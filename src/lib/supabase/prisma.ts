@@ -9,6 +9,8 @@ const prismaClientSingleton = () => {
         url: process.env.DATABASE_URL
       }
     },
+    // Adicione esta configuração para tentar corrigir o problema
+    // específico de prepared statements
     // Adicione também um timeout mais longo para as transações
     transactionOptions: {
       maxWait: 10000, // 10 segundos
