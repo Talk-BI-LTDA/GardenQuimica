@@ -1,27 +1,13 @@
 // src/lib/supabase/prisma.ts
 import { PrismaClient } from '@prisma/client';
 
-declare global {
-  // eslint-disable-next-line no-var
-  var prismaGlobal: PrismaClient | undefined;
-}
+// Esta abordagem evita múltiplas instâncias durante hot-reloading em desenvolvimento
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
-// Inicializar o cliente Prisma com as configurações básicas
-const prismaClientSingleton = () => {
-  return new PrismaClient({
+export const prisma = 
+  globalForPrisma.prisma || 
+  new PrismaClient({
     log: ['error'],
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL
-      },
-    }
   });
-};
 
-// Usar um singleton para evitar múltiplas conexões em desenvolvimento
-export const prisma = globalThis.prismaGlobal ?? prismaClientSingleton();
-
-// Salvar a referência global apenas em ambiente de desenvolvimento
-if (process.env.NODE_ENV !== 'production') {
-  globalThis.prismaGlobal = prisma;
-}
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
