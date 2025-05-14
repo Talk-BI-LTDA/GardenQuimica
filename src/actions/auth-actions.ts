@@ -76,9 +76,7 @@ export async function login(credentials: LoginCredentials): Promise<AuthResult> 
   } catch (error) {
     console.error("Erro no login:", error);
     return { success: false, error: "Falha na autenticação" };
-  } finally {
-    await prisma.$disconnect();
-  }
+  } 
 }
 /**
  * Função de logout
