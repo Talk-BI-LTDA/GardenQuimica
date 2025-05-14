@@ -2,7 +2,7 @@
 'use server'
 
 import { cookies } from 'next/headers';
-import { prisma } from '@/lib/supabase/prisma';
+import { prisma, authPrisma } from '@/lib/supabase/prisma';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { sendEmail } from '@/lib/email-service';
@@ -25,7 +25,7 @@ type AuthResult = {
 export async function login(credentials: LoginCredentials): Promise<AuthResult> {
   try {
     // Buscar usuário pelo email
-    const user = await prisma.user.findUnique({
+    const user = await authPrisma.user.findUnique({
       where: { email: credentials.email },
       select: {
         id: true,
