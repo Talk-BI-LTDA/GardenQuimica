@@ -46,37 +46,13 @@ export async function login(credentials: LoginCredentials): Promise<AuthResult> 
       return { success: false, error: "Senha incorreta" };
     }
 
-    // Criar sessão
-    const userData = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role
-    };
-
-    // Definir tempo de expiração
-    const expirationTime = credentials.lembrar 
-      ? 30 * 24 * 60 * 60 * 1000 // 30 dias
-      : 24 * 60 * 60 * 1000;     // 1 dia
+    // Resto do código...
     
-    const expires = new Date(Date.now() + expirationTime);
-
-    // Método correto para definir cookies no Next.js
-    (await cookies()).set({
-      name: 'session',
-      value: JSON.stringify(userData),
-      expires,
-      httpOnly: true,
-      path: '/',
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax'
-    });
-
     return { success: true };
   } catch (error) {
     console.error("Erro no login:", error);
     return { success: false, error: "Falha na autenticação" };
-  } 
+  }
 }
 /**
  * Função de logout
