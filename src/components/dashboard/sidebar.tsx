@@ -108,7 +108,7 @@ export function Sidebar() {
         />
       </div>
 
-      <nav className="flex-1 py-6 space-y-2 px-2">
+      <nav className="flex-1 py-3 space-y-2 px-2">
         <SidebarItem
           href="/painel"
           icon={<BarChart3 className="w-5 h-5" />}

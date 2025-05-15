@@ -79,7 +79,7 @@ export default async function FuncionariosPage() {
                   <TableCell>{usuario.cpf}</TableCell>
                   <TableCell>
                     <Badge
-                      variant={usuario.role === "ADMIN" ? "default" : "outline"}
+                      variant={usuario.role === "ADMIN" ? "azul" : "outline"}
                     >
                       {usuario.role === "ADMIN" ? "Administrador" : "Vendedor"}
                     </Badge>

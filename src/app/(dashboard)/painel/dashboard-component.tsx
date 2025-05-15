@@ -21,7 +21,6 @@ import {
   Search,
   Calendar,
   Download,
-  MoreVertical,
   CheckCircle,
   XCircle,
   DollarSign,
@@ -283,9 +282,7 @@ const EnhancedDashboard: React.FC = () => {
   const [produtosTab, setProdutosTab] = useState<"todos" | "rank">("todos");
   const [vendedoresTab, setVendedoresTab] = useState<"geral" | "rank">("geral");
   const [clientesTab, setClientesTab] = useState<"geral" | "rank">("geral");
-  const [activeTab, setActiveTab] = useState<"painel" | "vendas" | "naovendas">(
-    "painel"
-  );
+
 
   // Estados para filtros e loading
   const [filtroAberto, setFiltroAberto] = useState(false);
@@ -498,12 +495,6 @@ const EnhancedDashboard: React.FC = () => {
         setLoading(false);
       }
     }
-  };
-
-  // Aplicar filtro de pesquisa
-  const aplicarPesquisa = (termo: string) => {
-    setSearchTerm(termo);
-    setFilter((prev) => ({ ...prev, searchTerm: termo }));
   };
 
   // Toggle de ordenação
@@ -877,29 +868,29 @@ const EnhancedDashboard: React.FC = () => {
           <CardContent className="p-4">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium">Desempenho de Vendas</h3>
-              <div className="flex bg-gray-100 p-1 rounded-md">
+              <div className="flex  p-1 rounded-md">
                 <Tabs
                   value={chartTab}
                   onValueChange={(value) =>
                     setChartTab(value as "geral" | "vendas" | "naoVendas")
                   }
                 >
-                  <TabsList className="bg-transparent p-0">
+                  <TabsList className="">
                     <TabsTrigger
                       value="geral"
-                      className="text-xs px-3 py-1 rounded data-[state=active]:bg-white data-[state=active]:shadow"
+                      className=" data-[state=active]:shadow"
                     >
                       Geral
                     </TabsTrigger>
                     <TabsTrigger
                       value="vendas"
-                      className="text-xs px-3 py-1 rounded data-[state=active]:bg-white data-[state=active]:shadow"
+                      className="rounded data-[state=active]:shadow"
                     >
                       Vendas
                     </TabsTrigger>
                     <TabsTrigger
                       value="naoVendas"
-                      className="text-xs px-3 py-1 rounded data-[state=active]:bg-white data-[state=active]:shadow"
+                      className="text-xs px-3 py-1 rounded  data-[state=active]:shadow"
                     >
                       Não Vendas
                     </TabsTrigger>
@@ -1354,7 +1345,7 @@ const EnhancedDashboard: React.FC = () => {
                                 >
                                   <CardContent className="p-4">
                                     <div className="flex items-center gap-4">
-                                      <div className="flex items-center justify-center bg-gray-100 w-8 h-8 rounded-full">
+                                      <div className="flex items-center justify-center  w-8 h-8 rounded-full">
                                         <span className="font-bold text-gray-700">
                                           {idx + 1}
                                         </span>
@@ -1535,7 +1526,7 @@ const EnhancedDashboard: React.FC = () => {
                               >
                                 <CardContent className="p-4">
                                   <div className="flex items-center gap-4">
-                                    <div className="flex items-center justify-center bg-gray-100 w-8 h-8 rounded-full">
+                                    <div className="flex items-center justify-center  w-8 h-8 rounded-full">
                                       <span className="font-bold text-gray-700">
                                         {idx + 1}
                                       </span>
@@ -1724,7 +1715,7 @@ const EnhancedDashboard: React.FC = () => {
                                 >
                                   <CardContent className="p-4">
                                     <div className="flex items-center gap-4">
-                                      <div className="flex items-center justify-center bg-gray-100 w-8 h-8 rounded-full">
+                                      <div className="flex items-center justify-center  w-8 h-8 rounded-full">
                                         <span className="font-bold text-gray-700">
                                           {idx + 1}
                                         </span>
@@ -1813,187 +1804,6 @@ const EnhancedDashboard: React.FC = () => {
                 </>
               )}
             </div>
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* Tabelas de Vendas */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Lista de Vendas</CardTitle>
-          <div className="flex items-center gap-2">
-            <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 text-xs">
-                  <Calendar className="mr-1 h-3 w-3" />
-                  {dateRange?.from ? formatarPeriodoSelecionado() : "Período"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <CalendarComponent
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange?.from}
-                  selected={dateRange}
-                  onSelect={(range) => {
-                    setDateRange(range);
-                    setFilter((prev) => ({ ...prev, dateRange: range }));
-                  }}
-                  numberOfMonths={2}
-                  locale={ptBR}
-                />
-                <div className="p-3 border-t flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setDateRange(undefined);
-                      setFilter((prev) => ({ ...prev, dateRange: undefined }));
-                    }}
-                  >
-                    Limpar
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setDatePickerOpen(false);
-                      aplicarFiltros();
-                    }}
-                  >
-                    Aplicar
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs"
-              onClick={toggleSortDirection}
-            >
-              {sortDirection === "asc" ? (
-                <ArrowUp className="h-3 w-3" />
-              ) : (
-                <ArrowDown className="h-3 w-3" />
-              )}
-            </Button>
-
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-500" />
-              <Input
-                placeholder="Buscar..."
-                className="pl-7 h-8 text-xs rounded-md border border-gray-300 bg-white px-3 w-36"
-                value={searchTerm}
-                onChange={(e) => aplicarPesquisa(e.target.value)}
-              />
-            </div>
-          </div>
-        </CardHeader>
-
-        <CardContent>
-          <Tabs
-            value={activeTab}
-            onValueChange={(value) =>
-              setActiveTab(value as "painel" | "vendas" | "naovendas")
-            }
-          >
-            <TabsList className="mb-4">
-              <TabsTrigger value="painel">Todas</TabsTrigger>
-              <TabsTrigger value="vendas">Vendas</TabsTrigger>
-              <TabsTrigger value="naovendas">Não Vendas</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="painel">
-              {loading ? (
-                <div className="flex items-center justify-center h-64">
-                  <Loader2 className="h-8 w-8 animate-spin text-[#00446A]" />
-                </div>
-              ) : (
-                <div className="overflow-auto border rounded-lg">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Código</TableHead>
-                        <TableHead>Vendedor</TableHead>
-                        <TableHead>Cliente</TableHead>
-                        <TableHead>CNPJ</TableHead>
-                        <TableHead>Valor Total</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Data</TableHead>
-                        <TableHead className="text-right">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {estatisticas &&
-                        estatisticas.vendedores &&
-                        estatisticas.vendedores.length > 0 &&
-                        estatisticas.vendedores
-                          .filter((v) => v.quantidadeVendas > 0) // Apenas vendedores com vendas
-                          .slice(0, 5) // Limitar a 5 itens
-                          .map((vendedor, idx) => (
-                            <TableRow key={`venda-${idx}`}>
-                              <TableCell className="font-medium">
-                                V00{idx + 1}
-                              </TableCell>
-                              <TableCell>{vendedor.nome}</TableCell>
-                              <TableCell>Cliente {idx + 1}</TableCell>
-                              <TableCell>
-                                {Math.floor(
-                                  10000000000000 +
-                                    Math.random() * 90000000000000
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {formatarValorBRL(
-                                  vendedor.valorTotalVendas /
-                                    vendedor.quantidadeVendas
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                <Badge
-                                  variant="outline"
-                                  className="bg-green-100 text-green-800 border-green-100"
-                                >
-                                  Aprovada
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                {formatDate(vendedor.ultimaVenda)}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Button variant="ghost" size="icon">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                      {(!estatisticas ||
-                        !estatisticas.vendedores ||
-                        estatisticas.vendedores.length === 0) && (
-                        <TableRow>
-                          <TableCell
-                            colSpan={8}
-                            className="text-center h-32 text-gray-500"
-                          >
-                            <AlertCircle className="h-8 w-8 mx-auto mb-2" />
-                            <p>Nenhuma venda encontrada</p>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="vendas">
-              {/* Conteúdo similar aqui para a aba de vendas */}
-            </TabsContent>
-
-            <TabsContent value="naovendas">
-              {/* Conteúdo similar aqui para a aba de não vendas */}
-            </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
