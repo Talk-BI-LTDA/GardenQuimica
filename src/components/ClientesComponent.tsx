@@ -1218,9 +1218,9 @@ const ClientesComponent: React.FC<{
           className="w-full"
         >
           <div className="px-6 overflow-x-auto">
-            <TabsList className="mb-4 grid grid-cols-3 w-full md:w-[400px]">
-              <TabsTrigger value="todos" className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
+            <TabsList className="mb-4 grid grid-cols-3 w-full md:w-[500px]">
+              <TabsTrigger value="todos" className="flex items-center gap-1">
+                
                 <span className="whitespace-nowrap">Todos</span>
                 {estatisticas && (
                   <Badge variant="outline" className="ml-1 bg-gray-100">
@@ -1231,9 +1231,8 @@ const ClientesComponent: React.FC<{
 
               <TabsTrigger
                 value="recorrentes"
-                className="flex items-center gap-2"
+                className="flex items-center gap-1"
               >
-                <RepeatIcon className="h-4 w-4" />
                 <span className="whitespace-nowrap">Recorrentes</span>
                 {estatisticas && (
                   <Badge
@@ -1247,9 +1246,8 @@ const ClientesComponent: React.FC<{
 
               <TabsTrigger
                 value="naoRecorrentes"
-                className="flex items-center gap-2"
+                className="flex items-center gap-1"
               >
-                <UserCheck className="h-4 w-4" />
                 <span className="whitespace-nowrap">Não Recorrentes</span>
                 {estatisticas && (
                   <Badge
