@@ -1,13 +1,13 @@
 // src/app/(dashboard)/funcionarios/page.tsx
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
-import { PlusCircle, Edit, Trash2, MoreVertical } from 'lucide-react';
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { PlusCircle, Edit, Trash2, MoreVertical } from "lucide-react";
 
-import { Button } from '@/components/ui/button'
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -15,37 +15,41 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
+} from "@/components/ui/table";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Badge } from '@/components/ui/badge'
+} from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
 
-import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/supabase/prisma'
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/supabase/prisma";
 
 export default async function FuncionariosPage() {
   const session = await auth();
-  
+
   // Verificamos se session existe E se o usuário é admin
-  if (!session || session.user.role !== 'ADMIN') {
-    redirect('/painel');
+  if (!session || session.user.role !== "ADMIN") {
+    redirect("/painel");
   }
-  
+
   // Buscar usuários
   const usuarios = await prisma.user.findMany({
     orderBy: {
-      name: 'asc'
-    }
+      name: "asc",
+    },
   });
-  
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Funcionários</h1>
+        <div className="flex flex-col">
+          <h1 className="text-2xl font-bold">Funcionários</h1>
+          <p className="mt-1">Cadastre e edite as informações de seus funcionários por este painel.</p>
+        </div>
+
         <Link href="/funcionarios/novo">
           <Button>
             <PlusCircle className="mr-2 h-4 w-4" />
@@ -53,8 +57,8 @@ export default async function FuncionariosPage() {
           </Button>
         </Link>
       </div>
-      
-      <div className="bg-white rounded-lg border shadow-sm">
+
+      <div className="bg-white rounded-lg border px-3 py-3">
         <Table>
           <TableHeader>
             <TableRow>
@@ -74,12 +78,16 @@ export default async function FuncionariosPage() {
                   <TableCell>{usuario.email}</TableCell>
                   <TableCell>{usuario.cpf}</TableCell>
                   <TableCell>
-                    <Badge variant={usuario.role === 'ADMIN' ? 'default' : 'outline'}>
-                      {usuario.role === 'ADMIN' ? 'Administrador' : 'Vendedor'}
+                    <Badge
+                      variant={usuario.role === "ADMIN" ? "default" : "outline"}
+                    >
+                      {usuario.role === "ADMIN" ? "Administrador" : "Vendedor"}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {format(new Date(usuario.createdAt), 'dd/MM/yyyy', { locale: ptBR })}
+                    {format(new Date(usuario.createdAt), "dd/MM/yyyy", {
+                      locale: ptBR,
+                    })}
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
@@ -106,7 +114,10 @@ export default async function FuncionariosPage() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={6} className="text-center h-32 text-gray-500">
+                <TableCell
+                  colSpan={6}
+                  className="text-center h-32 text-gray-500"
+                >
                   Nenhum funcionário encontrado
                 </TableCell>
               </TableRow>
@@ -115,5 +126,5 @@ export default async function FuncionariosPage() {
         </Table>
       </div>
     </div>
-  )
+  );
 }

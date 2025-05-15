@@ -21,7 +21,7 @@ export default async function DashboardLayout({
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar />
-      <main className="flex-1 p-8 overflow-auto">
+      <main className="flex-1 p-8 pl-70 overflow-auto">
         {children}
       </main>
       <Toaster position="top-right" />

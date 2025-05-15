@@ -227,7 +227,7 @@ const DonutChart: React.FC<DonutChartProps> = ({ data, title }) => {
       <div className="mb-2 text-center">
         <h3 className="text-md font-medium">{title}</h3>
       </div>
-      <ResponsiveContainer width="100%" height={320} >
+      <ResponsiveContainer width="100%" height={320}>
         <PieChart>
           <Pie
             activeIndex={activeIndex}
@@ -660,17 +660,6 @@ const EnhancedDashboard: React.FC = () => {
         <h2 className="text-2xl font-bold">Painel de Vendas</h2>
 
         <div className="flex flex-wrap gap-3 items-center">
-          <div className="relative w-full md:w-auto">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
-            <Input
-              type="text"
-              placeholder="Buscar cliente, código..."
-              className="pl-9 w-full md:w-64 h-10 rounded-md border border-gray-300 bg-white px-3 text-sm"
-              value={searchTerm}
-              onChange={(e) => aplicarPesquisa(e.target.value)}
-            />
-          </div>
-
           <Button variant="outline" onClick={toggleSortDirection}>
             {sortDirection === "asc" ? (
               <ArrowUp className="h-4 w-4" />
@@ -763,10 +752,11 @@ const EnhancedDashboard: React.FC = () => {
       </div>
 
       {/* Cards de Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="flex flex-col w-full gap-4">
+      <div className="flex gap-4 w-full">
         {/* Total de Orçamentos */}
-        <Card>
-          <CardContent className="p-6">
+        <Card className="w-[33%] !py-3">
+          <CardContent >
             <div className="flex items-start justify-between">
               <div>
                 <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
@@ -784,8 +774,8 @@ const EnhancedDashboard: React.FC = () => {
         </Card>
 
         {/* Vendas (Aprovados) */}
-        <Card>
-          <CardContent className="p-6">
+        <Card className="w-[33%] !py-3">
+          <CardContent >
             <div className="flex items-start justify-between">
               <div>
                 <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
@@ -803,8 +793,8 @@ const EnhancedDashboard: React.FC = () => {
         </Card>
 
         {/* Não Vendas (Recusados) */}
-        <Card>
-          <CardContent className="p-6">
+        <Card className="w-[33%] !py-3">
+          <CardContent >
             <div className="flex items-start justify-between">
               <div>
                 <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
@@ -820,10 +810,11 @@ const EnhancedDashboard: React.FC = () => {
             </div>
           </CardContent>
         </Card>
-
+      </div>
+      <div className="flex gap-4">
         {/* Valor Total de Vendas */}
-        <Card>
-          <CardContent className="p-6">
+        <Card className="w-[33%] !py-3">
+          <CardContent >
             <div className="flex items-start justify-between">
               <div>
                 <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
@@ -841,8 +832,8 @@ const EnhancedDashboard: React.FC = () => {
         </Card>
 
         {/* Vendas Perdidas */}
-        <Card>
-          <CardContent className="p-6">
+        <Card className="w-[33%] !py-3">
+          <CardContent >
             <div className="flex items-start justify-between">
               <div>
                 <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
@@ -860,8 +851,8 @@ const EnhancedDashboard: React.FC = () => {
         </Card>
 
         {/* Total de Clientes */}
-        <Card>
-          <CardContent className="p-6">
+        <Card className="w-[33%] !py-3">
+          <CardContent >
             <div className="flex items-start justify-between">
               <div>
                 <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
@@ -878,7 +869,7 @@ const EnhancedDashboard: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-
+      </div>
       {/* Gráficos */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Gráfico de Área - Desempenho de Vendas */}

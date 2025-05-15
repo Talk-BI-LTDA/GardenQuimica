@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // src/components/auth/login-form.tsx
 "use client";
@@ -18,6 +19,7 @@ import {
   CreditCard,
   ArrowLeft,
 } from "lucide-react";
+import logo from '../../app/assets/logo-garden.png';
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,7 +66,7 @@ const newPasswordSchema = z
 
 type FormState = "login" | "reset" | "token" | "new-password";
 
-export function   LoginForm() {
+export function LoginForm() {
   const router = useRouter();
   const [formState, setFormState] = useState<FormState>("login");
   const [loading, setLoading] = useState(false);
@@ -75,8 +77,8 @@ export function   LoginForm() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(loginSchema) as any,
     defaultValues: {
-      email: '',
-      senha: '',
+      email: "",
+      senha: "",
       lembrar: false,
     },
   });
@@ -191,17 +193,9 @@ export function   LoginForm() {
   return (
     <div className="w-full max-w-md ">
       <div className="mb-8 flex justify-center text-center">
-        <Image
-          width={126}
-          height={126}
-          src="/logo-garden.png"
-          alt="Garden Química"
-          className="object-contain "
-
-        />
-
+      <img src={logo.src} alt="logo" width={175} height={175} />
       </div>
-      <div className="bg-white p-8 rounded-lg shadow-lg overflow-hidden">
+      <div className="bg-black/50 backdrop-blur-1xl text-white p-8 rounded-lg shadow-lg overflow-hidden">
         <AnimatePresence mode="wait">
           {formState === "login" && (
             <motion.div
@@ -209,11 +203,10 @@ export function   LoginForm() {
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: -20, opacity: 0 }}
-              transition={{ 
+              transition={{
                 duration: 0.3,
-                ease: [0.4, 0.0, 0.2, 1] // Ease out cubic - mais suave e rápido
+                ease: [0.4, 0.0, 0.2, 1], // Ease out cubic - mais suave e rápido
               }}
-              
             >
               <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
 
@@ -413,9 +406,9 @@ export function   LoginForm() {
               initial={{ x: 20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -20, opacity: 0 }}
-              transition={{ 
+              transition={{
                 duration: 0.3,
-                ease: [0.4, 0.0, 0.2, 1] // Ease out cubic - mais suave e rápido
+                ease: [0.4, 0.0, 0.2, 1], // Ease out cubic - mais suave e rápido
               }}
             >
               <div className="flex items-center mb-6">
@@ -482,9 +475,9 @@ export function   LoginForm() {
               initial={{ x: 20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -20, opacity: 0 }}
-              transition={{ 
+              transition={{
                 duration: 0.3,
-                ease: [0.4, 0.0, 0.2, 1] // Ease out cubic - mais suave e rápido
+                ease: [0.4, 0.0, 0.2, 1], // Ease out cubic - mais suave e rápido
               }}
             >
               <div className="flex items-center mb-6">

@@ -129,4 +129,113 @@
   .will-change-opacity {
     will-change: opacity;
   }
+  .animate-exit {
+    animation: fadeOut 800ms ease forwards;
+  }
+
+  .animate-loader-exit {
+    animation: loaderExit 500ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  .animate-text-exit {
+    animation: textExit 400ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  .animate-particle {
+    animation: particleExit 1s ease-out forwards;
+  }
+
+  .animate-preloader-exit {
+    animation: preloaderExit 600ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  @keyframes fadeOut {
+    0% {
+      opacity: 1;
+      backdrop-filter: blur(5px);
+    }
+    100% {
+      opacity: 0;
+      backdrop-filter: blur(0px);
+    }
+  }
+
+  @keyframes loaderExit {
+    0% {
+      transform: scale(1) rotate(0deg);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(0.5) rotate(45deg);
+      opacity: 0;
+    }
+  }
+
+  @keyframes textExit {
+    0% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(10px);
+      opacity: 0;
+    }
+  }
+
+  @keyframes particleExit {
+    0% {
+      transform: scale(0) translate(0, 0);
+      opacity: 0;
+    }
+    50% {
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1) translate(var(--tw-translate-x), var(--tw-translate-y));
+      opacity: 0;
+    }
+  }
+
+  @keyframes preloaderExit {
+    0% {
+      opacity: 1;
+      backdrop-filter: blur(5px);
+    }
+    100% {
+      opacity: 0;
+      backdrop-filter: blur(0px);
+    }
+  }
+
+  body::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  body::-webkit-scrollbar-thumb {
+    background-color: #185678;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  
+  body {
+    scrollbar-color: #185678 transparent; /* Firefox */
+    scrollbar-width: thin; /* Firefox */
+  }
+  .shadow-sm {
+    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, rgb(0 0 0 / 0.1)), 0 1px 2px -1px var(--tw-shadow-color, rgb(0 0 0 / 0.1));
+    box-shadow: -6px 12px 20px -7px #0000000f !important;
+}
+h1{
+  color: #00446A !important;
+}
+
+.text-card-foreground {
+    color: #001927 !important;
+}
 }

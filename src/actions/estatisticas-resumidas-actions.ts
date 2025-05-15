@@ -6,6 +6,7 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { FiltrosBase } from '@/types/filtros';
 import { format, subDays } from 'date-fns';
+import { revalidatePath } from 'next/cache';
 
 // Definição dos tipos
 export interface ChartDataPoint {
@@ -20,6 +21,20 @@ export interface EstatisticasPainelResponse {
   error?: string;
 }
 
+export type VendedorEstatistica = {
+  id: string;
+  nome: string;
+  email: string;
+  regiao?: string; // Campo de região
+  quantidadeVendas: number;
+  quantidadeNaoVendas: number;
+  valorTotalVendas: number;
+  taxaSucesso: number;
+  ultimaVenda: Date;
+  mediaMensal: number;
+  quantidadeClientes: number;
+  clientesRecorrentes: number;
+};
 export interface EstatisticasPainel extends EstatisticasResumidas {
   chartData?: ChartDataPoint[];
   produtoMaisVendido?: {
@@ -111,9 +126,16 @@ export interface EstatisticasPainelParams extends FiltrosBase {
   searchVendedores?: string;
   searchProdutos?: string;
   searchClientes?: string;
+  regiao?: string; 
 }
-
-// Função para detectar e lidar com erros de conexão
+export type RegiaoEstatistica = {
+  nome: string;
+  vendas: number;
+  valorTotal: number;
+  valorMedio: number;
+  vendedores: number;
+};
+// Função para executar com retry otimizada
 async function executeWithRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   try {
     return await fn();
@@ -125,7 +147,6 @@ async function executeWithRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T
       errorMessage.includes("does not exist")
     )) {
       console.log("Detectado erro de conexão com o banco, reconectando...");
-      // Espera um pouco antes de tentar novamente
       await new Promise(resolve => setTimeout(resolve, 1000));
       return executeWithRetry(fn, retries - 1);
     }
@@ -135,7 +156,6 @@ async function executeWithRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T
 
 // Função principal para buscar estatísticas do painel
 export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams): Promise<EstatisticasPainelResponse> {
-  // Validar autenticação
   const session = await auth();
   
   if (!session) {
@@ -143,7 +163,6 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
   }
 
   try {
-    // Inicializar objeto de estatísticas
     const estatisticas: EstatisticasPainel = {
       totalVendas: 0,
       valorTotalVendas: 0,
@@ -158,13 +177,11 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
       },
       produtos: [],
       vendedores: [],
-      clientes: []
+      clientes: [],
     };
 
-    // Construir filtros base
     const where: Record<string, unknown> = {};
     
-    // Aplicar filtros
     if (session.user.role !== 'ADMIN') {
       where.vendedorId = session.user.id;
     } else if (filtros?.vendedorId) {
@@ -178,72 +195,42 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
       };
     }
 
-    // 1. CONTAGENS BÁSICAS
-    try {
-      // Fazer consultas sequencialmente para evitar problemas com prepared statements
-      const totalVendas = await executeWithRetry(() => 
-        prisma.venda.count({ where })
-      );
-      
-      const vendasAggregate = await executeWithRetry(() => 
-        prisma.venda.aggregate({ 
-          where, 
-          _sum: { valorTotal: true }
-        })
-      );
-      
-      const totalNaoVendas = await executeWithRetry(() => 
-        prisma.naoVenda.count({ where })
-      );
-      
-      const naoVendasAggregate = await executeWithRetry(() => 
-        prisma.naoVenda.aggregate({ 
-          where, 
-          _sum: { valorTotal: true }
-        })
-      );
-      
-      estatisticas.totalVendas = totalVendas;
-      estatisticas.valorTotalVendas = vendasAggregate._sum.valorTotal || 0;
-      estatisticas.totalNaoVendas = totalNaoVendas;
-      estatisticas.valorTotalNaoVendas = naoVendasAggregate._sum.valorTotal || 0;
-      estatisticas.totalOrcamentos = totalVendas + totalNaoVendas;
-    } catch (error) {
-      console.error('Erro ao buscar contagens básicas:', error);
-      // Continuar mesmo com erro, para tentar buscar outros dados
-    }
+    // Consultas paralelas para dados básicos
+    const [
+      totalVendas,
+      vendasAggregate,
+      totalNaoVendas,
+      naoVendasAggregate,
+      totalFuncionarios,
+      totalVendedores,
+      totalAdmins
+    ] = await Promise.all([
+      executeWithRetry(() => prisma.venda.count({ where })),
+      executeWithRetry(() => prisma.venda.aggregate({ where, _sum: { valorTotal: true } })),
+      executeWithRetry(() => prisma.naoVenda.count({ where })),
+      executeWithRetry(() => prisma.naoVenda.aggregate({ where, _sum: { valorTotal: true } })),
+      executeWithRetry(() => prisma.user.count()),
+      executeWithRetry(() => prisma.user.count({ where: { role: 'VENDEDOR' } })),
+      executeWithRetry(() => prisma.user.count({ where: { role: 'ADMIN' } }))
+    ]);
+    
+    estatisticas.totalVendas = totalVendas;
+    estatisticas.valorTotalVendas = vendasAggregate._sum.valorTotal || 0;
+    estatisticas.totalNaoVendas = totalNaoVendas;
+    estatisticas.valorTotalNaoVendas = naoVendasAggregate._sum.valorTotal || 0;
+    estatisticas.totalOrcamentos = totalVendas + totalNaoVendas;
+    
+    estatisticas.funcionarios = {
+      total: totalFuncionarios,
+      vendedores: totalVendedores,
+      administradores: totalAdmins
+    };
 
-    // 2. FUNCIONÁRIOS
-    try {
-      const totalFuncionarios = await executeWithRetry(() => 
-        prisma.user.count()
-      );
-      
-      const totalVendedores = await executeWithRetry(() => 
-        prisma.user.count({ where: { role: 'VENDEDOR' } })
-      );
-      
-      const totalAdmins = await executeWithRetry(() => 
-        prisma.user.count({ where: { role: 'ADMIN' } })
-      );
-      
-      estatisticas.funcionarios = {
-        total: totalFuncionarios,
-        vendedores: totalVendedores,
-        administradores: totalAdmins
-      };
-    } catch (error) {
-      console.error('Erro ao contar funcionários:', error);
-      // Continuar mesmo com erro
-    }
-
-    // 3. VENDEDOR COM MAIS VENDAS
-    try {
-      // Construir filtro para vendas agregadas
-      const whereVendas = { ...where };
-      
-      // Buscar vendedores com dados de vendas
-      const vendedores = await executeWithRetry(() => 
+    // Consultas paralelas para vendedores, produtos e maior venda
+    const whereVendas = { ...where };
+    
+    const [vendedoresComVendas, produtosMaisVendidos, maiorVenda] = await Promise.all([
+      executeWithRetry(() => 
         prisma.user.findMany({
           where: { role: 'VENDEDOR' },
           select: {
@@ -260,50 +247,8 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
             }
           }
         })
-      );
-      
-      // Processar vendedores e encontrar o que tem mais vendas
-      if (vendedores.length > 0) {
-        // Calcular total de vendas para cada vendedor
-        const vendedoresComEstat = vendedores.map(vendedor => {
-          const quantidadeVendas = vendedor.vendas.length;
-          const valorTotalVendas = vendedor.vendas.reduce((total, venda) => total + venda.valorTotal, 0);
-          
-          // Encontrar data da última venda
-          let ultimaVenda = new Date(0); // Iniciar com data antiga
-          for (const venda of vendedor.vendas) {
-            if (venda.createdAt > ultimaVenda) {
-              ultimaVenda = venda.createdAt;
-            }
-          }
-          
-          return {
-            id: vendedor.id,
-            nome: vendedor.name,
-            email: vendedor.email,
-            quantidadeVendas,
-            valorTotalVendas,
-            ultimaVenda: vendedor.vendas.length > 0 ? ultimaVenda : new Date()
-          };
-        });
-        
-        // Ordenar por quantidade de vendas
-        vendedoresComEstat.sort((a, b) => b.quantidadeVendas - a.quantidadeVendas);
-        
-        // Selecionar o vendedor com mais vendas
-        if (vendedoresComEstat.length > 0) {
-          estatisticas.vendedorMaisVendas = vendedoresComEstat[0];
-        }
-      }
-    } catch (error) {
-      console.error('Erro ao buscar vendedor com mais vendas:', error);
-      // Continuar mesmo com erro
-    }
-
-    // 4. PRODUTO MAIS VENDIDO
-    try {
-      // Buscar produtos com suas vendas
-      const produto = await executeWithRetry(() => 
+      ),
+      executeWithRetry(() => 
         prisma.vendaProduto.groupBy({
           by: ['produtoId'],
           where,
@@ -318,141 +263,125 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
               produtoId: 'desc'
             }
           },
-          take: 1
+          take: 10
         })
-      );
-      
-      if (produto.length > 0) {
-        const produtoId = produto[0].produtoId;
-        const presenteEmVendas = produto[0]._count.produtoId;
-        const valorTotal = produto[0]._sum.valor || 0;
-        
-        // Buscar detalhes do produto
-        const detalheProduto = await executeWithRetry(() => 
-          prisma.produto.findUnique({
-            where: { id: produtoId },
-            select: {
-              id: true,
-              nome: true,
-              medida: true,
-              valor: true
-            }
-          })
-        );
-        
-        if (detalheProduto) {
-          estatisticas.produtoMaisVendido = {
-            id: detalheProduto.id,
-            nome: detalheProduto.nome,
-            medida: detalheProduto.medida,
-            valorMedio: detalheProduto.valor,
-            presenteEmVendas,
-            valorTotal
-          };
-        }
-      }
-    } catch (error) {
-      console.error('Erro ao buscar produto mais vendido:', error);
-      // Continuar mesmo com erro
-    }
-
-    // 5. MAIOR VENDA
-    try {
-      const maiorVenda = await executeWithRetry(() => 
+      ),
+      executeWithRetry(() => 
         prisma.venda.findFirst({
           where,
           orderBy: { valorTotal: 'desc' },
-          include: {
+          select: {
+            id: true,
+            codigoVenda: true,
+            valorTotal: true,
+            createdAt: true,
             vendedor: { select: { name: true } },
             cliente: { select: { nome: true } }
           },
           take: 1
         })
-      );
+      )
+    ]);
+    
+    // Processar vendedores
+    const vendedoresComEstat = vendedoresComVendas.map(vendedor => {
+      const quantidadeVendas = vendedor.vendas.length;
+      const valorTotalVendas = vendedor.vendas.reduce((total, venda) => total + venda.valorTotal, 0);
       
-      if (maiorVenda) {
-        estatisticas.maiorVenda = {
-          codigoVenda: maiorVenda.codigoVenda,
-          valorTotal: maiorVenda.valorTotal,
-          data: maiorVenda.createdAt,
-          vendedorNome: maiorVenda.vendedor.name,
-          clienteNome: maiorVenda.cliente.nome
-        };
+      let ultimaVenda = new Date(0);
+      for (const venda of vendedor.vendas) {
+        if (venda.createdAt > ultimaVenda) {
+          ultimaVenda = venda.createdAt;
+        }
       }
-    } catch (error) {
-      console.error('Erro ao buscar maior venda:', error);
-      // Continuar mesmo com erro
+      
+      return {
+        id: vendedor.id,
+        nome: vendedor.name || '',
+        email: vendedor.email || '',
+        quantidadeVendas,
+        valorTotalVendas,
+        ultimaVenda: vendedor.vendas.length > 0 ? ultimaVenda : new Date()
+      };
+    });
+    
+    vendedoresComEstat.sort((a, b) => b.valorTotalVendas - a.valorTotalVendas);
+    
+    if (vendedoresComEstat.length > 0) {
+      estatisticas.vendedorMaisVendas = vendedoresComEstat[0];
     }
-
-    // 6. ESTATÍSTICAS DE PRODUTOS
-    try {
-      // Filtro de busca para produtos
-      const whereProdutos: Record<string, unknown> = {};
+    
+    // Processar produtos
+    if (produtosMaisVendidos.length > 0) {
+      const produtosIds = produtosMaisVendidos.map(p => p.produtoId);
       
-      if (filtros?.searchProdutos) {
-        whereProdutos.OR = [
-          { nome: { contains: filtros.searchProdutos, mode: 'insensitive' } },
-          { medida: { contains: filtros.searchProdutos, mode: 'insensitive' } }
-        ];
-      }
-      
-      // Buscar todos os produtos
-      const todosProdutos = await executeWithRetry(() => 
+      const detalhesProdutos = await executeWithRetry(() => 
         prisma.produto.findMany({
-          where: whereProdutos,
-          distinct: ['nome', 'medida'], // Evitar produtos duplicados
+          where: { id: { in: produtosIds } },
           select: {
             id: true,
             nome: true,
             medida: true,
-            valor: true,
-            vendaProdutos: {
-              where,
-              select: { 
-                quantidade: true, 
-                valor: true 
-              }
-            }
-          },
-          take: 100
+            valor: true
+          }
         })
       );
       
-      estatisticas.produtos = todosProdutos.map(produto => {
-        const presenteEmVendas = produto.vendaProdutos.length;
-        const valorTotal = produto.vendaProdutos.reduce((sum, item) => sum + item.valor, 0);
-        const quantidadeTotal = produto.vendaProdutos.reduce((sum, item) => sum + item.quantidade, 0);
-        
-        return {
-          id: produto.id,
-          nome: produto.nome,
-          medida: produto.medida,
-          valorMedio: produto.valor,
-          presenteEmVendas,
-          valorTotal,
-          quantidadeMedia: presenteEmVendas > 0 ? quantidadeTotal / presenteEmVendas : 0
+      const produtosProcessados = produtosMaisVendidos
+        .map(produto => {
+          const detalhe = detalhesProdutos.find(p => p.id === produto.produtoId);
+          if (!detalhe) return null;
+          
+          return {
+            id: detalhe.id,
+            nome: detalhe.nome || '',
+            medida: detalhe.medida || '',
+            valorMedio: detalhe.valor || 0,
+            presenteEmVendas: produto._count.produtoId,
+            valorTotal: produto._sum.valor || 0,
+            quantidadeMedia: 0 // Adicionado para compatibilidade com a interface
+          };
+        })
+        .filter((p): p is NonNullable<typeof p> => p !== null)
+        .sort((a, b) => b.presenteEmVendas - a.presenteEmVendas);
+      
+      if (produtosProcessados.length > 0) {
+        estatisticas.produtoMaisVendido = {
+          id: produtosProcessados[0].id,
+          nome: produtosProcessados[0].nome,
+          medida: produtosProcessados[0].medida,
+          valorMedio: produtosProcessados[0].valorMedio,
+          presenteEmVendas: produtosProcessados[0].presenteEmVendas,
+          valorTotal: produtosProcessados[0].valorTotal
         };
-      }).sort((a, b) => b.presenteEmVendas - a.presenteEmVendas);
-    } catch (error) {
-      console.error('Erro ao buscar estatísticas de produtos:', error);
-      estatisticas.produtos = [];
+        estatisticas.produtos = produtosProcessados;
+      }
+    }
+    
+    // Processar maior venda
+    if (maiorVenda) {
+      estatisticas.maiorVenda = {
+        codigoVenda: maiorVenda.codigoVenda || '',
+        valorTotal: maiorVenda.valorTotal || 0,
+        data: maiorVenda.createdAt,
+        vendedorNome: maiorVenda.vendedor?.name || '',
+        clienteNome: maiorVenda.cliente?.nome || ''
+      };
     }
 
-    // 7. ESTATÍSTICAS DE VENDEDORES
-    try {
-      // Filtro de busca para vendedores
-      const whereVendedores: Record<string, unknown> = { role: 'VENDEDOR' };
-      
-      if (filtros?.searchVendedores) {
-        whereVendedores.OR = [
-          { name: { contains: filtros.searchVendedores, mode: 'insensitive' } },
-          { email: { contains: filtros.searchVendedores, mode: 'insensitive' } }
-        ];
-      }
-      
-      // Buscar vendedores
-      const vendedores = await executeWithRetry(() => 
-        prisma.user.findMany({
+    // Consultas paralelas para vendedores detalhados e clientes
+    const [vendedoresDetalhados, clientesInfo] = await Promise.all([
+      executeWithRetry(() => {
+        const whereVendedores: Record<string, unknown> = { role: 'VENDEDOR' };
+        
+        if (filtros?.searchVendedores) {
+          whereVendedores.OR = [
+            { name: { contains: filtros.searchVendedores, mode: 'insensitive' } },
+            { email: { contains: filtros.searchVendedores, mode: 'insensitive' } }
+          ];
+        }
+        
+        return prisma.user.findMany({
           where: whereVendedores,
           select: {
             id: true,
@@ -473,285 +402,153 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
             }
           },
           take: 50
-        })
-      );
-      
-      estatisticas.vendedores = vendedores.map(vendedor => {
-        const quantidadeVendas = vendedor.vendas.length;
-        const quantidadeNaoVendas = vendedor.naoVendas.length;
-        const valorTotalVendas = vendedor.vendas.reduce((sum, venda) => sum + venda.valorTotal, 0);
-        
-        // Taxa de sucesso
-        const totalOrcamentos = quantidadeVendas + quantidadeNaoVendas;
-        const taxaSucesso = totalOrcamentos > 0 ? (quantidadeVendas / totalOrcamentos) * 100 : 0;
-        
-        // Última venda
-        let ultimaVenda = new Date(0);
-        if (vendedor.vendas.length > 0) {
-          for (const venda of vendedor.vendas) {
-            if (venda.createdAt > ultimaVenda) {
-              ultimaVenda = venda.createdAt;
-            }
-          }
-        } else {
-          ultimaVenda = new Date(); // Data atual se não houver vendas
-        }
-        
-        // Clientes únicos
-        const clientesIds = new Set<string>();
-        vendedor.vendas.forEach(venda => {
-          clientesIds.add(venda.clienteId);
         });
-        const quantidadeClientes = clientesIds.size;
-        
-        // Clientes recorrentes (com mais de uma compra)
-        const clientesContagem: Record<string, number> = {};
-        vendedor.vendas.forEach(venda => {
-          clientesContagem[venda.clienteId] = (clientesContagem[venda.clienteId] || 0) + 1;
-        });
-        
-        const clientesRecorrentes = Object.values(clientesContagem).filter(count => count > 1).length;
-        
-        // Média mensal aproximada (baseada nos últimos 6 meses)
-        const mediaMensal = Math.max(1, Math.ceil(quantidadeVendas / 6));
-        
-        return {
-          id: vendedor.id,
-          nome: vendedor.name,
-          email: vendedor.email,
-          quantidadeVendas,
-          quantidadeNaoVendas,
-          valorTotalVendas,
-          taxaSucesso,
-          ultimaVenda,
-          quantidadeClientes,
-          clientesRecorrentes,
-          mediaMensal
-        };
-      }).sort((a, b) => b.valorTotalVendas - a.valorTotalVendas); // Ordenar por valor
-    } catch (error) {
-      console.error('Erro ao buscar estatísticas de vendedores:', error);
-      estatisticas.vendedores = [];
-    }
-
-    // 8. ESTATÍSTICAS DE CLIENTES
-    try {
-      // Filtro de busca para clientes
-      const whereClientes: Record<string, unknown> = {};
-      
-      if (filtros?.searchClientes) {
-        whereClientes.OR = [
-          { nome: { contains: filtros.searchClientes, mode: 'insensitive' } },
-          { cnpj: { contains: filtros.searchClientes, mode: 'insensitive' } },
-          { segmento: { contains: filtros.searchClientes, mode: 'insensitive' } }
-        ];
-      }
-      
-      const clientes = await executeWithRetry(() => 
-        prisma.cliente.findMany({
-          where: whereClientes,
-          select: {
-            id: true,
-            nome: true,
-            cnpj: true,
-            segmento: true,
-            vendas: {
-              where,
-              select: {
-                id: true,
-                valorTotal: true,
-                createdAt: true,
-                produtos: {
-                  select: {
-                    produto: { select: { id: true, nome: true } },
-                    quantidade: true
-                  }
-                }
+      }),
+      executeWithRetry(() => 
+        prisma.cliente.count()
+      ).then(async (totalClientes) => {
+        const clientesComVendas = await executeWithRetry(() => 
+          prisma.cliente.findMany({
+            select: {
+              id: true,
+              _count: {
+                select: { vendas: true }
               }
             }
-          },
-          take: 50
-        })
-      );
-      
-      estatisticas.clientes = clientes.map(cliente => {
-        const quantidadeVendas = cliente.vendas.length;
-        const valorTotal = cliente.vendas.reduce((sum, venda) => sum + venda.valorTotal, 0);
-        const valorMedio = quantidadeVendas > 0 ? valorTotal / quantidadeVendas : 0;
+          })
+        );
         
-        // Cliente é recorrente se tem mais de 1 compra
-        const ehRecorrente = quantidadeVendas > 1;
-        
-        // Maior valor
-        let maiorValor = 0;
-        if (cliente.vendas.length > 0) {
-          for (const venda of cliente.vendas) {
-            if (venda.valorTotal > maiorValor) {
-              maiorValor = venda.valorTotal;
-            }
-          }
-        }
-        
-        // Última compra
-        let ultimaCompra = new Date(0);
-        if (cliente.vendas.length > 0) {
-          for (const venda of cliente.vendas) {
-            if (venda.createdAt > ultimaCompra) {
-              ultimaCompra = venda.createdAt;
-            }
-          }
-        } else {
-          ultimaCompra = new Date(); // Data atual se não houver compras
-        }
-        
-        // Encontrar produto mais comprado (por frequência)
-        const frequenciaProdutos: Record<string, { count: number, nome: string }> = {};
-        const quantidadeProdutos: Record<string, { count: number, nome: string }> = {};
-        
-        cliente.vendas.forEach(venda => {
-          venda.produtos.forEach(item => {
-            const produtoId = item.produto.id;
-            // Contador de frequência
-            if (!frequenciaProdutos[produtoId]) {
-              frequenciaProdutos[produtoId] = { count: 0, nome: item.produto.nome };
-            }
-            frequenciaProdutos[produtoId].count += 1;
-            
-            // Contador de quantidade
-            if (!quantidadeProdutos[produtoId]) {
-              quantidadeProdutos[produtoId] = { count: 0, nome: item.produto.nome };
-            }
-            quantidadeProdutos[produtoId].count += item.quantidade;
-          });
-        });
-        
-        // Encontrar o produto mais frequente
-        let produtoMaisFrequente: string | undefined;
-        let maiorFrequencia = 0;
-        
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        Object.entries(frequenciaProdutos).forEach(([_, data]) => {
-          if (data.count > maiorFrequencia) {
-            maiorFrequencia = data.count;
-            produtoMaisFrequente = data.nome;
-          }
-        });
-        
-        // Se não houver produto mais frequente ou houver empate, usar o de maior quantidade
-        if (!produtoMaisFrequente || Object.values(frequenciaProdutos).filter(data => data.count === maiorFrequencia).length > 1) {
-          let maiorQuantidade = 0;
-          
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          Object.entries(quantidadeProdutos).forEach(([_, data]) => {
-            if (data.count > maiorQuantidade) {
-              maiorQuantidade = data.count;
-              produtoMaisFrequente = data.nome;
-            }
-          });
-        }
-        
-        // Se ainda não tiver um produto definido ou houver empate, usar "Diversos"
-        if (!produtoMaisFrequente || Object.values(quantidadeProdutos).filter(data => data.count === maiorFrequencia).length > 1) {
-          produtoMaisFrequente = "Diversos";
-        }
+        const clientesRecorrentes = clientesComVendas.filter(c => c._count.vendas > 1).length;
         
         return {
-          id: cliente.id,
-          nome: cliente.nome,
-          cnpj: cliente.cnpj,
-          segmento: cliente.segmento,
-          quantidadeVendas,
-          valorTotal,
-          valorMedio,
-          maiorValor,
-          ultimaCompra,
-          produtoMaisComprado: produtoMaisFrequente,
-          ehRecorrente
+          totalClientes,
+          clientesRecorrentes,
+          clientesNaoRecorrentes: totalClientes - clientesRecorrentes
         };
-      });
-    } catch (error) {
-      console.error('Erro ao buscar estatísticas de clientes:', error);
-      estatisticas.clientes = [];
-    }
-
-    // 9. DADOS DO GRÁFICO
-    try {
-      // Usar subDays conforme o código original
-      const hoje = new Date();
-      estatisticas.chartData = [];
+      })
+    ]);
+    
+    estatisticas.totalClientes = clientesInfo.totalClientes;
+    estatisticas.clientesRecorrentes = clientesInfo.clientesRecorrentes;
+    estatisticas.clientesNaoRecorrentes = clientesInfo.clientesNaoRecorrentes;
+    
+    // Processar vendedores detalhados
+    estatisticas.vendedores = vendedoresDetalhados.map(vendedor => {
+      const quantidadeVendas = vendedor.vendas.length;
+      const quantidadeNaoVendas = vendedor.naoVendas.length;
+      const valorTotalVendas = vendedor.vendas.reduce((sum, venda) => sum + venda.valorTotal, 0);
       
-      // Criar dados para os últimos 30 dias
-      for (let i = 29; i >= 0; i--) {
+      const totalOrcamentos = quantidadeVendas + quantidadeNaoVendas;
+      const taxaSucesso = totalOrcamentos > 0 ? (quantidadeVendas / totalOrcamentos) * 100 : 0;
+      
+      let ultimaVenda = new Date(0);
+      const clientesContagem: Record<string, number> = {};
+      
+      for (const venda of vendedor.vendas) {
+        if (venda.createdAt > ultimaVenda) {
+          ultimaVenda = venda.createdAt;
+        }
+        
+        clientesContagem[venda.clienteId] = (clientesContagem[venda.clienteId] || 0) + 1;
+      }
+      
+      const clientesUnicos = Object.keys(clientesContagem).length;
+      const clientesRecorrentes = Object.values(clientesContagem).filter(count => count > 1).length;
+      const mediaMensal = Math.max(1, Math.ceil(quantidadeVendas / 6));
+      
+      return {
+        id: vendedor.id,
+        nome: vendedor.name || '',
+        email: vendedor.email || '',
+        quantidadeVendas,
+        quantidadeNaoVendas,
+        valorTotalVendas,
+        taxaSucesso,
+        ultimaVenda: vendedor.vendas.length > 0 ? ultimaVenda : new Date(),
+        quantidadeClientes: clientesUnicos,
+        clientesRecorrentes,
+        mediaMensal
+      };
+    }).sort((a, b) => b.valorTotalVendas - a.valorTotalVendas);
+
+    // Dados do gráfico otimizados
+    try {
+      const hoje = new Date();
+      const dataInicio = subDays(hoje, 29);
+      
+      const [vendasPeriodo, naoVendasPeriodo] = await Promise.all([
+        executeWithRetry(() => 
+          prisma.venda.findMany({
+            where: {
+              ...where,
+              createdAt: {
+                gte: dataInicio,
+                lte: hoje
+              }
+            },
+            select: {
+              valorTotal: true,
+              createdAt: true
+            }
+          })
+        ),
+        executeWithRetry(() => 
+          prisma.naoVenda.findMany({
+            where: {
+              ...where,
+              createdAt: {
+                gte: dataInicio,
+                lte: hoje
+              }
+            },
+            select: {
+              valorTotal: true,
+              createdAt: true
+            }
+          })
+        )
+      ]);
+      
+      const dadosPorDia = new Map<string, { vendas: number, naoVendas: number }>();
+      
+      for (let i = 0; i <= 29; i++) {
         const data = subDays(hoje, i);
         const dataFormatada = format(data, 'yyyy-MM-dd');
-        
-        // Filtro para esta data específica
-        const whereDia = {
-          ...where,
-          createdAt: {
-            gte: new Date(`${dataFormatada}T00:00:00.000Z`),
-            lt: new Date(`${dataFormatada}T23:59:59.999Z`)
-          }
-        };
-        
-        // Buscar vendas desta data
-        const vendaDia = await executeWithRetry(() => 
-          prisma.venda.aggregate({
-            where: whereDia,
-            _sum: { valorTotal: true }
-          })
-        );
-        
-        // Buscar não vendas desta data
-        const naoVendaDia = await executeWithRetry(() => 
-          prisma.naoVenda.aggregate({
-            where: whereDia,
-            _sum: { valorTotal: true }
-          })
-        );
-        
-        // Adicionar dados ao gráfico
-        estatisticas.chartData.push({
-          date: dataFormatada,
-          vendas: vendaDia._sum.valorTotal || 0,
-          naoVendas: naoVendaDia._sum.valorTotal || 0
-        });
+        dadosPorDia.set(dataFormatada, { vendas: 0, naoVendas: 0 });
       }
+      
+      vendasPeriodo.forEach(venda => {
+        const dataFormatada = format(venda.createdAt, 'yyyy-MM-dd');
+        const dadosDia = dadosPorDia.get(dataFormatada);
+        
+        if (dadosDia) {
+          dadosDia.vendas += venda.valorTotal;
+        }
+      });
+      
+      naoVendasPeriodo.forEach(naoVenda => {
+        const dataFormatada = format(naoVenda.createdAt, 'yyyy-MM-dd');
+        const dadosDia = dadosPorDia.get(dataFormatada);
+        
+        if (dadosDia) {
+          dadosDia.naoVendas += naoVenda.valorTotal;
+        }
+      });
+      
+      estatisticas.chartData = Array.from(dadosPorDia.entries())
+        .map(([date, dados]) => ({
+          date,
+          vendas: dados.vendas,
+          naoVendas: dados.naoVendas
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date));
     } catch (error) {
       console.error('Erro ao gerar dados do gráfico:', error);
       estatisticas.chartData = [];
     }
 
-    // 10. CLIENTES RECORRENTES
-    try {
-      const totalClientes = await executeWithRetry(() => 
-        prisma.cliente.count()
-      );
-      
-      // Encontrar clientes com mais de uma venda
-      const clientesComVendas = await executeWithRetry(() => 
-        prisma.cliente.findMany({
-          select: {
-            id: true,
-            _count: {
-              select: { vendas: true }
-            }
-          }
-        })
-      );
-      
-      const clientesRecorrentes = clientesComVendas.filter(c => c._count.vendas > 1).length;
-      
-      estatisticas.totalClientes = totalClientes;
-      estatisticas.clientesRecorrentes = clientesRecorrentes;
-      estatisticas.clientesNaoRecorrentes = totalClientes - clientesRecorrentes;
-    } catch (error) {
-      console.error('Erro ao calcular clientes recorrentes:', error);
-      estatisticas.totalClientes = 0;
-      estatisticas.clientesRecorrentes = 0;
-      estatisticas.clientesNaoRecorrentes = 0;
-    }
-
+    revalidatePath('/painel');
+    
     return { success: true, estatisticas };
   } catch (error) {
     console.error('Erro geral ao buscar estatísticas do painel:', error);
@@ -762,12 +559,12 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
   }
 }
 
+// Funções para estatísticas resumidas (mantidas as otimizações originais)
 export async function getEstatisticasResumidas(filtros?: FiltrosBase): Promise<{ 
   success: boolean; 
   estatisticas?: EstatisticasResumidas;
   error?: string;
 }> {
-  // Validar autenticação
   const session = await auth();
   
   if (!session) {
@@ -775,15 +572,12 @@ export async function getEstatisticasResumidas(filtros?: FiltrosBase): Promise<{
   }
 
   try {
-    // Construir filtros
     const where: Record<string, unknown> = {}; 
     
-    // Se não for admin, filtrar por usuário logado
     if (session.user.role !== 'ADMIN') {
       where.vendedorId = session.user.id;
     }
     
-    // Filtrar por data
     if (filtros?.dataInicio && filtros?.dataFim) {
       where.createdAt = {
         gte: new Date(filtros.dataInicio),
@@ -791,42 +585,22 @@ export async function getEstatisticasResumidas(filtros?: FiltrosBase): Promise<{
       };
     }
 
-    // Buscar total de vendas
-    const totalVendas = await executeWithRetry(() => 
-      prisma.venda.count({ where })
-    );
-
-    // Buscar valor total de vendas
-    const valorVendasResult = await executeWithRetry(() => 
-      prisma.venda.aggregate({
-        where,
-        _sum: { valorTotal: true }
-      })
-    );
-    const valorTotalVendas = valorVendasResult._sum.valorTotal || 0;
-
-    // Buscar total de não vendas
-    const totalNaoVendas = await executeWithRetry(() => 
-      prisma.naoVenda.count({ where })
-    );
-
-    // Buscar valor total de não vendas
-    const valorNaoVendasResult = await executeWithRetry(() => 
-      prisma.naoVenda.aggregate({
-        where,
-        _sum: { valorTotal: true }
-      })
-    );
-    const valorTotalNaoVendas = valorNaoVendasResult._sum.valorTotal || 0;
-
+    const [totalVendas, valorVendasResult, totalNaoVendas, valorNaoVendasResult] = await Promise.all([
+      executeWithRetry(() => prisma.venda.count({ where })),
+      executeWithRetry(() => prisma.venda.aggregate({ where, _sum: { valorTotal: true } })),
+      executeWithRetry(() => prisma.naoVenda.count({ where })),
+      executeWithRetry(() => prisma.naoVenda.aggregate({ where, _sum: { valorTotal: true } }))
+    ]);
+    
     const estatisticas: EstatisticasResumidas = {
       totalVendas,
-      valorTotalVendas,
+      valorTotalVendas: valorVendasResult._sum.valorTotal || 0,
       totalNaoVendas,
-      valorTotalNaoVendas,
+      valorTotalNaoVendas: valorNaoVendasResult._sum.valorTotal || 0,
       totalOrcamentos: totalVendas + totalNaoVendas
     };
 
+    revalidatePath('/painel');
     return { success: true, estatisticas };
   } catch (error) {
     console.error('Erro ao buscar estatísticas resumidas:', error);
@@ -839,7 +613,6 @@ export async function getEstatisticasResumidasVendas(filtros?: FiltrosBase): Pro
   estatisticas?: EstatisticasResumidasVendas;
   error?: string;
 }> {
-  // Validar autenticação
   const session = await auth();
   
   if (!session) {
@@ -847,15 +620,12 @@ export async function getEstatisticasResumidasVendas(filtros?: FiltrosBase): Pro
   }
 
   try {
-    // Construir filtros
     const where: Record<string, unknown> = {}; 
     
-    // Se não for admin, filtrar por usuário logado
     if (session.user.role !== 'ADMIN') {
       where.vendedorId = session.user.id;
     }
     
-    // Filtrar por data
     if (filtros?.dataInicio && filtros?.dataFim) {
       where.createdAt = {
         gte: new Date(filtros.dataInicio),
@@ -863,25 +633,17 @@ export async function getEstatisticasResumidasVendas(filtros?: FiltrosBase): Pro
       };
     }
 
-    // Buscar total de vendas
-    const totalVendas = await executeWithRetry(() => 
-      prisma.venda.count({ where })
-    );
-
-    // Buscar valor total de vendas
-    const valorVendasResult = await executeWithRetry(() => 
-      prisma.venda.aggregate({
-        where,
-        _sum: { valorTotal: true }
-      })
-    );
-    const valorTotalVendas = valorVendasResult._sum.valorTotal || 0;
-
+    const [totalVendas, valorVendasResult] = await Promise.all([
+      executeWithRetry(() => prisma.venda.count({ where })),
+      executeWithRetry(() => prisma.venda.aggregate({ where, _sum: { valorTotal: true } }))
+    ]);
+    
     const estatisticas: EstatisticasResumidasVendas = {
       totalVendas,
-      valorTotalVendas
+      valorTotalVendas: valorVendasResult._sum.valorTotal || 0
     };
 
+    revalidatePath('/painel');
     return { success: true, estatisticas };
   } catch (error) {
     console.error('Erro ao buscar estatísticas resumidas de vendas:', error);
@@ -894,7 +656,6 @@ export async function getEstatisticasResumidasNaoVendas(filtros?: FiltrosBase): 
   estatisticas?: EstatisticasResumidasNaoVendas;
   error?: string;
 }> {
-  // Validar autenticação
   const session = await auth();
   
   if (!session) {
@@ -902,15 +663,12 @@ export async function getEstatisticasResumidasNaoVendas(filtros?: FiltrosBase): 
   }
 
   try {
-    // Construir filtros
     const where: Record<string, unknown> = {}; 
     
-    // Se não for admin, filtrar por usuário logado
     if (session.user.role !== 'ADMIN') {
       where.vendedorId = session.user.id;
     }
     
-    // Filtrar por data
     if (filtros?.dataInicio && filtros?.dataFim) {
       where.createdAt = {
         gte: new Date(filtros.dataInicio),
@@ -918,28 +676,20 @@ export async function getEstatisticasResumidasNaoVendas(filtros?: FiltrosBase): 
       };
     }
 
-    // Buscar total de não vendas
-    const totalNaoVendas = await executeWithRetry(() => 
-      prisma.naoVenda.count({ where })
-    );
-
-    // Buscar valor total de não vendas
-    const valorNaoVendasResult = await executeWithRetry(() => 
-      prisma.naoVenda.aggregate({
-        where,
-        _sum: { valorTotal: true }
-      })
-    );
-    const valorTotalNaoVendas = valorNaoVendasResult._sum.valorTotal || 0;
-
+    const [totalNaoVendas, valorNaoVendasResult] = await Promise.all([
+      executeWithRetry(() => prisma.naoVenda.count({ where })),
+      executeWithRetry(() => prisma.naoVenda.aggregate({ where, _sum: { valorTotal: true } }))
+    ]);
+    
     const estatisticas: EstatisticasResumidasNaoVendas = {
       totalNaoVendas,
-      valorTotalNaoVendas
+      valorTotalNaoVendas: valorNaoVendasResult._sum.valorTotal || 0
     };
 
+    revalidatePath('/painel');
     return { success: true, estatisticas };
   } catch (error) {
     console.error('Erro ao buscar estatísticas resumidas de não vendas:', error);
     return { success: false, error: 'Ocorreu um erro ao buscar as estatísticas' };
   }
-}
+} 

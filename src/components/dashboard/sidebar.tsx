@@ -69,7 +69,7 @@ export function Sidebar() {
         onClick={handleClick}
         className={cn(
           "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors relative",
-          isActive ? "bg-[#00446A] text-white" : "hover:bg-[#00446A]/10"
+          isActive ? "bg-[#00446A] text-white shadow-2xs" : "hover:bg-[#00446A]/10"
         )}
       >
         {icon}
@@ -83,19 +83,21 @@ export function Sidebar() {
         
         {isActive && (
           <motion.div
-            className="absolute left-0 w-1 h-8 bg-[#9BC21B] rounded-r-lg"
+            className="absolute left-0 w-2 h-9 bg-[#9BC21B] rounded-r-lg"
             layoutId="activeIndicator"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           />
+          
         )}
+        
       </Link>
     );
   };
 
   return (
-    <aside className="w-64 h-screen bg-white border-r rounded-tr-[3rem] rounded-br-[3rem] shadow-[0_0_20px_#00000017] border border-[#00446a2b] flex flex-col">
+    <aside className="w-64 h-screen bg-white border-r rounded-tr-[3rem] rounded-br-[3rem] shadow-[0_0_20px_#00000017] border border-[#00446a2b] flex flex-col fixed">
       <div className="p-6 w-[100%] flex justify-center">
         <Image
           width={125}
