@@ -1,4 +1,3 @@
-// src/components/dashboard/sidebar.tsx
 "use client";
 
 import Link from "next/link";
@@ -19,8 +18,10 @@ import {
   Settings,
   Lock,
   Boxes,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useState, useEffect } from "react";
 
 type SidebarItemProps = {
   href: string;
@@ -29,44 +30,70 @@ type SidebarItemProps = {
   disabled?: boolean;
 };
 
-const SidebarItem = ({ href, icon, label, disabled }: SidebarItemProps) => {
+export function Sidebar() {
+  const [activePath, setActivePath] = useState<string | null>(null);
   const pathname = usePathname();
-  const isActive = pathname === href;
 
-  if (disabled) {
+  // Efeito para resetar o caminho ativo quando a navegação for concluída
+  useEffect(() => {
+    setActivePath(null);
+  }, [pathname]);
+
+  const SidebarItem = ({ href, icon, label, disabled }: SidebarItemProps) => {
+    const isActive = pathname === href;
+    const isLoading = activePath === href;
+
+    const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+      if (disabled) {
+        e.preventDefault();
+        return;
+      }
+      
+      // Define o caminho ativo para mostrar o indicador de carregamento
+      setActivePath(href);
+    };
+
+    if (disabled) {
+      return (
+        <div className="flex items-center gap-3 px-4 py-3 text-gray-400 opacity-70 cursor-not-allowed">
+          {icon}
+          <span>{label}</span>
+          <Lock className="w-4 h-4 ml-auto" />
+        </div>
+      );
+    }
+
     return (
-      <div className="flex items-center gap-3 px-4 py-3 text-gray-400 opacity-70 cursor-not-allowed">
+      <Link
+        href={href}
+        onClick={handleClick}
+        className={cn(
+          "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors relative",
+          isActive ? "bg-[#00446A] text-white" : "hover:bg-[#00446A]/10"
+        )}
+      >
         {icon}
         <span>{label}</span>
-        <Lock className="w-4 h-4 ml-auto" />
-      </div>
+        
+        {isLoading && (
+          <Loader2 
+            className="w-6 h-6 ml-auto animate-spin text-[#00446A]" 
+          />
+        )}
+        
+        {isActive && (
+          <motion.div
+            className="absolute left-0 w-1 h-8 bg-[#9BC21B] rounded-r-lg"
+            layoutId="activeIndicator"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          />
+        )}
+      </Link>
     );
-  }
+  };
 
-  return (
-    <Link
-      href={href}
-      className={cn(
-        "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
-        isActive ? "bg-[#00446A] text-white" : "hover:bg-[#00446A]/10"
-      )}
-    >
-      {icon}
-      <span>{label}</span>
-      {isActive && (
-        <motion.div
-          className="absolute left-0 w-1 h-8 bg-[#9BC21B] rounded-r-lg"
-          layoutId="activeIndicator"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-        />
-      )}
-    </Link>
-  );
-};
-
-export function Sidebar() {
   return (
     <aside className="w-64 h-screen bg-white border-r rounded-tr-[3rem] rounded-br-[3rem] shadow-[0_0_20px_#00000017] border border-[#00446a2b] flex flex-col">
       <div className="p-6 w-[100%] flex justify-center">

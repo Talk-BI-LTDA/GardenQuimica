@@ -60,6 +60,7 @@ export async function criarUsuario(data: UsuarioFormData) {
         password: hashedPassword,
         cpf: data.cpf,
         role: data.role,
+        regiao: data.regiao,
         createdById: session.user.id,
       },
     });
@@ -72,7 +73,7 @@ export async function criarUsuario(data: UsuarioFormData) {
   }
 }
 
-export async function getUsuarios() {
+export async function getUsuarioS(id: string) {
   // Validar autenticação
   const session = await auth();
   
@@ -86,16 +87,28 @@ export async function getUsuarios() {
   }
 
   try {
-    const usuarios = await prisma.user.findMany({
-      orderBy: {
-        name: 'asc'
-      }
+    const usuario = await prisma.user.findUnique({
+      where: { id }
     });
 
-    return { success: true, usuarios };
+    if (!usuario) {
+      return { error: 'Usuário não encontrado' };
+    }
+
+    return { 
+      success: true, 
+      usuario: {
+        id: usuario.id,
+        nome: usuario.name,
+        email: usuario.email,
+        cpf: usuario.cpf,
+        role: usuario.role,
+        regiao: usuario.regiao, // Campo região incluído
+      } 
+    };
   } catch (error) {
-    console.error('Erro ao buscar usuários:', error);
-    return { error: 'Ocorreu um erro ao buscar os usuários' };
+    console.error('Erro ao buscar usuário:', error);
+    return { error: 'Ocorreu um erro ao buscar o usuário' };
   }
 }
 
@@ -206,6 +219,7 @@ export async function atualizarUsuario(id: string, data: UsuarioFormData) {
       email: data.email,
       cpf: data.cpf,
       role: data.role,
+      regiao: data.regiao, 
       editedById: session.user.id,
     };
 

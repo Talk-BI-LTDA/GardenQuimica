@@ -7,6 +7,7 @@ export type Usuario = {
   email: string;
   cpf: string;
   role: UsuarioRole;
+  regiao?: string;  
   createdAt: Date;
   updatedAt: Date;
   createdById?: string;
@@ -20,4 +21,5 @@ export type UsuarioFormData = {
   confirmacaoSenha: string;
   cpf: string;
   role: UsuarioRole;
+  regiao?: string;  
 };

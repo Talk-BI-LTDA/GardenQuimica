@@ -121,49 +121,74 @@ export async function getClientes(filtros?: ClienteFiltros) {
       : undefined
     const take = filtros?.itensPorPagina || undefined
       
-    // Buscar clientes no banco de dados
+    // Otimização: Reduzir a quantidade de dados retornados em cada consulta
     const clientesDB = await prisma.cliente.findMany({
       where,
       orderBy,
       skip,
       take,
-      include: {
+      select: {
+        id: true,
+        nome: true,
+        segmento: true,
+        cnpj: true,
+        razaoSocial: true,
+        createdAt: true,
         vendas: {
-          include: {
+          select: {
+            id: true,
+            valorTotal: true,
+            createdAt: true,
+            vendaRecorrente: true,
             produtos: {
-              include: {
-                produto: true
+              select: {
+                produto: {
+                  select: {
+                    id: true,
+                    nome: true
+                  }
+                }
               }
             }
           }
         }
       }
-    })
+    });
     
-    // Calcular dados adicionais para cada cliente
-    const clientes = await Promise.all(clientesDB.map(async cliente => {
+    // Calcular dados adicionais para cada cliente - otimizado para reduzir cálculos repetidos
+    const clientes = clientesDB.map(cliente => {
       // Calcular valor total e médio
       let valorTotal = 0
       let maiorValor = 0
       const vendas = cliente.vendas || []
+      
+      // Calcular numa única passagem para melhorar performance
+      let ultimaCompraTimestamp = 0;
+      const produtosContagem: Record<string, number> = {}
+      
       vendas.forEach(venda => {
+        // Calcular valor total e maior valor
         valorTotal += venda.valorTotal
         if (venda.valorTotal > maiorValor) {
           maiorValor = venda.valorTotal
         }
-      })
-      
-      const valorMedio = vendas.length > 0 ? valorTotal / vendas.length : 0
-      
-      // Determinar produto mais comprado
-      const produtosContagem: Record<string, number> = {}
-      vendas.forEach(venda => {
+        
+        // Encontrar última compra
+        const vendaTimestamp = venda.createdAt.getTime()
+        if (vendaTimestamp > ultimaCompraTimestamp) {
+          ultimaCompraTimestamp = vendaTimestamp
+        }
+        
+        // Contar produtos
         venda.produtos.forEach(p => {
           const nomeProduto = p.produto.nome
           produtosContagem[nomeProduto] = (produtosContagem[nomeProduto] || 0) + 1
         })
       })
       
+      const valorMedio = vendas.length > 0 ? valorTotal / vendas.length : 0
+      
+      // Produto mais comprado
       let produtoMaisComprado: string | undefined = undefined
       let maxContagem = 0
       
@@ -174,10 +199,9 @@ export async function getClientes(filtros?: ClienteFiltros) {
         }
       })
       
-      // Calcular última compra
-      const datasCompra = vendas.map(v => v.createdAt)
-      const ultimaCompra = datasCompra.length > 0 
-        ? new Date(Math.max(...datasCompra.map(d => d.getTime())))
+      // Última compra
+      const ultimaCompra = ultimaCompraTimestamp > 0 
+        ? new Date(ultimaCompraTimestamp)
         : null
       
       // Calcular recorrência
@@ -191,8 +215,9 @@ export async function getClientes(filtros?: ClienteFiltros) {
       
       // Calcular frequência média de compra
       let freqCompra: number | undefined = undefined
-      if (datasCompra.length > 1) {
+      if (vendas.length > 1) {
         // Ordenar datas de compra
+        const datasCompra = vendas.map(v => v.createdAt)
         const datasOrdenadas = [...datasCompra].sort((a, b) => a.getTime() - b.getTime())
         
         // Calcular diferenças entre compras consecutivas
@@ -244,7 +269,7 @@ export async function getClientes(filtros?: ClienteFiltros) {
       };
       
       return clienteFormatado;
-    }))
+    })
     
     // Se ordenação for por campo calculado, aplicar aqui
     if (filtros?.ordenacao?.campo && ['valorTotal', 'valorMedio', 'ultimaCompra', 'quantidadeVendas', 'maiorValor'].includes(filtros.ordenacao.campo)) {
@@ -267,6 +292,9 @@ export async function getClientes(filtros?: ClienteFiltros) {
         }
       })
     }
+    
+    // Revalidar para garantir dados atualizados sem cache desnecessário
+    revalidatePath('/clientes')
     
     return { 
       success: true, 
@@ -295,14 +323,31 @@ export async function getClienteById(id: string) {
   }
 
   try {
+    // Otimização: usar select em vez de include para reduzir dados retornados
     const cliente = await prisma.cliente.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        nome: true,
+        segmento: true,
+        cnpj: true,
+        razaoSocial: true,
+        createdAt: true,
         vendas: {
-          include: {
+          select: {
+            id: true,
+            valorTotal: true,
+            createdAt: true,
+            vendaRecorrente: true,
             produtos: {
-              include: {
-                produto: true
+              select: {
+                produto: {
+                  select: {
+                    id: true,
+                    nome: true
+                  }
+                },
+                quantidade: true
               }
             }
           }
@@ -314,88 +359,96 @@ export async function getClienteById(id: string) {
       return { success: false, error: 'Cliente não encontrado' }
     }
 
-    // Calcular métricas
-    let valorTotal = 0
-    let maiorValor = 0
-    const vendas = cliente.vendas || []
+    // Otimização: Calcular tudo em um único loop
+    let valorTotal = 0;
+    let maiorValor = 0;
+    let ultimaCompraTimestamp = 0;
+    const produtosContagem: Record<string, number> = {};
+    const vendas = cliente.vendas || [];
+    const datasCompra: Date[] = [];
+    
     vendas.forEach(venda => {
-      valorTotal += venda.valorTotal
+      valorTotal += venda.valorTotal;
+      
       if (venda.valorTotal > maiorValor) {
-        maiorValor = venda.valorTotal
+        maiorValor = venda.valorTotal;
       }
-    })
-    
-    const valorMedio = vendas.length > 0 ? valorTotal / vendas.length : 0
-    
-    // Determinar produto mais comprado
-    const produtosContagem: Record<string, number> = {}
-    vendas.forEach(venda => {
+      
+      const vendaTimestamp = venda.createdAt.getTime();
+      if (vendaTimestamp > ultimaCompraTimestamp) {
+        ultimaCompraTimestamp = vendaTimestamp;
+      }
+      
+      datasCompra.push(venda.createdAt);
+      
       venda.produtos.forEach(p => {
-        const nomeProduto = p.produto.nome
-        produtosContagem[nomeProduto] = (produtosContagem[nomeProduto] || 0) + 1
-      })
-    })
+        const nomeProduto = p.produto.nome;
+        produtosContagem[nomeProduto] = (produtosContagem[nomeProduto] || 0) + 1;
+      });
+    });
     
-    let produtoMaisComprado: string | undefined = undefined
-    let maxContagem = 0
+    const valorMedio = vendas.length > 0 ? valorTotal / vendas.length : 0;
+    
+    // Produto mais comprado
+    let produtoMaisComprado: string | undefined = undefined;
+    let maxContagem = 0;
     
     Object.entries(produtosContagem).forEach(([produto, contagem]) => {
       if (contagem > maxContagem) {
-        maxContagem = contagem
-        produtoMaisComprado = produto
+        maxContagem = contagem;
+        produtoMaisComprado = produto;
       }
-    })
+    });
     
-    // Calcular última compra
-    const datasCompra = vendas.map(v => v.createdAt)
-    const ultimaCompra = datasCompra.length > 0 
-      ? new Date(Math.max(...datasCompra.map(d => d.getTime())))
-      : null
+    // Última compra
+    const ultimaCompra = ultimaCompraTimestamp > 0 
+      ? new Date(ultimaCompraTimestamp)
+      : null;
     
     // Calcular recorrência
-    const vendasRecorrentes = vendas.filter(v => v.vendaRecorrente)
-    const recorrente = vendasRecorrentes.length > 0
+    const vendasRecorrentes = vendas.filter(v => v.vendaRecorrente);
+    const recorrente = vendasRecorrentes.length > 0;
     
     // Calcular dias desde última compra
     const diasDesdeUltimaCompra = ultimaCompra 
       ? differenceInDays(new Date(), ultimaCompra) 
-      : 999
+      : 999;
     
     // Calcular frequência média de compra
-    let freqCompra: number | undefined = undefined
+    let freqCompra: number | undefined = undefined;
     if (datasCompra.length > 1) {
       // Ordenar datas de compra
-      const datasOrdenadas = [...datasCompra].sort((a, b) => a.getTime() - b.getTime())
+      const datasOrdenadas = [...datasCompra].sort((a, b) => a.getTime() - b.getTime());
       
       // Calcular diferenças entre compras consecutivas
-      let somaIntervalo = 0
+      let somaIntervalo = 0;
       for (let i = 1; i < datasOrdenadas.length; i++) {
-        somaIntervalo += differenceInDays(datasOrdenadas[i], datasOrdenadas[i-1])
+        somaIntervalo += differenceInDays(datasOrdenadas[i], datasOrdenadas[i-1]);
       }
       
-      freqCompra = Math.round(somaIntervalo / (datasOrdenadas.length - 1))
+      freqCompra = Math.round(somaIntervalo / (datasOrdenadas.length - 1));
     }
     
     // Calcular score do cliente (baseado em recência, frequência e valor)
-    let score = 0
+    let score = 0;
     
     // Componente de recência (30% do score)
-    if (diasDesdeUltimaCompra <= 30) score += 30
-    else if (diasDesdeUltimaCompra <= 90) score += 20
-    else if (diasDesdeUltimaCompra <= 180) score += 10
+    if (diasDesdeUltimaCompra <= 30) score += 30;
+    else if (diasDesdeUltimaCompra <= 90) score += 20;
+    else if (diasDesdeUltimaCompra <= 180) score += 10;
     
     // Componente de frequência (30% do score)
-    if (vendas.length >= 10) score += 30
-    else if (vendas.length >= 5) score += 20
-    else if (vendas.length >= 2) score += 10
+    if (vendas.length >= 10) score += 30;
+    else if (vendas.length >= 5) score += 20;
+    else if (vendas.length >= 2) score += 10;
     
     // Componente de valor (40% do score)
-    if (valorTotal >= 50000) score += 40
-    else if (valorTotal >= 10000) score += 30
-    else if (valorTotal >= 5000) score += 20
-    else if (valorTotal >= 1000) score += 10
+    if (valorTotal >= 50000) score += 40;
+    else if (valorTotal >= 10000) score += 30;
+    else if (valorTotal >= 5000) score += 20;
+    else if (valorTotal >= 1000) score += 10;
 
-    // Converter para o tipo Cliente omitindo os campos que não existem no modelo Prisma
+    // Converter para o tipo Cliente
     const clienteComMetricas: Cliente = {
       id: cliente.id,
       nome: cliente.nome,
@@ -415,6 +468,9 @@ export async function getClienteById(id: string) {
       score
     };
 
+    // Revalidar para garantir dados atualizados
+    revalidatePath(`/clientes`);
+    
     return { success: true, cliente: clienteComMetricas }
   } catch (error) {
     console.error('Erro ao buscar cliente:', error)
@@ -434,10 +490,21 @@ export async function getVendasCliente(clienteId: string) {
   }
 
   try {
+    // Otimização: usar select em vez de include para dados menores
     const vendas = await prisma.venda.findMany({
       where: { clienteId },
-      include: {
-        cliente: true,
+      select: {
+        id: true,
+        codigoVenda: true,
+        createdAt: true,
+        clienteId: true,
+        valorTotal: true,
+        cliente: {
+          select: {
+            nome: true,
+            cnpj: true
+          }
+        },
         vendedor: {
           select: {
             id: true,
@@ -445,8 +512,15 @@ export async function getVendasCliente(clienteId: string) {
           }
         },
         produtos: {
-          include: {
-            produto: true
+          select: {
+            quantidade: true,
+            valor: true,
+            produto: {
+              select: {
+                id: true,
+                nome: true
+              }
+            }
           }
         }
       },
@@ -475,6 +549,9 @@ export async function getVendasCliente(clienteId: string) {
       }))
     }))
 
+    // Revalidar para garantir dados atualizados
+    revalidatePath(`/clientes`);
+    
     return { success: true, vendas: vendasMapeadas }
   } catch (error) {
     console.error('Erro ao buscar vendas do cliente:', error)
@@ -494,13 +571,17 @@ export async function getSegmentos() {
   }
 
   try {
-    // Buscar segmentos únicos de clientes
+    // Otimização: usar consulta mais direta
     const segmentos = await prisma.cliente.groupBy({
       by: ['segmento'],
     })
 
     // Buscar informações de catálogo de segmentos
-    const catalogoSegmentos = await prisma.catalogoSegmento.findMany()
+    const catalogoSegmentos = await prisma.catalogoSegmento.findMany({
+      select: {
+        nome: true
+      }
+    })
     
     // Combinar informações
     const segmentosUnicos = [...new Set([
@@ -508,6 +589,9 @@ export async function getSegmentos() {
       ...catalogoSegmentos.map(s => s.nome)
     ])]
 
+    // Revalidar para garantir dados atualizados
+    revalidatePath('/clientes');
+    
     return { success: true, segmentos: segmentosUnicos }
   } catch (error) {
     console.error('Erro ao buscar segmentos:', error)
@@ -527,10 +611,21 @@ export async function getEstatisticasClientes() {
   }
 
   try {
-    // Buscar todos os clientes
+    // Otimização: reduzir dados buscados com select mais específico
     const clientes = await prisma.cliente.findMany({
-      include: {
-        vendas: true
+      select: {
+        id: true,
+        nome: true,
+        segmento: true,
+        createdAt: true,
+        vendas: {
+          select: {
+            id: true,
+            valorTotal: true,
+            createdAt: true,
+            vendaRecorrente: true
+          }
+        }
       }
     })
     
@@ -538,21 +633,13 @@ export async function getEstatisticasClientes() {
     const totalClientes = clientes.length
     
     // Identificar clientes recorrentes vs não recorrentes
-    const clientesComVendasRecorrentes = await prisma.venda.findMany({
-      where: {
-        vendaRecorrente: true
-      },
-      select: {
-        clienteId: true
-      },
-      distinct: ['clienteId']
-    })
+    const clientesRecorrentes = clientes.filter(cliente => 
+      cliente.vendas.some(v => v.vendaRecorrente)
+    ).length
     
-    const idsClientesRecorrentes = clientesComVendasRecorrentes.map(v => v.clienteId)
-    const clientesRecorrentes = idsClientesRecorrentes.length
     const clientesNaoRecorrentes = totalClientes - clientesRecorrentes
     
-    // Calcular valor total e médio
+    // Calcular valor total
     let valorTotalGeral = 0
     clientes.forEach(cliente => {
       cliente.vendas.forEach(venda => {
@@ -563,17 +650,26 @@ export async function getEstatisticasClientes() {
     const valorMedio = totalClientes > 0 ? valorTotalGeral / totalClientes : 0
     
     // Identificar clientes inativos (sem compras há mais de 90 dias)
+    const hoje = new Date()
     const clientesInativos = clientes.filter(cliente => {
       if (cliente.vendas.length === 0) return true
       
-      const datasCompra = cliente.vendas.map(v => v.createdAt)
-      const ultimaCompra = new Date(Math.max(...datasCompra.map(d => d.getTime())))
-      const diasDesdeUltimaCompra = differenceInDays(new Date(), ultimaCompra)
+      // Encontrar data mais recente
+      let ultimaCompraTimestamp = 0
+      cliente.vendas.forEach(venda => {
+        const timestamp = venda.createdAt.getTime()
+        if (timestamp > ultimaCompraTimestamp) {
+          ultimaCompraTimestamp = timestamp
+        }
+      })
+      
+      const ultimaCompra = new Date(ultimaCompraTimestamp)
+      const diasDesdeUltimaCompra = differenceInDays(hoje, ultimaCompra)
       
       return diasDesdeUltimaCompra > 90
     }).length
     
-    // Calcular frequência média de compra
+    // Calcular frequência média de compra de forma mais eficiente
     let somaFrequencia = 0
     let contadorClientesComFrequencia = 0
     
@@ -598,7 +694,7 @@ export async function getEstatisticasClientes() {
     
     // Identificar clientes novos (últimos 30 dias)
     const clientesNovos30Dias = clientes.filter(cliente => {
-      return differenceInDays(new Date(), cliente.createdAt) <= 30
+      return differenceInDays(hoje, cliente.createdAt) <= 30
     }).length
     
     // Calcular top 5 clientes por valor
@@ -620,7 +716,7 @@ export async function getEstatisticasClientes() {
       .slice(0, 5)
       .filter(c => c.valorTotal > 0)
     
-    // Agrupar por segmento
+    // Agrupar por segmento de forma mais eficiente
     const segmentosMap = new Map<string, { nome: string, quantidadeClientes: number, valorTotal: number }>()
     
     clientes.forEach(cliente => {
@@ -642,6 +738,9 @@ export async function getEstatisticasClientes() {
     
     const segmentos = Array.from(segmentosMap.values())
 
+    // Revalidar para garantir dados atualizados
+    revalidatePath('/clientes');
+    
     return { 
       success: true, 
       estatisticas: {
@@ -695,6 +794,7 @@ export async function criarCliente(data: ClienteParams) {
       }
     })
 
+    // Revalidar para garantir que a UI mostre os dados atualizados
     revalidatePath('/clientes')
     return { success: true, cliente }
   } catch (error) {
@@ -748,6 +848,7 @@ export async function atualizarCliente(id: string, data: ClienteParams) {
       }
     })
 
+    // Revalidar para garantir que a UI mostre os dados atualizados
     revalidatePath('/clientes')
     return { success: true, cliente }
   } catch (error) {
@@ -776,9 +877,14 @@ export async function excluirCliente(id: string) {
     // Verificar se o cliente existe
     const clienteExistente = await prisma.cliente.findUnique({
       where: { id },
-      include: {
-        vendas: true,
-        naoVendas: true
+      select: {
+        id: true,
+        _count: {
+          select: {
+            vendas: true,
+            naoVendas: true
+          }
+        }
       }
     })
 
@@ -787,7 +893,7 @@ export async function excluirCliente(id: string) {
     }
 
     // Verificar se há vendas associadas
-    if (clienteExistente.vendas.length > 0 || clienteExistente.naoVendas.length > 0) {
+    if (clienteExistente._count.vendas > 0 || clienteExistente._count.naoVendas > 0) {
       return { success: false, error: 'Não é possível excluir um cliente com vendas ou não-vendas associadas' }
     }
 
@@ -796,6 +902,7 @@ export async function excluirCliente(id: string) {
       where: { id }
     })
 
+    // Revalidar para garantir que a UI mostre os dados atualizados
     revalidatePath('/clientes')
     return { success: true }
   } catch (error) {
@@ -803,6 +910,7 @@ export async function excluirCliente(id: string) {
     return { success: false, error: 'Ocorreu um erro ao excluir o cliente' }
   }
 }
+
 export async function getDadosMensaisComparacao() {
   // Validar autenticação
   const session = await auth()
@@ -812,17 +920,26 @@ export async function getDadosMensaisComparacao() {
   }
 
   try {
-    // Buscar todas as vendas com clientes para processamento
+    // Otimização: reduzir dados buscados com select
     const vendas = await prisma.venda.findMany({
-      include: {
-        cliente: true
+      select: {
+        id: true,
+        valorTotal: true,
+        createdAt: true,
+        clienteId: true,
+        vendaRecorrente: true,
+        cliente: {
+          select: {
+            segmento: true
+          }
+        }
       },
       orderBy: {
         createdAt: 'asc'
       }
     });
 
-    // Agrupar vendas por mês
+    // Agrupar vendas por mês com mapa para melhor performance
     const vendasPorMesMap = new Map<string, {
       mes: string;
       novosClientes: Set<string>; // Usado para contar clientes únicos
@@ -832,7 +949,7 @@ export async function getDadosMensaisComparacao() {
       segmentos: Record<string, number>;
     }>();
 
-    // Processar cada venda
+    // Processar cada venda em única passagem
     vendas.forEach(venda => {
       const data = venda.createdAt;
       const mes = `${String(data.getMonth() + 1).padStart(2, '0')}/${data.getFullYear()}`;
@@ -882,6 +999,9 @@ export async function getDadosMensaisComparacao() {
       segmentos: item.segmentos
     }));
 
+    // Revalidar para garantir dados atualizados
+    revalidatePath('/clientes');
+    
     return { success: true, dados: dadosFormatados };
   } catch (error) {
     console.error('Erro ao buscar dados mensais:', error);

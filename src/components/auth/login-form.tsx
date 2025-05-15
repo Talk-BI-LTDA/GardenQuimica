@@ -192,12 +192,14 @@ export function   LoginForm() {
     <div className="w-full max-w-md ">
       <div className="mb-8 flex justify-center text-center">
         <Image
-          width={150}
-          height={150}
+          width={126}
+          height={126}
           src="/logo-garden.png"
           alt="Garden Química"
-          className="object-fit"
+          className="object-contain "
+
         />
+
       </div>
       <div className="bg-white p-8 rounded-lg shadow-lg overflow-hidden">
         <AnimatePresence mode="wait">

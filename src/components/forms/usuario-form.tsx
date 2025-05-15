@@ -14,7 +14,8 @@ import {
   Mail,
   Lock,
   CreditCard,
-  UserCog
+  UserCog,
+  MapPin
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -40,10 +41,19 @@ import { UsuarioFormData } from '@/types/usuario'
 import { criarUsuario, atualizarUsuario } from '@/actions/usuario-actions'
 
 type UsuarioFormProps = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  initialData?: any
+  initialData?: Record<string, unknown>
   isEditing?: boolean
 }
+
+// Lista de estados brasileiros
+const estadosBrasileiros = [
+  'Acre', 'Alagoas', 'Amapá', 'Amazonas', 'Bahia', 'Ceará', 
+  'Distrito Federal', 'Espírito Santo', 'Goiás', 'Maranhão', 
+  'Mato Grosso', 'Mato Grosso do Sul', 'Minas Gerais', 'Pará', 
+  'Paraíba', 'Paraná', 'Pernambuco', 'Piauí', 'Rio de Janeiro', 
+  'Rio Grande do Norte', 'Rio Grande do Sul', 'Rondônia', 
+  'Roraima', 'Santa Catarina', 'São Paulo', 'Sergipe', 'Tocantins'
+];
 
 export function UsuarioForm({ initialData, isEditing = false }: UsuarioFormProps) {
   const [loading, setLoading] = useState(false)
@@ -61,7 +71,8 @@ export function UsuarioForm({ initialData, isEditing = false }: UsuarioFormProps
       senha: '',
       confirmacaoSenha: '',
       cpf: '',
-      role: 'VENDEDOR'
+      role: 'VENDEDOR',
+      regiao: 'São Paulo',
     }
   })
 
@@ -71,7 +82,7 @@ export function UsuarioForm({ initialData, isEditing = false }: UsuarioFormProps
 
     try {
       const result = isEditing 
-        ? await atualizarUsuario(initialData.id, data)
+        ? await atualizarUsuario(initialData?.id as string, data)
         : await criarUsuario(data)
 
       if (result.error) {
@@ -86,7 +97,8 @@ export function UsuarioForm({ initialData, isEditing = false }: UsuarioFormProps
             senha: '',
             confirmacaoSenha: '',
             cpf: '',
-            role: 'VENDEDOR'
+            role: 'VENDEDOR',
+            regiao: 'São Paulo',
           })
         }
       }
@@ -147,7 +159,6 @@ export function UsuarioForm({ initialData, isEditing = false }: UsuarioFormProps
                     <Input 
                       {...field} 
                       placeholder="000.000.000-00" 
-                      // Máscara de CPF
                     />
                   </div>
                 </FormControl>
@@ -172,6 +183,38 @@ export function UsuarioForm({ initialData, isEditing = false }: UsuarioFormProps
                       <SelectContent>
                         <SelectItem value="VENDEDOR">Vendedor</SelectItem>
                         <SelectItem value="ADMIN">Administrador</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          {/* Novo campo de região */}
+          <FormField
+            control={form.control}
+            name="regiao"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Região</FormLabel>
+                <FormControl>
+                  <div className="flex items-center space-x-2">
+                    <MapPin className="w-4 h-4 text-gray-400" />
+                    <Select 
+                      value={field.value || ''} 
+                      onValueChange={field.onChange}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a região" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {estadosBrasileiros.map((estado) => (
+                          <SelectItem key={estado} value={estado}>
+                            {estado}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

@@ -4,22 +4,21 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  // directUrl = env("DIRECT_URL")
-  
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
-  id        String   @id @default(uuid())
+  id        String     @id @default(uuid())
   name      String
-  email     String   @unique
+  email     String     @unique
   password  String
-  cpf       String   @unique
-  role      Role     @default(VENDEDOR)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  cpf       String     @unique
+  role      Role       @default(VENDEDOR)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  regiao    String?
   vendas    Venda[]
   naoVendas NaoVenda[]
 
@@ -51,10 +50,10 @@ model User {
 }
 
 model PasswordReset {
-  id        String    @id @default(uuid())
-  email     String    @unique
-  token     String    
-  createdAt DateTime  @default(now())
+  id        String   @id @default(uuid())
+  email     String   @unique
+  token     String
+  createdAt DateTime @default(now())
   expiresAt DateTime
 }
 
