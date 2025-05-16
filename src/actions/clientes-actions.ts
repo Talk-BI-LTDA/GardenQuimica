@@ -35,10 +35,11 @@ export async function getClientes(filtros?: ClienteFiltros) {
         },
         select: {
           clienteId: true
-        }
+        },
+        distinct: ['clienteId'] // Otimização: buscar somente IDs distintos
       })
       
-      const clienteIds = [...new Set(clientesComCompraNoIntervalo.map(c => c.clienteId))]
+      const clienteIds = clientesComCompraNoIntervalo.map(c => c.clienteId);
       
       if (clienteIds.length > 0) {
         where.id = { in: clienteIds }
@@ -61,7 +62,7 @@ export async function getClientes(filtros?: ClienteFiltros) {
     if (filtros?.recorrencia === "recorrentes" || filtros?.recorrencia === "naoRecorrentes") {
       const recorrentesEsperado = filtros.recorrencia === "recorrentes"
       
-      // Encontrar clientes com vendas recorrentes
+      // Encontrar clientes com vendas recorrentes - otimização: usar distinct
       const clientesComVendasRecorrentes = await prisma.venda.findMany({
         where: {
           vendaRecorrente: true
@@ -94,159 +95,136 @@ export async function getClientes(filtros?: ClienteFiltros) {
       ]
     }
     
-    // Contar total para paginação
-    const totalClientes = await prisma.cliente.count({ where })
-    const totalPaginas = filtros?.itensPorPagina 
-      ? Math.ceil(totalClientes / filtros.itensPorPagina) 
-      : 1
+    // Executar contagem e consulta principal em paralelo
+    const [totalClientes, clientesDB] = await Promise.all([
+      // Contagem total para paginação
+      prisma.cliente.count({ where }),
       
-    // Construir ordenação
-    const orderBy: Record<string, string> = {};
-    if (filtros?.ordenacao?.campo && filtros?.ordenacao?.ordem) {
-      // Para ordenar por campos calculados como valorTotal, precisamos de abordagem diferente
-      if (['valorTotal', 'valorMedio', 'ultimaCompra', 'quantidadeVendas', 'maiorValor'].includes(filtros.ordenacao.campo)) {
-        // Ordenação baseada em campos calculados será aplicada após a consulta
-      } else {
-        // Ordenação direta para campos simples
-        orderBy[filtros.ordenacao.campo] = filtros.ordenacao.ordem
-      }
-    } else {
-      // Ordenação padrão
-      orderBy.nome = 'asc'
-    }
-    
-    // Aplicar paginação
-    const skip = filtros?.pagina && filtros?.itensPorPagina 
-      ? (filtros.pagina - 1) * filtros.itensPorPagina 
-      : undefined
-    const take = filtros?.itensPorPagina || undefined
-      
-    // Otimização: Reduzir a quantidade de dados retornados em cada consulta
-    const clientesDB = await prisma.cliente.findMany({
-      where,
-      orderBy,
-      skip,
-      take,
-      select: {
-        id: true,
-        nome: true,
-        segmento: true,
-        cnpj: true,
-        razaoSocial: true,
-        createdAt: true,
-        vendas: {
-          select: {
-            id: true,
-            valorTotal: true,
-            createdAt: true,
-            vendaRecorrente: true,
-            produtos: {
-              select: {
-                produto: {
-                  select: {
-                    id: true,
-                    nome: true
+      // Busca principal de clientes com suas vendas
+      prisma.cliente.findMany({
+        where,
+        orderBy: buildOrderBy(filtros),
+        skip: filtros?.pagina && filtros?.itensPorPagina 
+          ? (filtros.pagina - 1) * filtros.itensPorPagina 
+          : undefined,
+        take: filtros?.itensPorPagina || undefined,
+        select: {
+          id: true,
+          nome: true,
+          segmento: true,
+          cnpj: true,
+          razaoSocial: true,
+          createdAt: true,
+          vendas: {
+            select: {
+              id: true,
+              valorTotal: true,
+              createdAt: true,
+              vendaRecorrente: true,
+              produtos: {
+                select: {
+                  produto: {
+                    select: {
+                      id: true,
+                      nome: true
+                    }
                   }
                 }
               }
             }
           }
         }
-      }
-    });
+      })
+    ]);
+      
+    const totalPaginas = filtros?.itensPorPagina 
+      ? Math.ceil(totalClientes / filtros.itensPorPagina) 
+      : 1
     
     // Calcular dados adicionais para cada cliente - otimizado para reduzir cálculos repetidos
     const clientes = clientesDB.map(cliente => {
-      // Calcular valor total e médio
-      let valorTotal = 0
-      let maiorValor = 0
-      const vendas = cliente.vendas || []
-      
-      // Calcular numa única passagem para melhorar performance
+      // Calcular valor total e médio em uma única passagem
+      const vendas = cliente.vendas || [];
+      let valorTotal = 0;
+      let maiorValor = 0;
       let ultimaCompraTimestamp = 0;
-      const produtosContagem: Record<string, number> = {}
+      const produtosContagem: Record<string, number> = {};
       
       vendas.forEach(venda => {
-        // Calcular valor total e maior valor
-        valorTotal += venda.valorTotal
-        if (venda.valorTotal > maiorValor) {
-          maiorValor = venda.valorTotal
-        }
+        // Valor total e maior valor
+        valorTotal += venda.valorTotal;
+        maiorValor = Math.max(maiorValor, venda.valorTotal);
         
-        // Encontrar última compra
-        const vendaTimestamp = venda.createdAt.getTime()
-        if (vendaTimestamp > ultimaCompraTimestamp) {
-          ultimaCompraTimestamp = vendaTimestamp
-        }
+        // Última compra
+        ultimaCompraTimestamp = Math.max(ultimaCompraTimestamp, venda.createdAt.getTime());
         
-        // Contar produtos
+        // Produtos
         venda.produtos.forEach(p => {
-          const nomeProduto = p.produto.nome
-          produtosContagem[nomeProduto] = (produtosContagem[nomeProduto] || 0) + 1
-        })
-      })
+          const nomeProduto = p.produto.nome;
+          produtosContagem[nomeProduto] = (produtosContagem[nomeProduto] || 0) + 1;
+        });
+      });
       
-      const valorMedio = vendas.length > 0 ? valorTotal / vendas.length : 0
+      const valorMedio = vendas.length > 0 ? valorTotal / vendas.length : 0;
       
       // Produto mais comprado
-      let produtoMaisComprado: string | undefined = undefined
-      let maxContagem = 0
+      let produtoMaisComprado: string | undefined = undefined;
+      let maxContagem = 0;
       
       Object.entries(produtosContagem).forEach(([produto, contagem]) => {
         if (contagem > maxContagem) {
-          maxContagem = contagem
-          produtoMaisComprado = produto
+          maxContagem = contagem;
+          produtoMaisComprado = produto;
         }
-      })
+      });
       
       // Última compra
       const ultimaCompra = ultimaCompraTimestamp > 0 
         ? new Date(ultimaCompraTimestamp)
-        : null
+        : null;
       
       // Calcular recorrência
-      const vendasRecorrentes = vendas.filter(v => v.vendaRecorrente)
-      const recorrente = vendasRecorrentes.length > 0
+      const recorrente = vendas.some(v => v.vendaRecorrente);
       
       // Calcular dias desde última compra
       const diasDesdeUltimaCompra = ultimaCompra 
         ? differenceInDays(new Date(), ultimaCompra) 
-        : 999
+        : 999;
       
       // Calcular frequência média de compra
-      let freqCompra: number | undefined = undefined
+      let freqCompra: number | undefined = undefined;
       if (vendas.length > 1) {
         // Ordenar datas de compra
-        const datasCompra = vendas.map(v => v.createdAt)
-        const datasOrdenadas = [...datasCompra].sort((a, b) => a.getTime() - b.getTime())
+        const datasCompra = vendas.map(v => v.createdAt);
+        const datasOrdenadas = [...datasCompra].sort((a, b) => a.getTime() - b.getTime());
         
         // Calcular diferenças entre compras consecutivas
-        let somaIntervalo = 0
+        let somaIntervalo = 0;
         for (let i = 1; i < datasOrdenadas.length; i++) {
-          somaIntervalo += differenceInDays(datasOrdenadas[i], datasOrdenadas[i-1])
+          somaIntervalo += differenceInDays(datasOrdenadas[i], datasOrdenadas[i-1]);
         }
         
-        freqCompra = Math.round(somaIntervalo / (datasOrdenadas.length - 1))
+        freqCompra = Math.round(somaIntervalo / (datasOrdenadas.length - 1));
       }
       
       // Calcular score do cliente (baseado em recência, frequência e valor)
-      let score = 0
+      let score = 0;
       
       // Componente de recência (30% do score)
-      if (diasDesdeUltimaCompra <= 30) score += 30
-      else if (diasDesdeUltimaCompra <= 90) score += 20
-      else if (diasDesdeUltimaCompra <= 180) score += 10
+      if (diasDesdeUltimaCompra <= 30) score += 30;
+      else if (diasDesdeUltimaCompra <= 90) score += 20;
+      else if (diasDesdeUltimaCompra <= 180) score += 10;
       
       // Componente de frequência (30% do score)
-      if (vendas.length >= 10) score += 30
-      else if (vendas.length >= 5) score += 20
-      else if (vendas.length >= 2) score += 10
+      if (vendas.length >= 10) score += 30;
+      else if (vendas.length >= 5) score += 20;
+      else if (vendas.length >= 2) score += 10;
       
       // Componente de valor (40% do score)
-      if (valorTotal >= 50000) score += 40
-      else if (valorTotal >= 10000) score += 30
-      else if (valorTotal >= 5000) score += 20
-      else if (valorTotal >= 1000) score += 10
+      if (valorTotal >= 50000) score += 40;
+      else if (valorTotal >= 10000) score += 30;
+      else if (valorTotal >= 5000) score += 20;
+      else if (valorTotal >= 1000) score += 10;
       
       // Converter para o tipo Cliente omitindo os campos que não existem no modelo Prisma
       const clienteFormatado: Cliente = {
@@ -269,46 +247,66 @@ export async function getClientes(filtros?: ClienteFiltros) {
       };
       
       return clienteFormatado;
-    })
+    });
     
-    // Se ordenação for por campo calculado, aplicar aqui
+    // Ordenar resultados após processamento se for por campo calculado
     if (filtros?.ordenacao?.campo && ['valorTotal', 'valorMedio', 'ultimaCompra', 'quantidadeVendas', 'maiorValor'].includes(filtros.ordenacao.campo)) {
-      const campo = filtros.ordenacao.campo as keyof Cliente
-      const direcao = filtros.ordenacao.ordem
-      
-      clientes.sort((a, b) => {
-        const valorA = a[campo]
-        const valorB = b[campo]
-        
-        if (valorA instanceof Date && valorB instanceof Date) {
-          return direcao === 'asc' 
-            ? valorA.getTime() - valorB.getTime()
-            : valorB.getTime() - valorA.getTime()
-        } else {
-          const numA = valorA === null || valorA === undefined ? -Infinity : Number(valorA)
-          const numB = valorB === null || valorB === undefined ? -Infinity : Number(valorB)
-          
-          return direcao === 'asc' ? numA - numB : numB - numA
-        }
-      })
+      sortClientesByCalculatedField(clientes, filtros.ordenacao.campo as keyof Cliente, filtros.ordenacao.ordem);
     }
     
     // Revalidar para garantir dados atualizados sem cache desnecessário
-    revalidatePath('/clientes')
+    revalidatePath('/clientes');
     
     return { 
       success: true, 
       clientes,
       totalPaginas
-    }
+    };
   } catch (error) {
-    console.error('Erro ao buscar clientes:', error)
+    console.error('Erro ao buscar clientes:', error);
     return { 
       success: false, 
       error: 'Ocorreu um erro ao buscar os clientes',
       totalPaginas: 0
-    }
+    };
   }
+}
+
+// Função auxiliar para construir a ordenação
+function buildOrderBy(filtros?: ClienteFiltros): Record<string, string> {
+  const orderBy: Record<string, string> = {};
+  
+  if (filtros?.ordenacao?.campo && filtros?.ordenacao?.ordem) {
+    if (!['valorTotal', 'valorMedio', 'ultimaCompra', 'quantidadeVendas', 'maiorValor'].includes(filtros.ordenacao.campo)) {
+      orderBy[filtros.ordenacao.campo] = filtros.ordenacao.ordem;
+    } else {
+      // Ordenação padrão para campos calculados, será aplicada após a consulta
+      orderBy.nome = 'asc';
+    }
+  } else {
+    orderBy.nome = 'asc';
+  }
+  
+  return orderBy;
+}
+
+// Função auxiliar para ordenação por campos calculados
+function sortClientesByCalculatedField(clientes: Cliente[], campo: keyof Cliente, direcao: string): void {
+  clientes.sort((a, b) => {
+    const valorA = a[campo];
+    const valorB = b[campo];
+    
+    if (valorA instanceof Date && valorB instanceof Date) {
+      return direcao === 'asc' 
+        ? valorA.getTime() - valorB.getTime()
+        : valorB.getTime() - valorA.getTime();
+    } else {
+      const numA = valorA === null || valorA === undefined ? -Infinity : Number(valorA);
+      const numB = valorB === null || valorB === undefined ? -Infinity : Number(valorB);
+      
+      return direcao === 'asc' ? numA - numB : numB - numA;
+    }
+  });
 }
 
 /**
@@ -316,10 +314,10 @@ export async function getClientes(filtros?: ClienteFiltros) {
  */
 export async function getClienteById(id: string) {
   // Validar autenticação
-  const session = await auth()
+  const session = await auth();
   
   if (!session) {
-    redirect('/login')
+    redirect('/login');
   }
 
   try {
@@ -353,10 +351,10 @@ export async function getClienteById(id: string) {
           }
         }
       }
-    })
+    });
 
     if (!cliente) {
-      return { success: false, error: 'Cliente não encontrado' }
+      return { success: false, error: 'Cliente não encontrado' };
     }
 
     // Otimização: Calcular tudo em um único loop
@@ -369,21 +367,13 @@ export async function getClienteById(id: string) {
     
     vendas.forEach(venda => {
       valorTotal += venda.valorTotal;
-      
-      if (venda.valorTotal > maiorValor) {
-        maiorValor = venda.valorTotal;
-      }
-      
-      const vendaTimestamp = venda.createdAt.getTime();
-      if (vendaTimestamp > ultimaCompraTimestamp) {
-        ultimaCompraTimestamp = vendaTimestamp;
-      }
-      
+      maiorValor = Math.max(maiorValor, venda.valorTotal);
+      ultimaCompraTimestamp = Math.max(ultimaCompraTimestamp, venda.createdAt.getTime());
       datasCompra.push(venda.createdAt);
       
       venda.produtos.forEach(p => {
         const nomeProduto = p.produto.nome;
-        produtosContagem[nomeProduto] = (produtosContagem[nomeProduto] || 0) + 1;
+        produtosContagem[nomeProduto] = (produtosContagem[nomeProduto] || 0) + p.quantidade;
       });
     });
     
@@ -406,8 +396,7 @@ export async function getClienteById(id: string) {
       : null;
     
     // Calcular recorrência
-    const vendasRecorrentes = vendas.filter(v => v.vendaRecorrente);
-    const recorrente = vendasRecorrentes.length > 0;
+    const recorrente = vendas.some(v => v.vendaRecorrente);
     
     // Calcular dias desde última compra
     const diasDesdeUltimaCompra = ultimaCompra 
@@ -471,10 +460,10 @@ export async function getClienteById(id: string) {
     // Revalidar para garantir dados atualizados
     revalidatePath(`/clientes`);
     
-    return { success: true, cliente: clienteComMetricas }
+    return { success: true, cliente: clienteComMetricas };
   } catch (error) {
-    console.error('Erro ao buscar cliente:', error)
-    return { success: false, error: 'Ocorreu um erro ao buscar o cliente' }
+    console.error('Erro ao buscar cliente:', error);
+    return { success: false, error: 'Ocorreu um erro ao buscar o cliente' };
   }
 }
 
@@ -483,10 +472,10 @@ export async function getClienteById(id: string) {
  */
 export async function getVendasCliente(clienteId: string) {
   // Validar autenticação
-  const session = await auth()
+  const session = await auth();
   
   if (!session) {
-    redirect('/login')
+    redirect('/login');
   }
 
   try {
@@ -527,7 +516,7 @@ export async function getVendasCliente(clienteId: string) {
       orderBy: {
         createdAt: 'desc'
       }
-    })
+    });
 
     // Mapear para formato esperado pela UI
     const vendasMapeadas = vendas.map(venda => ({
@@ -547,15 +536,15 @@ export async function getVendasCliente(clienteId: string) {
         valorUnitario: p.valor / p.quantidade,
         valorTotal: p.valor
       }))
-    }))
+    }));
 
     // Revalidar para garantir dados atualizados
     revalidatePath(`/clientes`);
     
-    return { success: true, vendas: vendasMapeadas }
+    return { success: true, vendas: vendasMapeadas };
   } catch (error) {
-    console.error('Erro ao buscar vendas do cliente:', error)
-    return { success: false, error: 'Ocorreu um erro ao buscar as vendas do cliente' }
+    console.error('Erro ao buscar vendas do cliente:', error);
+    return { success: false, error: 'Ocorreu um erro ao buscar as vendas do cliente' };
   }
 }
 
@@ -564,38 +553,38 @@ export async function getVendasCliente(clienteId: string) {
  */
 export async function getSegmentos() {
   // Validar autenticação
-  const session = await auth()
+  const session = await auth();
   
   if (!session) {
-    redirect('/login')
+    redirect('/login');
   }
 
   try {
-    // Otimização: usar consulta mais direta
-    const segmentos = await prisma.cliente.groupBy({
-      by: ['segmento'],
-    })
-
-    // Buscar informações de catálogo de segmentos
-    const catalogoSegmentos = await prisma.catalogoSegmento.findMany({
-      select: {
-        nome: true
-      }
-    })
+    // Otimização: executar consultas em paralelo
+    const [segmentos, catalogoSegmentos] = await Promise.all([
+      prisma.cliente.groupBy({
+        by: ['segmento'],
+      }),
+      prisma.catalogoSegmento.findMany({
+        select: {
+          nome: true
+        }
+      })
+    ]);
     
-    // Combinar informações
+    // Combinar informações de forma mais eficiente
     const segmentosUnicos = [...new Set([
       ...segmentos.map(s => s.segmento),
       ...catalogoSegmentos.map(s => s.nome)
-    ])]
+    ])];
 
     // Revalidar para garantir dados atualizados
     revalidatePath('/clientes');
     
-    return { success: true, segmentos: segmentosUnicos }
+    return { success: true, segmentos: segmentosUnicos };
   } catch (error) {
-    console.error('Erro ao buscar segmentos:', error)
-    return { success: false, error: 'Ocorreu um erro ao buscar os segmentos' }
+    console.error('Erro ao buscar segmentos:', error);
+    return { success: false, error: 'Ocorreu um erro ao buscar os segmentos' };
   }
 }
 
@@ -604,14 +593,14 @@ export async function getSegmentos() {
  */
 export async function getEstatisticasClientes() {
   // Validar autenticação
-  const session = await auth()
+  const session = await auth();
   
   if (!session) {
-    redirect('/login')
+    redirect('/login');
   }
 
   try {
-    // Otimização: reduzir dados buscados com select mais específico
+    // Otimização: buscar clientes com vendas em uma única consulta mais eficiente
     const clientes = await prisma.cliente.findMany({
       select: {
         id: true,
@@ -627,116 +616,106 @@ export async function getEstatisticasClientes() {
           }
         }
       }
-    })
+    });
     
-    // Calcular total de clientes
-    const totalClientes = clientes.length
+    // Estrutura para processamento otimizado
+    const hoje = new Date();
+    const totalClientes = clientes.length;
+    let valorTotalGeral = 0;
+    let clientesRecorrentes = 0;
+    let clientesInativos = 0;
+    let clientesNovos30Dias = 0;
+    let somaFrequencia = 0;
+    let contadorClientesComFrequencia = 0;
     
-    // Identificar clientes recorrentes vs não recorrentes
-    const clientesRecorrentes = clientes.filter(cliente => 
-      cliente.vendas.some(v => v.vendaRecorrente)
-    ).length
+    // Mapear clientes por segmento para processamento eficiente
+    const segmentosMap = new Map<string, { nome: string, quantidadeClientes: number, valorTotal: number }>();
+    const clienteValorMap: Array<{id: string, nome: string, valorTotal: number}> = [];
     
-    const clientesNaoRecorrentes = totalClientes - clientesRecorrentes
-    
-    // Calcular valor total
-    let valorTotalGeral = 0
+    // Processar todos os clientes em uma única passagem
     clientes.forEach(cliente => {
-      cliente.vendas.forEach(venda => {
-        valorTotalGeral += venda.valorTotal
-      })
-    })
-    
-    const valorMedio = totalClientes > 0 ? valorTotalGeral / totalClientes : 0
-    
-    // Identificar clientes inativos (sem compras há mais de 90 dias)
-    const hoje = new Date()
-    const clientesInativos = clientes.filter(cliente => {
-      if (cliente.vendas.length === 0) return true
+      const vendas = cliente.vendas;
       
-      // Encontrar data mais recente
-      let ultimaCompraTimestamp = 0
-      cliente.vendas.forEach(venda => {
-        const timestamp = venda.createdAt.getTime()
-        if (timestamp > ultimaCompraTimestamp) {
-          ultimaCompraTimestamp = timestamp
-        }
-      })
+      // Verificar se é recorrente
+      const ehRecorrente = vendas.some(v => v.vendaRecorrente);
+      if (ehRecorrente) clientesRecorrentes++;
       
-      const ultimaCompra = new Date(ultimaCompraTimestamp)
-      const diasDesdeUltimaCompra = differenceInDays(hoje, ultimaCompra)
+      // Calcular valor total do cliente
+      let valorTotalCliente = 0;
+      vendas.forEach(venda => {
+        valorTotalCliente += venda.valorTotal;
+      });
+      valorTotalGeral += valorTotalCliente;
       
-      return diasDesdeUltimaCompra > 90
-    }).length
-    
-    // Calcular frequência média de compra de forma mais eficiente
-    let somaFrequencia = 0
-    let contadorClientesComFrequencia = 0
-    
-    clientes.forEach(cliente => {
-      if (cliente.vendas.length > 1) {
-        const datasCompra = cliente.vendas.map(v => v.createdAt)
-        const datasOrdenadas = [...datasCompra].sort((a, b) => a.getTime() - b.getTime())
-        
-        let somaIntervalo = 0
-        for (let i = 1; i < datasOrdenadas.length; i++) {
-          somaIntervalo += differenceInDays(datasOrdenadas[i], datasOrdenadas[i-1])
-        }
-        
-        somaFrequencia += somaIntervalo / (datasOrdenadas.length - 1)
-        contadorClientesComFrequencia++
-      }
-    })
-    
-    const frequenciaMedia = contadorClientesComFrequencia > 0 
-      ? Math.round(somaFrequencia / contadorClientesComFrequencia)
-      : 0
-    
-    // Identificar clientes novos (últimos 30 dias)
-    const clientesNovos30Dias = clientes.filter(cliente => {
-      return differenceInDays(hoje, cliente.createdAt) <= 30
-    }).length
-    
-    // Calcular top 5 clientes por valor
-    const clientesComValorTotal = clientes.map(cliente => {
-      let valorTotal = 0
-      cliente.vendas.forEach(venda => {
-        valorTotal += venda.valorTotal
-      })
-      
-      return {
+      // Adicionar ao mapa de valor para encontrar top clientes
+      clienteValorMap.push({
         id: cliente.id,
         nome: cliente.nome,
-        valorTotal
+        valorTotal: valorTotalCliente
+      });
+      
+      // Verificar se é inativo (sem compras há mais de 90 dias)
+      if (vendas.length === 0) {
+        clientesInativos++;
+      } else {
+        // Encontrar última compra
+        const ultimaCompra = new Date(Math.max(...vendas.map(v => v.createdAt.getTime())));
+        const diasDesdeUltimaCompra = differenceInDays(hoje, ultimaCompra);
+        
+        if (diasDesdeUltimaCompra > 90) {
+          clientesInativos++;
+        }
       }
-    })
-    
-    const clientesMaisValiosos = clientesComValorTotal
-      .sort((a, b) => b.valorTotal - a.valorTotal)
-      .slice(0, 5)
-      .filter(c => c.valorTotal > 0)
-    
-    // Agrupar por segmento de forma mais eficiente
-    const segmentosMap = new Map<string, { nome: string, quantidadeClientes: number, valorTotal: number }>()
-    
-    clientes.forEach(cliente => {
-      if (!segmentosMap.has(cliente.segmento)) {
-        segmentosMap.set(cliente.segmento, {
-          nome: cliente.segmento,
+      
+      // Verificar se é cliente novo (últimos 30 dias)
+      if (differenceInDays(hoje, cliente.createdAt) <= 30) {
+        clientesNovos30Dias++;
+      }
+      
+      // Calcular frequência média se tiver mais de uma venda
+      if (vendas.length > 1) {
+        const datasCompra = vendas.map(v => v.createdAt);
+        const datasOrdenadas = [...datasCompra].sort((a, b) => a.getTime() - b.getTime());
+        
+        let somaIntervalo = 0;
+        for (let i = 1; i < datasOrdenadas.length; i++) {
+          somaIntervalo += differenceInDays(datasOrdenadas[i], datasOrdenadas[i-1]);
+        }
+        
+        somaFrequencia += somaIntervalo / (datasOrdenadas.length - 1);
+        contadorClientesComFrequencia++;
+      }
+      
+      // Processar segmento
+      const segmento = cliente.segmento;
+      if (!segmentosMap.has(segmento)) {
+        segmentosMap.set(segmento, {
+          nome: segmento,
           quantidadeClientes: 0,
           valorTotal: 0
-        })
+        });
       }
       
-      const segmento = segmentosMap.get(cliente.segmento)!
-      segmento.quantidadeClientes++
-      
-      cliente.vendas.forEach(venda => {
-        segmento.valorTotal += venda.valorTotal
-      })
-    })
+      const segmentoInfo = segmentosMap.get(segmento)!;
+      segmentoInfo.quantidadeClientes++;
+      segmentoInfo.valorTotal += valorTotalCliente;
+    });
     
-    const segmentos = Array.from(segmentosMap.values())
+    // Calcular estatísticas finais
+    const clientesNaoRecorrentes = totalClientes - clientesRecorrentes;
+    const valorMedio = totalClientes > 0 ? valorTotalGeral / totalClientes : 0;
+    const frequenciaMedia = contadorClientesComFrequencia > 0 
+      ? Math.round(somaFrequencia / contadorClientesComFrequencia)
+      : 0;
+    
+    // Ordenar e filtrar top 5 clientes
+    const clientesMaisValiosos = clienteValorMap
+      .sort((a, b) => b.valorTotal - a.valorTotal)
+      .slice(0, 5)
+      .filter(c => c.valorTotal > 0);
+    
+    // Converter mapa de segmentos para array
+    const segmentos = Array.from(segmentosMap.values());
 
     // Revalidar para garantir dados atualizados
     revalidatePath('/clientes');
@@ -755,10 +734,10 @@ export async function getEstatisticasClientes() {
         frequenciaMedia,
         clientesNovos30Dias
       }
-    }
+    };
   } catch (error) {
-    console.error('Erro ao obter estatísticas de clientes:', error)
-    return { success: false, error: 'Ocorreu um erro ao obter estatísticas de clientes' }
+    console.error('Erro ao obter estatísticas de clientes:', error);
+    return { success: false, error: 'Ocorreu um erro ao obter estatísticas de clientes' };
   }
 }
 
@@ -767,20 +746,21 @@ export async function getEstatisticasClientes() {
  */
 export async function criarCliente(data: ClienteParams) {
   // Validar autenticação
-  const session = await auth()
+  const session = await auth();
   
   if (!session) {
-    return { success: false, error: 'Você precisa estar autenticado para realizar esta ação' }
+    return { success: false, error: 'Você precisa estar autenticado para realizar esta ação' };
   }
 
   try {
     // Verificar se já existe cliente com mesmo CNPJ
     const clienteExistente = await prisma.cliente.findFirst({
-      where: { cnpj: data.cnpj }
-    })
+      where: { cnpj: data.cnpj },
+      select: { id: true } // Otimização: buscar apenas o ID necessário
+    });
 
     if (clienteExistente) {
-      return { success: false, error: 'Já existe um cliente com este CNPJ' }
+      return { success: false, error: 'Já existe um cliente com este CNPJ' };
     }
 
     // Criar novo cliente com apenas os campos que existem no modelo Prisma
@@ -792,14 +772,14 @@ export async function criarCliente(data: ClienteParams) {
         razaoSocial: data.razaoSocial || null,
         createdById: session.user.id,
       }
-    })
+    });
 
     // Revalidar para garantir que a UI mostre os dados atualizados
-    revalidatePath('/clientes')
-    return { success: true, cliente }
+    revalidatePath('/clientes');
+    return { success: true, cliente };
   } catch (error) {
-    console.error('Erro ao criar cliente:', error)
-    return { success: false, error: 'Ocorreu um erro ao criar o cliente' }
+    console.error('Erro ao criar cliente:', error);
+    return { success: false, error: 'Ocorreu um erro ao criar o cliente' };
   }
 }
 
@@ -808,32 +788,37 @@ export async function criarCliente(data: ClienteParams) {
  */
 export async function atualizarCliente(id: string, data: ClienteParams) {
   // Validar autenticação
-  const session = await auth()
+  const session = await auth();
   
   if (!session) {
-    return { success: false, error: 'Você precisa estar autenticado para realizar esta ação' }
+    return { success: false, error: 'Você precisa estar autenticado para realizar esta ação' };
   }
 
   try {
-    // Verificar se o cliente existe
-    const clienteExistente = await prisma.cliente.findUnique({
-      where: { id }
-    })
+    // Verificações em paralelo
+    const [clienteExistente, clienteComMesmoCNPJ] = await Promise.all([
+      // Verificar se o cliente existe
+      prisma.cliente.findUnique({
+        where: { id },
+        select: { id: true } // Otimização: buscar apenas o ID necessário
+      }),
+      
+      // Verificar se o CNPJ não conflita com outro cliente
+      prisma.cliente.findFirst({
+        where: { 
+          cnpj: data.cnpj,
+          id: { not: id }
+        },
+        select: { id: true } // Otimização: buscar apenas o ID necessário
+      })
+    ]);
 
     if (!clienteExistente) {
-      return { success: false, error: 'Cliente não encontrado' }
+      return { success: false, error: 'Cliente não encontrado' };
     }
 
-    // Verificar se o CNPJ não conflita com outro cliente
-    const clienteComMesmoCNPJ = await prisma.cliente.findFirst({
-      where: { 
-        cnpj: data.cnpj,
-        id: { not: id }
-      }
-    })
-
     if (clienteComMesmoCNPJ) {
-      return { success: false, error: 'Já existe outro cliente com este CNPJ' }
+      return { success: false, error: 'Já existe outro cliente com este CNPJ' };
     }
 
     // Atualizar cliente com apenas os campos que existem no modelo Prisma
@@ -846,14 +831,14 @@ export async function atualizarCliente(id: string, data: ClienteParams) {
         razaoSocial: data.razaoSocial || null,
         editedById: session.user.id,
       }
-    })
+    });
 
     // Revalidar para garantir que a UI mostre os dados atualizados
-    revalidatePath('/clientes')
-    return { success: true, cliente }
+    revalidatePath('/clientes');
+    return { success: true, cliente };
   } catch (error) {
-    console.error('Erro ao atualizar cliente:', error)
-    return { success: false, error: 'Ocorreu um erro ao atualizar o cliente' }
+    console.error('Erro ao atualizar cliente:', error);
+    return { success: false, error: 'Ocorreu um erro ao atualizar o cliente' };
   }
 }
 
@@ -862,19 +847,19 @@ export async function atualizarCliente(id: string, data: ClienteParams) {
  */
 export async function excluirCliente(id: string) {
   // Validar autenticação
-  const session = await auth()
+  const session = await auth();
   
   if (!session) {
-    return { success: false, error: 'Você precisa estar autenticado para realizar esta ação' }
+    return { success: false, error: 'Você precisa estar autenticado para realizar esta ação' };
   }
 
   // Verificar se é admin
   if (session.user.role !== 'ADMIN') {
-    return { success: false, error: 'Apenas administradores podem excluir clientes' }
+    return { success: false, error: 'Apenas administradores podem excluir clientes' };
   }
 
   try {
-    // Verificar se o cliente existe
+    // Verificar se o cliente existe e se tem vendas/não-vendas associadas
     const clienteExistente = await prisma.cliente.findUnique({
       where: { id },
       select: {
@@ -886,41 +871,41 @@ export async function excluirCliente(id: string) {
           }
         }
       }
-    })
+    });
 
     if (!clienteExistente) {
-      return { success: false, error: 'Cliente não encontrado' }
+      return { success: false, error: 'Cliente não encontrado' };
     }
 
     // Verificar se há vendas associadas
     if (clienteExistente._count.vendas > 0 || clienteExistente._count.naoVendas > 0) {
-      return { success: false, error: 'Não é possível excluir um cliente com vendas ou não-vendas associadas' }
+      return { success: false, error: 'Não é possível excluir um cliente com vendas ou não-vendas associadas' };
     }
 
     // Excluir cliente
     await prisma.cliente.delete({
       where: { id }
-    })
+    });
 
     // Revalidar para garantir que a UI mostre os dados atualizados
-    revalidatePath('/clientes')
-    return { success: true }
+    revalidatePath('/clientes');
+    return { success: true };
   } catch (error) {
-    console.error('Erro ao excluir cliente:', error)
-    return { success: false, error: 'Ocorreu um erro ao excluir o cliente' }
+    console.error('Erro ao excluir cliente:', error);
+    return { success: false, error: 'Ocorreu um erro ao excluir o cliente' };
   }
 }
 
 export async function getDadosMensaisComparacao() {
   // Validar autenticação
-  const session = await auth()
+  const session = await auth();
   
   if (!session) {
-    redirect('/login')
+    redirect('/login');
   }
 
   try {
-    // Otimização: reduzir dados buscados com select
+    // Buscar todas as vendas de uma vez para processar em memória
     const vendas = await prisma.venda.findMany({
       select: {
         id: true,
@@ -939,17 +924,17 @@ export async function getDadosMensaisComparacao() {
       }
     });
 
-    // Agrupar vendas por mês com mapa para melhor performance
+    // Agrupar vendas por mês usando um Map para melhor performance
     const vendasPorMesMap = new Map<string, {
       mes: string;
-      novosClientes: Set<string>; // Usado para contar clientes únicos
+      novosClientes: Set<string>; // Usar Set para garantir unicidade
       clientesRecorrentes: number;
       clientesNaoRecorrentes: number;
       valorTotal: number;
       segmentos: Record<string, number>;
     }>();
 
-    // Processar cada venda em única passagem
+    // Processar todas as vendas em uma única passagem
     vendas.forEach(venda => {
       const data = venda.createdAt;
       const mes = `${String(data.getMonth() + 1).padStart(2, '0')}/${data.getFullYear()}`;
@@ -983,10 +968,7 @@ export async function getDadosMensaisComparacao() {
       
       // Processar segmentos
       const segmento = venda.cliente.segmento;
-      if (!dadosMes.segmentos[segmento]) {
-        dadosMes.segmentos[segmento] = 0;
-      }
-      dadosMes.segmentos[segmento] += 1;
+      dadosMes.segmentos[segmento] = (dadosMes.segmentos[segmento] || 0) + 1;
     });
 
     // Converter o Map para array e formatar a saída
