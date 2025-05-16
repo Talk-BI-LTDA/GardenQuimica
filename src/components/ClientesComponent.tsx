@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   XAxis,
   YAxis,
@@ -123,21 +123,6 @@ import {
 import EditarClienteForm from "@/app/(dashboard)/clientes/components/EditarClienteForm";
 // import ComparacaoMensal from "@/app/(dashboard)/clientes/components/ComparacaoMensal";
 
-// interface ShapeProps {
-//   cx: number;
-//   cy: number;
-//   innerRadius: number;
-//   outerRadius: number;
-//   startAngle: number;
-//   endAngle: number;
-//   fill: string;
-//   payload: {
-//     name: string;
-//     value: number;
-//   };
-//   percent: number;
-//   value: number;
-// }
 interface PieDataPoint {
   name: string;
   value: number;
@@ -149,14 +134,26 @@ interface SegmentoChartData {
   clientes: number;
   valorTotal: number;
 }
-// interface DadoMensal {
-//   mes: string;
-//   novosClientes: number;
-//   clientesRecorrentes: number;
-//   clientesNaoRecorrentes: number;
-//   valorTotal: number;
-//   segmentos: Record<string, number>;
-// }
+
+interface DonutChartProps {
+  data: PieDataPoint[];
+  title: string;
+  height?: number;
+}
+
+interface SessionProps {
+  user: {
+    role: string;
+    id: string;
+  };
+}
+
+interface PeriodoOption {
+  label: string;
+  value: string;
+  fn: () => DateRange | undefined;
+}
+
 // Formatador para valores monetários
 const formatarValorBRL = (valor: number): string => {
   return new Intl.NumberFormat("pt-BR", {
@@ -172,76 +169,12 @@ const formatDate = (date: Date | null | undefined): string => {
 };
 
 // Componente para o gráfico de pizza (donut)
-const DonutChart: React.FC<{
-  data: PieDataPoint[];
-  title: string;
-  height?: number;
-}> = ({ data, title, height = 320 }) => {
+const DonutChart: React.FC<DonutChartProps> = ({ data, title, height = 320 }) => {
   const [activeIndex, setActiveIndex] = useState(0);
 
   const onPieEnter = (_: unknown, index: number) => {
     setActiveIndex(index);
   };
-
-  // const renderActiveShape = (props: PieChartShapeProps) => {
-  //   const {
-  //     cx,
-  //     cy,
-  //     innerRadius,
-  //     outerRadius,
-  //     startAngle,
-  //     endAngle,
-  //     fill,
-  //     payload,
-  //     percent,
-  //     value,
-  //   } = props;
-
-  //   return (
-  //     <g>
-  //       <text
-  //         x={cx}
-  //         y={cy}
-  //         dy={-20}
-  //         textAnchor="middle"
-  //         fill={fill}
-  //         className="text-sm font-medium"
-  //       >
-  //         {payload.name}
-  //       </text>
-  //       <text
-  //         x={cx}
-  //         y={cy}
-  //         dy={8}
-  //         textAnchor="middle"
-  //         fill="#333"
-  //         className="text-base font-bold"
-  //       >
-  //         {value}
-  //       </text>
-  //       <text
-  //         x={cx}
-  //         y={cy}
-  //         dy={25}
-  //         textAnchor="middle"
-  //         fill="#999"
-  //         className="text-xs"
-  //       >
-  //         {`${(percent * 100).toFixed(0)}%`}
-  //       </text>
-  //       <Sector
-  //         cx={cx}
-  //         cy={cy}
-  //         innerRadius={innerRadius}
-  //         outerRadius={outerRadius + 5}
-  //         startAngle={startAngle}
-  //         endAngle={endAngle}
-  //         fill={fill}
-  //       />
-  //     </g>
-  //   );
-  // };
-
 
   // Verificar se temos dados válidos
   if (!data || data.length === 0 || data.every((item) => item.value === 0)) {
@@ -301,9 +234,7 @@ const DonutChart: React.FC<{
 };
 
 // Componente principal da página de clientes
-const ClientesComponent: React.FC<{
-  session: { user: { role: string; id: string } };
-}> = ({ session }) => {
+const ClientesComponent: React.FC<{ session: SessionProps }> = ({ session }) => {
   const router = useRouter();
 
   // Estados para dados
@@ -336,7 +267,6 @@ const ClientesComponent: React.FC<{
   );
 
   // Estados para filtros
-  // const [dadosMensais, setDadosMensais] = useState<DadoMensal[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [filtroAberto, setFiltroAberto] = useState(false);
@@ -357,34 +287,8 @@ const ClientesComponent: React.FC<{
     pagina: 1,
   });
 
-  // const carregarDadosMensais = useCallback(async () => {
-  //   try {
-  //     setLoading(true);
-  //     console.log("Iniciando carregamento de dados mensais...");
-  //     const resultado = await getDadosMensaisComparacao();
-  //     if (resultado.success && resultado.dados) {
-  //       console.log("Dados mensais carregados com sucesso:", resultado.dados.length);
-  //       setDadosMensais(resultado.dados);
-  //     } else {
-  //       console.error("Erro ao carregar dados mensais:", resultado.error);
-  //       toast.error("Não foi possível carregar os dados mensais de comparação");
-  //     }
-  //   } catch (error) {
-  //     console.error("Erro ao carregar dados mensais:", error);
-  //     toast.error("Ocorreu um erro ao tentar carregar os dados de comparação");
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // }, []);
-  // useEffect(() => {
-  //   // Carregar dados mensais ao inicializar o componente
-  //   carregarDadosMensais();
-  // }, [carregarDadosMensais]);
-  // useEffect(() => {
-  //   carregarDadosMensais();
-  // }, [carregarDadosMensais]);
   // Opções de filtro de período predefinidas
-  const periodoOptions = [
+  const periodoOptions: PeriodoOption[] = useMemo(() => [
     {
       label: "Último mês",
       value: "lastMonth",
@@ -435,9 +339,9 @@ const ClientesComponent: React.FC<{
         return undefined;
       },
     },
-  ];
+  ], []);
 
-  // Função para carregar clientes com filtros
+  // Função para carregar clientes com filtros - memoizada para evitar recriação
   const carregarClientes = useCallback(
     async (filtrosAtuais: ClienteFiltros) => {
       setLoading(true);
@@ -458,20 +362,23 @@ const ClientesComponent: React.FC<{
     },
     [] // Sem dependências para evitar recriação desnecessária
   );
-  // Função para carregar todos os dados necessários
+
+  // Função para carregar todos os dados necessários - memoizada com dependências corretas
   const carregarDados = useCallback(async () => {
     setLoading(true);
     try {
-      // Carregar segmentos
-      const segmentosResult = await getSegmentos();
+      // Paralelizar solicitações de API para melhorar a performance
+      const [segmentosResult, estatisticasResult] = await Promise.all([
+        getSegmentos(),
+        getEstatisticasClientes()
+      ]);
+      
       if (segmentosResult.success && segmentosResult.segmentos) {
         setSegmentos(segmentosResult.segmentos);
       } else if (segmentosResult.error) {
         toast.error(segmentosResult.error);
       }
   
-      // Carregar estatísticas
-      const estatisticasResult = await getEstatisticasClientes();
       if (estatisticasResult.success && estatisticasResult.estatisticas) {
         setEstatisticas(estatisticasResult.estatisticas);
       } else if (estatisticasResult.error) {
@@ -488,39 +395,22 @@ const ClientesComponent: React.FC<{
     }
   }, [filtro, carregarClientes]);
 
-
-// useEffect(() => {
-//   // Aplicar outros filtros existentes
-//   const filtrados = dados.filter(dado => {
-//     // Lógica de filtro de período
-//     if (periodoSelecionado?.from) {
-//       // código existente para filtro de período
-//     }
-//     return true;
-//   });
-  
-//   setDadosFiltrados(filtrados);
-// }, [dados, periodoSelecionado, segmentosSelecionados]);
   // Carregar dados iniciais
   useEffect(() => {
     carregarDados();
   }, [carregarDados]);
 
-  // Efeito para recarregar quando o tab muda
+  // Efeito para recarregar quando o tab muda - otimizado para evitar carregamentos duplicados
   useEffect(() => {
-    // Não atualize o filtro se a tab não mudou para evitar renderizações duplicadas
     if (filtro.recorrencia !== activeTab) {
-      const novoFiltro = { ...filtro, recorrencia: activeTab };
+      const novoFiltro = { ...filtro, recorrencia: activeTab, pagina: 1 };
+      setPaginaAtual(1);
       setFiltro(novoFiltro);
       carregarClientes(novoFiltro);
     }
   }, [activeTab, carregarClientes, filtro]);
 
-  useEffect(() => {
-    setFiltro((prev) => ({ ...prev, recorrencia: activeTab }));
-  }, [activeTab]);
-
-  // Efeito para recarregar quando a página muda
+  // Efeito para recarregar quando a página muda - otimizado para evitar carregamentos duplicados
   useEffect(() => {
     if (filtro.pagina !== paginaAtual) {
       const novoFiltro = { ...filtro, pagina: paginaAtual };
@@ -529,8 +419,8 @@ const ClientesComponent: React.FC<{
     }
   }, [paginaAtual, carregarClientes, filtro]);
 
-  // Aplicar filtros
-  const aplicarFiltros = async () => {
+  // Aplicar filtros - memoizada para evitar recriação
+  const aplicarFiltros = useCallback(async () => {
     setLoading(true);
 
     try {
@@ -560,10 +450,10 @@ const ClientesComponent: React.FC<{
     } finally {
       setLoading(false);
     }
-  };
+  }, [filtro, dateRange, segmentoFiltro, searchTerm, classificacaoFiltro, sortField, sortDirection, carregarClientes]);
 
-  // Limpar filtros
-  const limparFiltros = async () => {
+  // Limpar filtros - memoizada para evitar recriação
+  const limparFiltros = useCallback(async () => {
     setDateRange(undefined);
     setSearchTerm("");
     setSegmentoFiltro(undefined);
@@ -586,10 +476,10 @@ const ClientesComponent: React.FC<{
     await carregarClientes(novoFiltro);
     setFiltroAberto(false);
     toast.success("Filtros removidos");
-  };
+  }, [activeTab, carregarClientes]);
 
-  // Aplicar filtro de período
-  const aplicarPeriodo = (value: string) => {
+  // Aplicar filtro de período - memoizada
+  const aplicarPeriodo = useCallback((value: string) => {
     const periodoOption = periodoOptions.find((p) => p.value === value);
 
     if (periodoOption) {
@@ -603,10 +493,10 @@ const ClientesComponent: React.FC<{
         toast.success(`Filtro aplicado: ${periodoOption.label}`);
       }
     }
-  };
+  }, [periodoOptions]);
 
-  // Abrir detalhes do cliente
-  const verDetalhesCliente = async (cliente: Cliente) => {
+  // Abrir detalhes do cliente - memoizada
+  const verDetalhesCliente = useCallback(async (cliente: Cliente) => {
     setLoading(true);
     try {
       // Buscar dados atualizados do cliente
@@ -626,10 +516,10 @@ const ClientesComponent: React.FC<{
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Abrir vendas do cliente
-  const verVendasCliente = async (cliente: Cliente) => {
+  // Abrir vendas do cliente - memoizada
+  const verVendasCliente = useCallback(async (cliente: Cliente) => {
     setLoading(true);
     try {
       setClienteSelecionado(cliente);
@@ -649,15 +539,15 @@ const ClientesComponent: React.FC<{
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Navegação para a página de edição de venda
-  const irParaEditarVenda = (vendaId: string) => {
+  // Navegação para a página de edição de venda - memoizada
+  const irParaEditarVenda = useCallback((vendaId: string) => {
     router.push(`/vendas/${vendaId}/editar`);
-  };
+  }, [router]);
 
-  // Alterar ordenação
-  const alterarOrdenacao = (campo: keyof Cliente) => {
+  // Alterar ordenação - memoizada
+  const alterarOrdenacao = useCallback((campo: keyof Cliente) => {
     let direcao = sortDirection;
 
     if (sortField === campo) {
@@ -682,10 +572,10 @@ const ClientesComponent: React.FC<{
 
     setFiltro(novoFiltro);
     carregarClientes(novoFiltro);
-  };
+  }, [sortField, sortDirection, filtro, carregarClientes]);
 
-  // Aplicar filtro de pesquisa
-  const aplicarPesquisa = (termo: string) => {
+  // Aplicar filtro de pesquisa com debounce para melhor performance
+  const aplicarPesquisa = useCallback((termo: string) => {
     setSearchTerm(termo);
 
     // Debounce para não executar muitas chamadas
@@ -700,10 +590,10 @@ const ClientesComponent: React.FC<{
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  };
+  }, [filtro, carregarClientes]);
 
-  // Preparar dados para gráficos
-  const prepararDadosGraficoSegmentos = (): PieDataPoint[] => {
+  // Preparar dados para gráficos - useMemo para evitar cálculos repetidos
+  const prepararDadosGraficoSegmentos = useMemo((): PieDataPoint[] => {
     if (!estatisticas?.segmentos) return [];
 
     const cores = [
@@ -722,9 +612,9 @@ const ClientesComponent: React.FC<{
       value: segmento.quantidadeClientes,
       color: cores[index % cores.length],
     }));
-  };
+  }, [estatisticas]);
 
-  const prepararDadosGraficoRecorrencia = (): PieDataPoint[] => {
+  const prepararDadosGraficoRecorrencia = useMemo((): PieDataPoint[] => {
     if (!estatisticas) return [];
 
     return [
@@ -739,9 +629,9 @@ const ClientesComponent: React.FC<{
         color: "#9CC31B",
       },
     ];
-  };
+  }, [estatisticas]);
 
-  const prepararDadosGraficoValorPorSegmento = (): SegmentoChartData[] => {
+  const prepararDadosGraficoValorPorSegmento = useMemo((): SegmentoChartData[] => {
     if (!estatisticas?.segmentos) return [];
 
     return estatisticas.segmentos.map((segmento) => ({
@@ -749,21 +639,22 @@ const ClientesComponent: React.FC<{
       clientes: segmento.quantidadeClientes,
       valorTotal: segmento.valorTotal,
     }));
-  };
+  }, [estatisticas]);
 
-  // Calcular classificação com base no score
-  const calcularClassificacaoCliente = (
-    score: number
-  ): { texto: string; cor: string } => {
-    if (score >= 80) return { texto: "Premium", cor: "text-purple-700" };
-    if (score >= 60) return { texto: "Ouro", cor: "text-amber-600" };
-    if (score >= 40) return { texto: "Prata", cor: "text-gray-500" };
-    if (score >= 20) return { texto: "Bronze", cor: "text-amber-800" };
-    return { texto: "Básico", cor: "text-gray-600" };
-  };
+  // Calcular classificação com base no score - memoizada
+  const calcularClassificacaoCliente = useCallback(
+    (score: number): { texto: string; cor: string } => {
+      if (score >= 80) return { texto: "Premium", cor: "text-purple-700" };
+      if (score >= 60) return { texto: "Ouro", cor: "text-amber-600" };
+      if (score >= 40) return { texto: "Prata", cor: "text-gray-500" };
+      if (score >= 20) return { texto: "Bronze", cor: "text-amber-800" };
+      return { texto: "Básico", cor: "text-gray-600" };
+    },
+    []
+  );
 
-  // Formatar período selecionado para exibição
-  const formatarPeriodoSelecionado = () => {
+  // Formatar período selecionado para exibição - memoizada
+  const formatarPeriodoSelecionado = useCallback(() => {
     if (!dateRange?.from) return "Selecione um período";
 
     if (dateRange.to) {
@@ -773,19 +664,22 @@ const ClientesComponent: React.FC<{
     }
 
     return format(dateRange.from, "dd/MM/yyyy");
-  };
+  }, [dateRange]);
 
-  // Renderizar ícone de ordenação
-  const renderSortIcon = (campo: keyof Cliente) => {
-    if (sortField === campo) {
-      return sortDirection === "asc" ? (
-        <ArrowUp className="h-4 w-4 ml-1" />
-      ) : (
-        <ArrowDown className="h-4 w-4 ml-1" />
-      );
-    }
-    return null;
-  };
+  // Renderizar ícone de ordenação - memoizada
+  const renderSortIcon = useCallback(
+    (campo: keyof Cliente) => {
+      if (sortField === campo) {
+        return sortDirection === "asc" ? (
+          <ArrowUp className="h-4 w-4 ml-1" />
+        ) : (
+          <ArrowDown className="h-4 w-4 ml-1" />
+        );
+      }
+      return null;
+    },
+    [sortField, sortDirection]
+  );
 
   // Verificar se estamos carregando ou não temos dados
   if (loading && !clientes.length && !estatisticas) {
@@ -808,7 +702,6 @@ const ClientesComponent: React.FC<{
         <h2 className="text-2xl font-bold">Gestão de Clientes</h2>
 
         <div className="flex flex-wrap gap-3 items-center">
-
           <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
             <PopoverTrigger className="hidden" asChild>
               <Button
@@ -884,12 +777,12 @@ const ClientesComponent: React.FC<{
         </div>
       </div>
 
-      {/* Cards de Estatísticas */}
+      {/* Cards de Estatísticas - Reorganizados para 3x2 (3 em cima, 3 embaixo) */}
       {estatisticas && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Total de Clientes */}
-          <Card>
-            <CardContent className="p-6">
+          <Card className="!py-3">
+            <CardContent>
               <div className="flex items-start justify-between">
                 <div>
                   <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
@@ -907,8 +800,8 @@ const ClientesComponent: React.FC<{
           </Card>
 
           {/* Clientes Recorrentes */}
-          <Card>
-            <CardContent className="p-6">
+          <Card className="!py-3">
+            <CardContent>
               <div className="flex items-start justify-between">
                 <div>
                   <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
@@ -926,8 +819,8 @@ const ClientesComponent: React.FC<{
           </Card>
 
           {/* Clientes Não Recorrentes */}
-          <Card>
-            <CardContent className="p-6">
+          <Card className="!py-3">
+            <CardContent>
               <div className="flex items-start justify-between">
                 <div>
                   <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
@@ -945,8 +838,8 @@ const ClientesComponent: React.FC<{
           </Card>
 
           {/* Valor Total em Vendas */}
-          <Card>
-            <CardContent className="p-6">
+          <Card className="!py-3">
+            <CardContent>
               <div className="flex items-start justify-between">
                 <div>
                   <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
@@ -964,8 +857,8 @@ const ClientesComponent: React.FC<{
           </Card>
 
           {/* Clientes Inativos */}
-          <Card>
-            <CardContent className="p-6">
+          <Card className="!py-3">
+            <CardContent>
               <div className="flex items-start justify-between">
                 <div>
                   <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
@@ -986,8 +879,8 @@ const ClientesComponent: React.FC<{
           </Card>
 
           {/* Novos Clientes */}
-          <Card>
-            <CardContent className="p-6">
+          <Card className="!py-3">
+            <CardContent>
               <div className="flex items-start justify-between">
                 <div>
                   <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
@@ -1007,9 +900,6 @@ const ClientesComponent: React.FC<{
         </div>
       )}
 
-      {/* Comparação Mensal - Removido */}
-      {/* <ComparacaoMensal dados={dadosMensais} segmentosDisponiveis={segmentos} /> */}
-
       {/* Gráficos */}
       {estatisticas && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1025,7 +915,7 @@ const ClientesComponent: React.FC<{
                 </div>
               ) : (
                 <DonutChart
-                  data={prepararDadosGraficoSegmentos()}
+                  data={prepararDadosGraficoSegmentos}
                   title="Distribuição por Segmento"
                 />
               )}
@@ -1044,7 +934,7 @@ const ClientesComponent: React.FC<{
                 </div>
               ) : (
                 <DonutChart
-                  data={prepararDadosGraficoRecorrencia()}
+                  data={prepararDadosGraficoRecorrencia}
                   title="Clientes Recorrentes vs Não Recorrentes"
                 />
               )}
@@ -1067,7 +957,7 @@ const ClientesComponent: React.FC<{
               ) : (
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart
-                    data={prepararDadosGraficoValorPorSegmento()}
+                    data={prepararDadosGraficoValorPorSegmento}
                     margin={{ top: 10, right: 10, left: 10, bottom: 40 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" />
@@ -1215,9 +1105,9 @@ const ClientesComponent: React.FC<{
           onValueChange={(value) =>
             setActiveTab(value as "todos" | "recorrentes" | "naoRecorrentes")
           }
-          className="w-full"
+          className="w-full px-6"
         >
-          <div className="px-6 overflow-x-auto">
+          <div className="overflow-x-auto">
             <TabsList className="mb-4 grid grid-cols-3 w-full md:w-[500px]">
               <TabsTrigger value="todos" className="flex items-center gap-1">
                 

@@ -208,7 +208,7 @@ export function LoginForm() {
                 ease: [0.4, 0.0, 0.2, 1], // Ease out cubic - mais suave e rápido
               }}
             >
-              <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
+              <h5 className="text-2xl font-bold mb-6 text-center !text-white">Login</h5>
 
               <Form {...loginForm}>
                 <form
@@ -279,7 +279,7 @@ export function LoginForm() {
 
                     <Button
                       variant="link"
-                      className="px-0 text-sm font-medium text-[#00446A]"
+                      className="px-0 text-sm font-medium text-[#9BC21B]"
                       type="button"
                       onClick={() => setFormState("reset")}
                     >

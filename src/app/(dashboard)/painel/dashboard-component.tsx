@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   AreaChart,
   Area,
@@ -139,6 +139,7 @@ const DonutChart: React.FC<DonutChartProps> = ({ data, title }) => {
     setActiveIndex(index);
   };
 
+  // Renderiza a forma ativa no gráfico com tipagem correta
   const renderActiveShape = (props: unknown) => {
     const {
       cx,
@@ -283,7 +284,6 @@ const EnhancedDashboard: React.FC = () => {
   const [vendedoresTab, setVendedoresTab] = useState<"geral" | "rank">("geral");
   const [clientesTab, setClientesTab] = useState<"geral" | "rank">("geral");
 
-
   // Estados para filtros e loading
   const [filtroAberto, setFiltroAberto] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -305,8 +305,8 @@ const EnhancedDashboard: React.FC = () => {
     searchTerm: "",
   });
 
-  // Opções de filtro de período predefinidas
-  const periodoOptions: PeriodoOption[] = [
+  // Opções de filtro de período predefinidas - usando useMemo para otimização
+  const periodoOptions: PeriodoOption[] = useMemo(() => [
     {
       label: "Hoje",
       value: "today",
@@ -359,45 +359,47 @@ const EnhancedDashboard: React.FC = () => {
         return { from: firstDay, to: today };
       },
     },
-  ];
+  ], []);
+
+  // Função otimizada para carregar dados iniciais
+  const loadInitialData = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Carregar dados simultaneamente com Promise.all para melhor performance
+      const [estatisticasResult, vendedoresResult, produtosResult] = await Promise.all([
+        getEstatisticasPainel(),
+        getVendedores(),
+        getProdutos()
+      ]);
+
+      if (estatisticasResult.success && estatisticasResult.estatisticas) {
+        setEstatisticas(estatisticasResult.estatisticas);
+      } else if (estatisticasResult.error) {
+        toast.error(estatisticasResult.error);
+      }
+
+      if (vendedoresResult.success && vendedoresResult.vendedores) {
+        setVendedores(vendedoresResult.vendedores);
+      }
+
+      if (produtosResult.success && produtosResult.produtos) {
+        setProdutos(produtosResult.produtos);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar dados iniciais:", error);
+      toast.error("Ocorreu um erro ao carregar os dados do painel");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   // Carregar dados iniciais
   useEffect(() => {
-    const loadInitialData = async () => {
-      setLoading(true);
-      try {
-        // Carregar dados de estatísticas
-        const estatisticasResult = await getEstatisticasPainel();
-        if (estatisticasResult.success && estatisticasResult.estatisticas) {
-          setEstatisticas(estatisticasResult.estatisticas);
-        } else if (estatisticasResult.error) {
-          toast.error(estatisticasResult.error);
-        }
-
-        // Carregar vendedores
-        const vendedoresResult = await getVendedores();
-        if (vendedoresResult.success && vendedoresResult.vendedores) {
-          setVendedores(vendedoresResult.vendedores);
-        }
-
-        // Carregar produtos
-        const produtosResult = await getProdutos();
-        if (produtosResult.success && produtosResult.produtos) {
-          setProdutos(produtosResult.produtos);
-        }
-      } catch (error) {
-        console.error("Erro ao carregar dados iniciais:", error);
-        toast.error("Ocorreu um erro ao carregar os dados do painel");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadInitialData();
-  }, []);
+  }, [loadInitialData]);
 
-  // Aplicar filtros
-  const aplicarFiltros = async () => {
+  // Aplicar filtros - otimizado com useCallback
+  const aplicarFiltros = useCallback(async () => {
     setLoading(true);
     try {
       const params: EstatisticasPainelParams = {};
@@ -411,6 +413,16 @@ const EnhancedDashboard: React.FC = () => {
       // Aplicar filtro de vendedor
       if (filter.vendedorId) {
         params.vendedorId = filter.vendedorId;
+      }
+
+      // Aplicar filtro de produto
+      if (filter.produtoId) {
+        params.produtoId = filter.produtoId;
+      }
+
+      // Aplicar filtro de busca
+      if (filter.searchTerm) {
+        params.searchTerm = filter.searchTerm;
       }
 
       // Buscar dados filtrados
@@ -429,10 +441,10 @@ const EnhancedDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
 
-  // Limpar filtros
-  const limparFiltros = async () => {
+  // Limpar filtros - otimizado com useCallback
+  const limparFiltros = useCallback(async () => {
     // Resetar estado dos filtros
     setFilter({
       dateRange: undefined,
@@ -455,16 +467,16 @@ const EnhancedDashboard: React.FC = () => {
       } else if (result.error) {
         toast.error(result.error);
       }
-    } catch (e: unknown) {
-      console.error("Erro ao remover filtros:", e);
+    } catch (error) {
+      console.error("Erro ao remover filtros:", error);
       toast.error("Erro ao remover filtros");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Aplicar filtro de período
-  const aplicarPeriodo = async (value: string) => {
+  // Aplicar filtro de período - otimizado com useCallback
+  const aplicarPeriodo = useCallback(async (value: string) => {
     const periodoOption = periodoOptions.find((p) => p.value === value);
 
     if (periodoOption) {
@@ -489,23 +501,24 @@ const EnhancedDashboard: React.FC = () => {
         } else if (result.error) {
           toast.error(result.error);
         }
-      } catch {
+      } catch (error) {
+        console.error("Erro ao aplicar filtro de período:", error);
         toast.error("Erro ao aplicar filtro de período");
       } finally {
         setLoading(false);
       }
     }
-  };
+  }, [periodoOptions]);
 
-  // Toggle de ordenação
-  const toggleSortDirection = () => {
+  // Toggle de ordenação - otimizado com useCallback
+  const toggleSortDirection = useCallback(() => {
     setSortDirection((prevDirection) =>
       prevDirection === "asc" ? "desc" : "asc"
     );
-  };
+  }, []);
 
-  // Filtrar produtos pelo termo de pesquisa
-  const filtrarProdutos = () => {
+  // Filtrar produtos pelo termo de pesquisa - otimizado com useMemo
+  const filtrarProdutos = useMemo(() => {
     if (!estatisticas?.produtos) return [];
 
     let produtosFiltrados = [...estatisticas.produtos];
@@ -534,10 +547,10 @@ const EnhancedDashboard: React.FC = () => {
     });
 
     return produtosFiltrados;
-  };
+  }, [estatisticas?.produtos, filter.searchTerm, produtosTab, sortDirection]);
 
-  // Filtrar vendedores pelo termo de pesquisa
-  const filtrarVendedores = () => {
+  // Filtrar vendedores pelo termo de pesquisa - otimizado com useMemo
+  const filtrarVendedores = useMemo(() => {
     if (!estatisticas?.vendedores) return [];
 
     let vendedoresFiltrados = [...estatisticas.vendedores];
@@ -566,10 +579,10 @@ const EnhancedDashboard: React.FC = () => {
     });
 
     return vendedoresFiltrados;
-  };
+  }, [estatisticas?.vendedores, filter.searchTerm, vendedoresTab, sortDirection]);
 
-  // Filtrar clientes pelo termo de pesquisa
-  const filtrarClientes = () => {
+  // Filtrar clientes pelo termo de pesquisa - otimizado com useMemo
+  const filtrarClientes = useMemo(() => {
     if (!estatisticas?.clientes) return [];
 
     let clientesFiltrados = [...estatisticas.clientes];
@@ -599,10 +612,10 @@ const EnhancedDashboard: React.FC = () => {
     });
 
     return clientesFiltrados;
-  };
+  }, [estatisticas?.clientes, filter.searchTerm, clientesTab, sortDirection]);
 
   // Formatar período selecionado para exibição
-  const formatarPeriodoSelecionado = () => {
+  const formatarPeriodoSelecionado = useCallback(() => {
     if (!dateRange?.from) return "Selecione um período";
 
     if (dateRange.to) {
@@ -612,7 +625,7 @@ const EnhancedDashboard: React.FC = () => {
     }
 
     return format(dateRange.from, "dd/MM/yyyy");
-  };
+  }, [dateRange]);
 
   // Verificar se estamos carregando ou não temos dados
   if (loading && !estatisticas) {
@@ -868,7 +881,7 @@ const EnhancedDashboard: React.FC = () => {
           <CardContent className="p-4">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium">Desempenho de Vendas</h3>
-              <div className="flex  p-1 rounded-md">
+              <div className="flex p-1 rounded-md">
                 <Tabs
                   value={chartTab}
                   onValueChange={(value) =>
@@ -878,7 +891,7 @@ const EnhancedDashboard: React.FC = () => {
                   <TabsList className="">
                     <TabsTrigger
                       value="geral"
-                      className=" data-[state=active]:shadow"
+                      className="data-[state=active]:shadow"
                     >
                       Geral
                     </TabsTrigger>
@@ -890,7 +903,7 @@ const EnhancedDashboard: React.FC = () => {
                     </TabsTrigger>
                     <TabsTrigger
                       value="naoVendas"
-                      className="text-xs px-3 py-1 rounded  data-[state=active]:shadow"
+                      className="text-xs px-3 py-1 rounded data-[state=active]:shadow"
                     >
                       Não Vendas
                     </TabsTrigger>
@@ -1293,7 +1306,7 @@ const EnhancedDashboard: React.FC = () => {
 
                       <TabsContent value="todos">
                         <div className="overflow-auto">
-                          {filtrarProdutos().length > 0 ? (
+                          {filtrarProdutos.length > 0 ? (
                             <Table>
                               <TableHeader>
                                 <TableRow>
@@ -1301,10 +1314,11 @@ const EnhancedDashboard: React.FC = () => {
                                   <TableHead>Medida</TableHead>
                                   <TableHead>Valor Médio</TableHead>
                                   <TableHead>Vendas</TableHead>
+                                  <TableHead>Valor Total</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {filtrarProdutos().map((produto) => (
+                                {filtrarProdutos.map((produto) => (
                                   <TableRow key={produto.id}>
                                     <TableCell className="font-medium">
                                       {produto.nome}
@@ -1315,6 +1329,9 @@ const EnhancedDashboard: React.FC = () => {
                                     </TableCell>
                                     <TableCell>
                                       {produto.presenteEmVendas}
+                                    </TableCell>
+                                    <TableCell>
+                                      {formatarValorBRL(produto.valorTotal)}
                                     </TableCell>
                                   </TableRow>
                                 ))}
@@ -1331,8 +1348,8 @@ const EnhancedDashboard: React.FC = () => {
 
                       <TabsContent value="rank">
                         <div className="space-y-3">
-                          {filtrarProdutos().length > 0 ? (
-                            filtrarProdutos()
+                          {filtrarProdutos.length > 0 ? (
+                            filtrarProdutos
                               .slice(0, 10)
                               .map((produto, idx) => (
                                 <Card
@@ -1345,7 +1362,7 @@ const EnhancedDashboard: React.FC = () => {
                                 >
                                   <CardContent className="p-4">
                                     <div className="flex items-center gap-4">
-                                      <div className="flex items-center justify-center  w-8 h-8 rounded-full">
+                                      <div className="flex items-center justify-center w-8 h-8 rounded-full">
                                         <span className="font-bold text-gray-700">
                                           {idx + 1}
                                         </span>
@@ -1434,7 +1451,7 @@ const EnhancedDashboard: React.FC = () => {
 
                       <TabsContent value="geral">
                         <div className="overflow-auto">
-                          {filtrarVendedores().length > 0 ? (
+                          {filtrarVendedores.length > 0 ? (
                             <Table>
                               <TableHeader>
                                 <TableRow>
@@ -1449,7 +1466,7 @@ const EnhancedDashboard: React.FC = () => {
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {filtrarVendedores().map((vendedor) => (
+                                {filtrarVendedores.map((vendedor) => (
                                   <TableRow key={vendedor.id}>
                                     <TableCell className="font-medium">
                                       {vendedor.nome}
@@ -1516,8 +1533,8 @@ const EnhancedDashboard: React.FC = () => {
 
                       <TabsContent value="rank">
                         <div className="space-y-3">
-                          {filtrarVendedores().length > 0 ? (
-                            filtrarVendedores().map((vendedor, idx) => (
+                          {filtrarVendedores.length > 0 ? (
+                            filtrarVendedores.map((vendedor, idx) => (
                               <Card
                                 key={vendedor.id}
                                 className={`${
@@ -1526,7 +1543,7 @@ const EnhancedDashboard: React.FC = () => {
                               >
                                 <CardContent className="p-4">
                                   <div className="flex items-center gap-4">
-                                    <div className="flex items-center justify-center  w-8 h-8 rounded-full">
+                                    <div className="flex items-center justify-center w-8 h-8 rounded-full">
                                       <span className="font-bold text-gray-700">
                                         {idx + 1}
                                       </span>
@@ -1649,7 +1666,7 @@ const EnhancedDashboard: React.FC = () => {
 
                       <TabsContent value="geral">
                         <div className="overflow-auto">
-                          {filtrarClientes().length > 0 ? (
+                          {filtrarClientes.length > 0 ? (
                             <Table>
                               <TableHeader>
                                 <TableRow>
@@ -1664,7 +1681,7 @@ const EnhancedDashboard: React.FC = () => {
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {filtrarClientes().map((cliente) => (
+                                {filtrarClientes.map((cliente) => (
                                   <TableRow key={cliente.id}>
                                     <TableCell className="font-medium">
                                       {cliente.nome}
@@ -1701,8 +1718,8 @@ const EnhancedDashboard: React.FC = () => {
 
                       <TabsContent value="rank">
                         <div className="space-y-3">
-                          {filtrarClientes().length > 0 ? (
-                            filtrarClientes()
+                          {filtrarClientes.length > 0 ? (
+                            filtrarClientes
                               .slice(0, 10)
                               .map((cliente, idx) => (
                                 <Card
@@ -1715,7 +1732,7 @@ const EnhancedDashboard: React.FC = () => {
                                 >
                                   <CardContent className="p-4">
                                     <div className="flex items-center gap-4">
-                                      <div className="flex items-center justify-center  w-8 h-8 rounded-full">
+                                      <div className="flex items-center justify-center w-8 h-8 rounded-full">
                                         <span className="font-bold text-gray-700">
                                           {idx + 1}
                                         </span>
