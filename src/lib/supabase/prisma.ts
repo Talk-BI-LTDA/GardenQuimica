@@ -1,25 +1,44 @@
 import { PrismaClient } from '@prisma/client';
 
-// IMPORTANTE: Forçar uso do pooler mesmo que a URL esteja incorreta no .env
-const databaseUrl = process.env.DATABASE_URL || '';
+const createPrismaClient = () => {
+  const connectionString = process.env.DATABASE_URL;
 
-// Cliente Prisma com uso forçado da URL corrigida
-const prismaClientSingleton = () => {
+  if (!connectionString) {
+    throw new Error('DATABASE_URL não definida');
+  }
+
   return new PrismaClient({
     datasources: {
       db: {
-        url: databaseUrl
-      }
-    }
+        url: connectionString,
+      },
+    },
+    log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
   });
 };
 
-type PrismaClientSingleton = ReturnType<typeof prismaClientSingleton>;
+type PrismaClientSingleton = ReturnType<typeof createPrismaClient>;
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClientSingleton | undefined;
 };
 
-export const prisma = globalForPrisma.prisma ?? prismaClientSingleton();
+export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+}
+
+export async function connectPrisma() {
+  try {
+    await prisma.$connect();
+    console.log('✅ Prisma conectado com sucesso');
+  } catch (error) {
+    console.error('❌ Erro ao conectar Prisma:', error);
+    throw error;
+  }
+}
+
+export async function disconnectPrisma() {
+  await prisma.$disconnect();
+}
