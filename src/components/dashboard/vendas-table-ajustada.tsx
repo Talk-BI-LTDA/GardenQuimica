@@ -323,7 +323,7 @@ export function VendasTableAjustada({
     if (tipo === "venda") {
       router.push(`/vendas/${item.id}/editar`);
     } else {
-      router.push(`/nao-vendas/${item.id}/editar`);
+      router.push(`/vendas/${item.id}/editar`);
     }
   };
 

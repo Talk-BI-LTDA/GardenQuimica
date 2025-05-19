@@ -450,18 +450,21 @@ export function VendaUnificadaFormTipado({
       toast.error("Preencha todos os campos obrigatórios do produto Garden");
       return;
     }
-
+  
+    // CORREÇÃO: Pegar o valor da concorrência do formulário principal
+    const valorConcorrencia = naoVendaForm.getValues("valorTotal");
+  
     // Validação básica para produto concorrência
     if (
       !produtoConcorrencia.nomeConcorrencia ||
-      produtoConcorrencia.valorConcorrencia <= 0
+      valorConcorrencia <= 0
     ) {
       toast.error(
         "Preencha todos os campos obrigatórios do produto da concorrência"
       );
       return;
     }
-
+  
     // Verificar duplicidade exata
     const isDuplicate = naoVendaFields.some((item) => {
       const pc = item as unknown as ProdutoConcorrenciaSchema;
@@ -469,22 +472,22 @@ export function VendaUnificadaFormTipado({
         pc.produtoGarden?.nome === currentProduto.nome &&
         pc.produtoGarden?.medida === currentProduto.medida &&
         pc.produtoGarden?.quantidade === currentProduto.quantidade &&
-        pc.valorConcorrencia === produtoConcorrencia.valorConcorrencia &&
+        pc.valorConcorrencia === valorConcorrencia &&
         pc.nomeConcorrencia === produtoConcorrencia.nomeConcorrencia
       );
     });
-
+  
     if (isDuplicate) {
       toast.error(
         "Esta comparação de produtos já foi adicionada com as mesmas informações"
       );
       return;
     }
-
+  
     // Criar objeto de produto concorrência com tipagem correta
     const novoProdutoConcorrencia: ProdutoConcorrenciaSchema = {
       produtoGarden: currentProduto,
-      valorConcorrencia: produtoConcorrencia.valorConcorrencia,
+      valorConcorrencia: valorConcorrencia, // CORREÇÃO: Usar o valor do formulário
       nomeConcorrencia: produtoConcorrencia.nomeConcorrencia,
       icms:
         produtoConcorrencia.icms !== null
@@ -495,12 +498,12 @@ export function VendaUnificadaFormTipado({
           ? (produtoConcorrencia.objecao as string)
           : undefined,
     };
-
+  
     // Adicionar à lista com tipagem segura
     naoVendaAppend(
       novoProdutoConcorrencia as unknown as NaoVendaSchemaType["produtosConcorrencia"][0]
     );
-
+  
     // Resetar campos
     setCurrentProduto({
       nome: "",
@@ -509,7 +512,7 @@ export function VendaUnificadaFormTipado({
       valor: 0,
       recorrencia: "",
     });
-
+  
     setProdutoConcorrencia({
       valorConcorrencia: 0,
       nomeConcorrencia: "",
@@ -1910,7 +1913,7 @@ export function VendaUnificadaFormTipado({
                   />
 
                   <FormField
-                    control={vendaForm.control}
+                    control={naoVendaForm.control}
                     name="valorTotal"
                     render={({ field }) => (
                       <FormItem>
