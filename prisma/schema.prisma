@@ -120,7 +120,7 @@ model NaoVendaProduto {
   medida      String
   recorrencia String?
 
-  // Campos específicos para não venda
+  // Campos específicos para Venda perdida
   valorConcorrencia Float?
   nomeConcorrencia  String?
   icms              Float?

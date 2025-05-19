@@ -859,7 +859,7 @@ export async function excluirCliente(id: string) {
   }
 
   try {
-    // Verificar se o cliente existe e se tem vendas/não-vendas associadas
+    // Verificar se o cliente existe e se tem vendas/Venda-Perdidas associadas
     const clienteExistente = await prisma.cliente.findUnique({
       where: { id },
       select: {
@@ -879,7 +879,7 @@ export async function excluirCliente(id: string) {
 
     // Verificar se há vendas associadas
     if (clienteExistente._count.vendas > 0 || clienteExistente._count.naoVendas > 0) {
-      return { success: false, error: 'Não é possível excluir um cliente com vendas ou não-vendas associadas' };
+      return { success: false, error: 'Não é possível excluir um cliente com vendas ou Venda-Perdidas associadas' };
     }
 
     // Excluir cliente

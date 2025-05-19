@@ -186,7 +186,7 @@ export function VendasTableAjustada({
 
     setVendas(sortedVendas);
 
-    // Ordenar não vendas por data
+    // Ordenar Venda perdidas por data
     const sortedNaoVendas = [...naoVendas].sort((a, b) => {
       const dateA = new Date(a.createdAt).getTime();
       const dateB = new Date(b.createdAt).getTime();
@@ -216,7 +216,7 @@ export function VendasTableAjustada({
 
     setVendas(filteredVendas);
 
-    // Filtrar não vendas
+    // Filtrar Venda perdidas
     const filteredNaoVendas = initialNaoVendas.filter(
       (naoVenda) =>
         naoVenda.cliente.nome.toLowerCase().includes(term) ||
@@ -275,7 +275,7 @@ export function VendasTableAjustada({
         setVendas(resultadoVendas.vendas);
       }
 
-      // Aplicar filtros às não vendas
+      // Aplicar filtros às Venda perdidas
       const resultadoNaoVendas = await getNaoVendas(filtrosConvertidos);
 
       if (resultadoNaoVendas.success) {
@@ -358,16 +358,16 @@ export function VendasTableAjustada({
         resultado = await excluirNaoVenda(vendaSelecionada.id as string);
 
         if (resultado.success) {
-          toast.success("Não venda excluída com sucesso");
+          toast.success("Venda perdida excluída com sucesso");
           setNaoVendas(naoVendas.filter((v) => v.id !== vendaSelecionada.id));
         } else {
-          toast.error(resultado.error || "Erro ao excluir não venda");
+          toast.error(resultado.error || "Erro ao excluir Venda perdida");
         }
       }
     } catch (error) {
       console.error("Erro ao excluir item:", error);
       toast.error(
-        `Erro ao excluir ${itemTipo === "venda" ? "venda" : "não venda"}`
+        `Erro ao excluir ${itemTipo === "venda" ? "venda" : "Venda perdida"}`
       );
     } finally {
       setConfirmacaoExclusao(false);
@@ -506,7 +506,7 @@ export function VendasTableAjustada({
                     <XCircle className="h-6 w-6 text-red-600" />
                   </div>
                   <p className="text-sm text-gray-500">
-                    Não Vendas (Recusados)
+                    Venda perdidas (Recusados)
                   </p>
                 </div>
                 <h3 className="text-2xl pl-12 font-bold mt-1">
@@ -527,7 +527,7 @@ export function VendasTableAjustada({
                   </div>
                   <p className="text-sm text-gray-500">Valor Total de Vendas</p>
                 </div>
-                <h3 className="text-2xl pl-12 font-bold mt-1">
+                <h3 className="text-[20px] pl-12 font-bold mt-1">
                   {formatarValorBRL(estatisticas.valorTotalVendas || 0)}
                 </h3>
               </div>
@@ -563,7 +563,7 @@ export function VendasTableAjustada({
         <TabsList className="bg-gray-100 p-1">
           <TabsTrigger value="painel">Painel de Vendas</TabsTrigger>
           <TabsTrigger value="vendas">Vendas</TabsTrigger>
-          <TabsTrigger value="naovendas">Não Vendas</TabsTrigger>
+          <TabsTrigger value="naovendas">Venda perdidas</TabsTrigger>
         </TabsList>
 
         {/* Conteúdo da Tab Painel */}
@@ -747,7 +747,7 @@ export function VendasTableAjustada({
           </div>
         </TabsContent>
 
-        {/* Conteúdo da Tab Não Vendas */}
+        {/* Conteúdo da Tab Venda perdidas */}
         <TabsContent value="naovendas">
           <div className="bg-white rounded-lg border shadow-sm">
             <Table>
@@ -830,7 +830,7 @@ export function VendasTableAjustada({
                       colSpan={9}
                       className="text-center h-32 text-gray-500"
                     >
-                      Nenhuma não-venda encontrada
+                      Nenhuma Venda-Perdida encontrada
                     </TableCell>
                   </TableRow>
                 )}
@@ -1139,7 +1139,7 @@ export function VendasTableAjustada({
               <DialogTitle>
                 {itemTipo === "venda"
                   ? "Detalhes da Venda"
-                  : "Detalhes da Não Venda"}
+                  : "Detalhes da Venda perdida"}
               </DialogTitle>
             </DialogHeader>
 
@@ -1254,7 +1254,7 @@ export function VendasTableAjustada({
                   )}
                 </div>
               ) : (
-                // Produtos para não venda (comparação com concorrência)
+                // Produtos para Venda perdida (comparação com concorrência)
                 <div className="space-y-3">
                   {(vendaSelecionada as NaoVenda).produtosConcorrencia.map(
                     (item, index) => (
@@ -1311,7 +1311,7 @@ export function VendasTableAjustada({
               )}
             </div>
 
-            {/* Exibir objeção geral se for não-venda */}
+            {/* Exibir objeção geral se for Venda-Perdida */}
             {itemTipo === "naoVenda" &&
               (vendaSelecionada as NaoVenda).objecaoGeral && (
                 <div className="mt-4">
@@ -1349,7 +1349,7 @@ export function VendasTableAjustada({
             <DialogTitle>Confirmar Exclusão</DialogTitle>
             <DialogDescription>
               Tem certeza que deseja excluir{" "}
-              {itemTipo === "venda" ? "esta venda" : "esta não venda"}? Esta
+              {itemTipo === "venda" ? "esta venda" : "esta Venda perdida"}? Esta
               ação não pode ser desfeita.
             </DialogDescription>
           </DialogHeader>

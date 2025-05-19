@@ -103,16 +103,29 @@ const objOptions = [
   "Logística",
   "Cliente inapto para compra",
   "Produto que não trabalhamos",
+  "Outro",
 ];
 
 // Lista de recorrências
 const recorrenciaOptions = [
-  "1x por semana",
-  "10 dias",
-  "20 dias",
-  "1x por mês",
-  "2x por mês",
-  "A cada 3 meses",
+  "7 dias",
+  "14 dias",
+  "21 dias",
+  "28 dias",
+  "35 dias",
+  "42 dias",
+  "49 dias",
+  "56 dias", // 8 semanas
+  "63 dias", // 9 semanas
+  "70 dias", // 10 semanas
+  "77 dias", // 11 semanas
+  "84 dias", // 12 semanas / 3 meses
+  "91 dias", // 13 semanas
+  "98 dias", // 14 semanas
+  "105 dias", // 15 semanas
+  "112 dias", // 16 semanas
+  "119 dias", // 17 semanas
+  "Outro",
 ];
 
 // Lista de segmentos
@@ -177,6 +190,7 @@ const condicoesPagamentoOptions = [
   "30/60/90 dias",
   "Boleto",
   "PIX",
+  "Outro",
 ];
 
 // Função para formatar CNPJ
@@ -208,13 +222,25 @@ function createTypedSubmitHandler<T>(
 ): SubmitHandler<T> {
   return handler as SubmitHandler<T>;
 }
+const formatCurrency = (value: string): string => {
+  // Remove tudo que não for número
+  const numericValue = value.replace(/\D/g, "");
 
+  // Converte para número com 2 casas decimais
+  const floatValue = parseFloat(numericValue) / 100;
+
+  // Formata o número com separadores de milhar e decimal corretos
+  return floatValue.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
 export function VendaUnificadaFormTipado({
   initialData,
   initialMode = "venda",
   isEditing = false,
 }: VendaUnificadaFormProps) {
-  // Modo do formulário (venda ou não-venda)
+  // Modo do formulário (venda ou Venda-Perdida)
   const [formMode, setFormMode] = useState<ModoFormulario>(initialMode);
 
   // Estado de carregamento
@@ -234,7 +260,7 @@ export function VendaUnificadaFormTipado({
     recorrencia: "",
   });
 
-  // Estado para produto da concorrência (não-vendas)
+  // Estado para produto da concorrência (Venda-Perdidas)
   const [produtoConcorrencia, setProdutoConcorrencia] =
     useState<ProdutoConcorrenciaTemp>({
       valorConcorrencia: 0,
@@ -266,7 +292,7 @@ export function VendaUnificadaFormTipado({
           vendaRecorrente: false,
         };
 
-  // Definir valores padrão do formulário para não-venda
+  // Definir valores padrão do formulário para Venda-Perdida
   const defaultNaoVendaValues: NaoVendaSchemaType =
     formMode === "naoVenda" && initialData
       ? (initialData as NaoVendaSchemaType)
@@ -353,8 +379,12 @@ export function VendaUnificadaFormTipado({
 
   // Handler para seleção de objeção
   const handleObjecaoSelect = (objValue: string) => {
-    setProdutoConcorrencia((prev) => ({ ...prev, objecao: objValue }));
-    setObjecaoInputOpen(false);
+    if (objValue === "Outro") {
+      setProdutoConcorrencia((prev) => ({ ...prev, objecao: "" }));
+    } else {
+      setProdutoConcorrencia((prev) => ({ ...prev, objecao: objValue }));
+      setObjecaoInputOpen(false);
+    }
   };
 
   // Handler para alteração manual da objeção
@@ -408,7 +438,7 @@ export function VendaUnificadaFormTipado({
     vendaForm.setValue("valorTotal", valorAtual + valorProduto);
   };
 
-  // Adicionar produto à lista de não-vendas
+  // Adicionar produto à lista de Venda-Perdidas
   const handleAddProdutoNaoVenda = () => {
     // Validação básica para produto Garden
     if (
@@ -505,7 +535,7 @@ export function VendaUnificadaFormTipado({
     vendaRemove(index);
   };
 
-  // Remover produto da lista de não-vendas
+  // Remover produto da lista de Venda-Perdidas
   const handleRemoveProdutoNaoVenda = (index: number) => {
     // Obter o produto
     const produtos = naoVendaForm.getValues("produtosConcorrencia");
@@ -532,7 +562,7 @@ export function VendaUnificadaFormTipado({
     }, 0);
   };
 
-  // Calcular valor total sugerido para não-vendas
+  // Calcular valor total sugerido para Venda-Perdidas
   const calcularValorSugeridoNaoVenda = (): number => {
     const produtos = naoVendaForm.getValues("produtosConcorrencia");
     return produtos.reduce((acumulador: number, item) => {
@@ -544,7 +574,7 @@ export function VendaUnificadaFormTipado({
     }, 0);
   };
 
-  // Calcular diferença de valor (para não-vendas)
+  // Calcular diferença de valor (para Venda-Perdidas)
   const calcularDiferencaValor = (
     produtoGarden: Produto,
     valorConcorrencia: number
@@ -626,7 +656,7 @@ export function VendaUnificadaFormTipado({
     }
   };
 
-  // Manipular envio do formulário de não-venda
+  // Manipular envio do formulário de Venda-Perdida
   const onSubmitNaoVenda = async (data: NaoVendaSchemaType) => {
     // Verificar se há ao menos um produto
     if (data.produtosConcorrencia.length === 0) {
@@ -637,7 +667,7 @@ export function VendaUnificadaFormTipado({
     setLoading(true);
 
     try {
-      // Usar a action diretamente para criar ou atualizar a não-venda
+      // Usar a action diretamente para criar ou atualizar a Venda-Perdida
       let result;
       if (isEditing && initialData?.id) {
         result = await atualizarNaoVenda(
@@ -653,8 +683,8 @@ export function VendaUnificadaFormTipado({
       } else {
         toast.success(
           isEditing
-            ? "Não-venda atualizada com sucesso!"
-            : "Não-venda cadastrada com sucesso!"
+            ? "Venda-Perdida atualizada com sucesso!"
+            : "Venda-Perdida cadastrada com sucesso!"
         );
         naoVendaForm.reset(defaultNaoVendaValues);
         setCurrentProduto({
@@ -672,8 +702,8 @@ export function VendaUnificadaFormTipado({
         });
       }
     } catch (error) {
-      console.error("Erro ao processar não-venda:", error);
-      toast.error("Ocorreu um erro ao processar a não-venda");
+      console.error("Erro ao processar Venda-Perdida:", error);
+      toast.error("Ocorreu um erro ao processar a Venda-Perdida");
     } finally {
       setLoading(false);
     }
@@ -705,10 +735,10 @@ export function VendaUnificadaFormTipado({
   const formTitle = isEditing
     ? formMode === "venda"
       ? "Editar Venda"
-      : "Editar Não-Venda"
+      : "Editar Venda-Perdida"
     : formMode === "venda"
     ? "Registrar Nova Venda"
-    : "Registrar Nova Não-Venda";
+    : "Registrar Nova Venda-Perdida";
 
   return (
     <>
@@ -739,7 +769,7 @@ export function VendaUnificadaFormTipado({
                     : "bg-red-100 text-red-800"
                 }`}
               >
-                {formMode === "venda" ? "Modo Venda" : "Modo Não-Venda"}
+                {formMode === "venda" ? "Modo Venda" : "Modo Venda-Perdida"}
               </Badge>
             </motion.div>
           </AnimatePresence>
@@ -757,7 +787,7 @@ export function VendaUnificadaFormTipado({
               {formMode === "venda" ? (
                 <>
                   <ThumbsDown className="mr-2 h-4 w-4" />
-                  Alternar para Não-Venda
+                  Alternar para Venda-Perdida
                 </>
               ) : (
                 <>
@@ -930,7 +960,7 @@ export function VendaUnificadaFormTipado({
                     <CardContent className="pt-6">
                       <div className="flex gap-4">
                         <div className="md:col-span-1">
-                          <FormLabel>Nome*</FormLabel>
+                          <FormLabel className="mb-1">Nome*</FormLabel>
                           <Select
                             value={currentProduto.nome}
                             onValueChange={(value) =>
@@ -951,7 +981,7 @@ export function VendaUnificadaFormTipado({
                         </div>
 
                         <div>
-                          <FormLabel>Medida*</FormLabel>
+                          <FormLabel className="mb-1">Medida*</FormLabel>
                           <Select
                             value={currentProduto.medida}
                             onValueChange={(value) =>
@@ -972,7 +1002,7 @@ export function VendaUnificadaFormTipado({
                         </div>
 
                         <div>
-                          <FormLabel>Quantidade*</FormLabel>
+                          <FormLabel className="mb-1">Quantidade*</FormLabel>
                           <Input
                             type="number"
                             min="1"
@@ -988,28 +1018,33 @@ export function VendaUnificadaFormTipado({
                         </div>
 
                         <div>
-                          <FormLabel>Valor*</FormLabel>
-                          <div className="relative">
-                            <span className="absolute left-3 top-3 text-gray-500">
+                          <FormLabel className="mb-1">Valor*</FormLabel>
+                          <div className="relative flex items-center">
+                            <span className="absolute left-3 text-gray-500">
                               R$
                             </span>
-                            <CurrencyInput
+                            <Input
                               className="px-8 h-10 rounded-md border border-input bg-background w-full"
-                              value={currentProduto.valor}
-                              onValueChange={(value) =>
-                                handleChangeProduto("valor", Number(value || 0))
-                              }
-                              decimalsLimit={2}
-                              decimalSeparator=","
-                              groupSeparator="."
-                              allowNegativeValue={false}
+                              value={formatCurrency(
+                                currentProduto.valor.toString()
+                              )}
+                              onChange={(e) => {
+                                const rawValue = e.target.value.replace(
+                                  /\D/g,
+                                  ""
+                                );
+                                const numValue = rawValue
+                                  ? parseInt(rawValue, 10) / 100
+                                  : 0;
+                                handleChangeProduto("valor", numValue);
+                              }}
                               placeholder="0,00"
                             />
                           </div>
                         </div>
 
                         <div>
-                          <FormLabel>Recorrência</FormLabel>
+                          <FormLabel className="mb-1">Recorrência</FormLabel>
                           <Select
                             value={currentProduto.recorrencia || ""}
                             onValueChange={(value) =>
@@ -1130,7 +1165,9 @@ export function VendaUnificadaFormTipado({
                     name="condicaoPagamento"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Condição de Pagamento*</FormLabel>
+                        <FormLabel className="mb-1">
+                          Condição de Pagamento*
+                        </FormLabel>
                         <FormControl>
                           <div className="flex items-center space-x-2">
                             <CreditCard className="w-4 h-4 text-gray-400" />
@@ -1163,8 +1200,8 @@ export function VendaUnificadaFormTipado({
                       <FormItem>
                         <FormLabel>Valor Total*</FormLabel>
                         <FormControl>
-                          <div className="relative">
-                            <span className="absolute left-3 top-2 text-gray-500">
+                          <div className="relative flex items-center">
+                            <span className="absolute left-3  text-gray-500">
                               R$
                             </span>
                             <CurrencyInput
@@ -1244,7 +1281,7 @@ export function VendaUnificadaFormTipado({
                       className="text-red-600 border-red-300 hover:bg-red-50"
                     >
                       <ThumbsDown className="mr-2 h-4 w-4" />
-                      Registrar como Não-Venda
+                      Registrar como Venda-Perdida
                     </Button>
                   </motion.div>
                   <motion.div
@@ -1401,7 +1438,7 @@ export function VendaUnificadaFormTipado({
                       <h4 className="font-medium mb-4 text-[#00446A]">
                         Produto (Garden)
                       </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                      <div className="flex w-fit gap-4">
                         <div className="md:col-span-1">
                           <FormLabel>Nome*</FormLabel>
                           <Select
@@ -1410,16 +1447,16 @@ export function VendaUnificadaFormTipado({
                               handleChangeProduto("nome", value)
                             }
                           >
-<SelectTrigger>
-    <SelectValue placeholder="Produto" />
-  </SelectTrigger>
-  <SelectContent>
-    {productOptions.map((produto) => (
-      <SelectItem key={produto} value={produto}>
-        {produto}
-      </SelectItem>
-    ))}
-  </SelectContent>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Produto" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {productOptions.map((produto) => (
+                                <SelectItem key={produto} value={produto}>
+                                  {produto}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
                           </Select>
                         </div>
 
@@ -1461,23 +1498,30 @@ export function VendaUnificadaFormTipado({
                         </div>
 
                         <div>
-                          <FormLabel>Valor*</FormLabel>
-                          <div className="relative">
-                            <span className="absolute left-3 top-3 text-gray-500">
-                              R$
-                            </span>
-                            <CurrencyInput
-                              className="px-8 h-10 rounded-md border border-input bg-background w-full"
-                              value={currentProduto.valor}
-                              onValueChange={(value) =>
-                                handleChangeProduto("valor", Number(value || 0))
-                              }
-                              decimalsLimit={2}
-                              decimalSeparator=","
-                              groupSeparator="."
-                              allowNegativeValue={false}
-                              placeholder="0,00"
-                            />
+                          <div>
+                            <FormLabel>Valor*</FormLabel>
+                            <div className="relative flex items-center">
+                              <span className="absolute left-3  text-gray-500">
+                                R$
+                              </span>
+                              <Input
+                                className="px-8 h-10 rounded-md border border-input bg-background w-full"
+                                value={formatCurrency(
+                                  currentProduto.valor.toString()
+                                )}
+                                onChange={(e) => {
+                                  const rawValue = e.target.value.replace(
+                                    /\D/g,
+                                    ""
+                                  );
+                                  const numValue = rawValue
+                                    ? parseInt(rawValue, 10) / 100
+                                    : 0;
+                                  handleChangeProduto("valor", numValue);
+                                }}
+                                placeholder="0,00"
+                              />
+                            </div>
                           </div>
                         </div>
 
@@ -1530,27 +1574,48 @@ export function VendaUnificadaFormTipado({
                         </div>
 
                         <div>
-                          <FormLabel>Valor da Concorrência*</FormLabel>
-                          <div className="relative">
-                            <span className="absolute left-3 top-3 text-gray-500">
-                              R$
-                            </span>
-                            <CurrencyInput
-                              className="px-8 h-10 rounded-md border border-input bg-background w-full"
-                              value={produtoConcorrencia.valorConcorrencia}
-                              onValueChange={(value) =>
-                                handleChangeProdutoConcorrencia(
-                                  "valorConcorrencia",
-                                  Number(value || 0)
-                                )
-                              }
-                              decimalsLimit={2}
-                              decimalSeparator=","
-                              groupSeparator="."
-                              allowNegativeValue={false}
-                              placeholder="0,00"
-                            />
-                          </div>
+                          <FormField
+                            control={naoVendaForm.control}
+                            name="valorTotal"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Valor Total*</FormLabel>
+                                <FormControl>
+                                  <div className="relative flex items-center">
+
+                                    <span className="absolute left-3  text-gray-500">
+                                      R$
+                                    </span>
+                                    <Input
+                                      className="px-8 h-10 rounded-md border border-input bg-background w-full"
+                                      value={formatCurrency(
+                                        field.value.toString()
+                                      )}
+                                      onChange={(e) => {
+                                        const rawValue = e.target.value.replace(
+                                          /\D/g,
+                                          ""
+                                        );
+                                        const numValue = rawValue
+                                          ? parseInt(rawValue, 10) / 100
+                                          : 0;
+                                        field.onChange(numValue);
+                                      }}
+                                      placeholder="0,00"
+                                    />
+                                  </div>
+                                </FormControl>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Valor sugerido:{" "}
+                                  {formatarValorBRL(
+                                    calcularValorSugeridoNaoVenda()
+                                  )}{" "}
+                                  (Soma de todos os produtos Garden)
+                                </p>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
                         </div>
 
                         <div>
@@ -1845,34 +1910,37 @@ export function VendaUnificadaFormTipado({
                   />
 
                   <FormField
-                    control={naoVendaForm.control}
+                    control={vendaForm.control}
                     name="valorTotal"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Valor Total*</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <span className="absolute left-3 top-2 text-gray-500">
+                            <span className="absolute left-3 text-gray-500">
                               R$
                             </span>
-                            <CurrencyInput
+                            <Input
                               className="px-8 h-10 rounded-md border border-input bg-background w-full"
-                              value={field.value}
-                              onValueChange={(value) =>
-                                field.onChange(Number(value || 0))
-                              }
-                              decimalsLimit={2}
-                              decimalSeparator=","
-                              groupSeparator="."
-                              allowNegativeValue={false}
+                              value={formatCurrency(field.value.toString())}
+                              onChange={(e) => {
+                                const rawValue = e.target.value.replace(
+                                  /\D/g,
+                                  ""
+                                );
+                                const numValue = rawValue
+                                  ? parseInt(rawValue, 10) / 100
+                                  : 0;
+                                field.onChange(numValue);
+                              }}
                               placeholder="0,00"
                             />
                           </div>
                         </FormControl>
                         <p className="text-xs text-gray-500 mt-1">
                           Valor sugerido:{" "}
-                          {formatarValorBRL(calcularValorSugeridoNaoVenda())}{" "}
-                          (Soma de todos os produtos Garden)
+                          {formatarValorBRL(calcularValorSugeridoVenda())} (Soma
+                          de todos os produtos)
                         </p>
                         <FormMessage />
                       </FormItem>
@@ -1898,7 +1966,7 @@ export function VendaUnificadaFormTipado({
                                     onChange={(e) =>
                                       field.onChange(e.target.value)
                                     }
-                                    placeholder="Clique para selecionar ou descreva a objeção geral para a não-venda"
+                                    placeholder="Clique para selecionar ou descreva a objeção geral para a Venda-Perdida"
                                     rows={4}
                                   />
                                 </div>
@@ -1989,8 +2057,8 @@ export function VendaUnificadaFormTipado({
                         <>
                           <Save className="mr-2 h-4 w-4" />
                           {isEditing
-                            ? "Atualizar Não-Venda"
-                            : "Registrar Não-Venda"}
+                            ? "Atualizar Venda-Perdida"
+                            : "Registrar Venda-Perdida"}
                         </>
                       )}
                     </Button>

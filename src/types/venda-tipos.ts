@@ -42,7 +42,7 @@ export type Produto = {
     nomeRecorrencia?: string;
   };
   
-  // Tipos relacionados a Não-Vendas
+  // Tipos relacionados a Venda-Perdidas
   export type ProdutoConcorrencia = {
     produtoGarden: Produto;
     valorConcorrencia: number;

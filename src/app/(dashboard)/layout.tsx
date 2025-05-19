@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import { redirect } from 'next/navigation'
 import { Toaster } from 'sonner'
 
-import { Sidebar } from '@/components/dashboard/sidebar'
+import { AuthSidebar  } from '@/components/auth-sidebar'
 import { auth } from '@/lib/auth'
 
 export default async function DashboardLayout({
@@ -20,7 +20,7 @@ export default async function DashboardLayout({
   
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar />
+      <AuthSidebar  />
       <main className="flex-1 p-8 pl-70 overflow-auto">
         {children}
       </main>

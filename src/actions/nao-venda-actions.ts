@@ -127,8 +127,8 @@ export async function criarNaoVenda(data: NaoVendaFormData) {
     revalidatePath('/dashboard/nao-vendas')
     return { success: true, id: naoVenda.id }
   } catch (error) {
-    console.error('Erro ao criar não venda:', error)
-    return { error: 'Ocorreu um erro ao salvar a não venda' }
+    console.error('Erro ao criar Venda perdida:', error)
+    return { error: 'Ocorreu um erro ao salvar a Venda perdida' }
   }
 }
 
@@ -312,8 +312,8 @@ export async function getNaoVendas(filtros?: FiltrosNaoVenda) {
 
     return { success: true, naoVendas: naoVendasMapeadas }
   } catch (error) {
-    console.error('Erro ao buscar não vendas:', error)
-    return { error: 'Ocorreu um erro ao buscar as não vendas' }
+    console.error('Erro ao buscar Venda perdidas:', error)
+    return { error: 'Ocorreu um erro ao buscar as Venda perdidas' }
   }
 }
 
@@ -350,17 +350,17 @@ export async function getNaoVenda(id: string) {
     })
 
     if (!naoVenda) {
-      return { error: 'Não venda não encontrada' }
+      return { error: 'Venda perdida não encontrada' }
     }
 
     if (session.user.role !== 'ADMIN' && naoVenda.vendedorId !== session.user.id) {
-      return { error: 'Você não tem permissão para visualizar esta não venda' }
+      return { error: 'Você não tem permissão para visualizar esta Venda perdida' }
     }
 
     return { success: true, naoVenda }
   } catch (error) {
-    console.error('Erro ao buscar não venda:', error)
-    return { error: 'Ocorreu um erro ao buscar a não venda' }
+    console.error('Erro ao buscar Venda perdida:', error)
+    return { error: 'Ocorreu um erro ao buscar a Venda perdida' }
   }
 }
 
@@ -386,11 +386,11 @@ export async function atualizarNaoVenda(id: string, data: NaoVendaFormData) {
     })
 
     if (!naoVendaExistente) {
-      return { error: 'Não venda não encontrada' }
+      return { error: 'Venda perdida não encontrada' }
     }
 
     if (session.user.role !== 'ADMIN' && naoVendaExistente.vendedorId !== session.user.id) {
-      return { error: 'Você não tem permissão para editar esta não venda' }
+      return { error: 'Você não tem permissão para editar esta Venda perdida' }
     }
 
     let cliente = await prisma.cliente.findFirst({
@@ -458,8 +458,8 @@ export async function atualizarNaoVenda(id: string, data: NaoVendaFormData) {
     revalidatePath('/dashboard/nao-vendas')
     return { success: true, id: naoVenda.id }
   } catch (error) {
-    console.error('Erro ao atualizar não venda:', error)
-    return { error: 'Ocorreu um erro ao atualizar a não venda' }
+    console.error('Erro ao atualizar Venda perdida:', error)
+    return { error: 'Ocorreu um erro ao atualizar a Venda perdida' }
   }
 }
 
@@ -471,7 +471,7 @@ export async function excluirNaoVenda(id: string) {
   }
 
   if (session.user.role !== 'ADMIN') {
-    return { error: 'Apenas administradores podem excluir não vendas' }
+    return { error: 'Apenas administradores podem excluir Venda perdidas' }
   }
 
   try {
@@ -482,7 +482,7 @@ export async function excluirNaoVenda(id: string) {
     revalidatePath('/dashboard/nao-vendas')
     return { success: true }
   } catch (error) {
-    console.error('Erro ao excluir não venda:', error)
-    return { error: 'Ocorreu um erro ao excluir a não venda' }
+    console.error('Erro ao excluir Venda perdida:', error)
+    return { error: 'Ocorreu um erro ao excluir a Venda perdida' }
   }
 }

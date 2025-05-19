@@ -50,12 +50,12 @@ export default function NovaPaginaVendaUnificada() {
             transition={{ duration: 0.3 }}
           >
             <h1 className="text-2xl font-bold">
-              {modoAtual === 'venda' ? 'Gestão de Vendas' : 'Registro de Não-Venda'}
+              {modoAtual === 'venda' ? 'Gestão de Vendas' : 'Registro de Venda-Perdida'}
             </h1>
             <p className="text-gray-500">
               {modoAtual === 'venda' 
                 ? 'Registre uma nova venda utilizando o formulário abaixo.'
-                : 'Registre uma não-venda para análise de objeções e comparação com concorrentes.'}
+                : 'Registre uma Venda-Perdida para análise de objeções e comparação com concorrentes.'}
             </p>
           </motion.div>
         </AnimatePresence>

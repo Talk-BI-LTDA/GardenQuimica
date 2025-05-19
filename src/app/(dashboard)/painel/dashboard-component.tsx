@@ -91,6 +91,7 @@ import { getVendedores } from "@/actions/vendedores-actions";
 import { Usuario } from "@/types/usuario";
 import { getProdutos } from "@/actions/produtos-actions";
 import { Produto } from "@/types/venda";
+// import MapaVendasRegiao from '@/components/dashboard/mapa-vendas-regiao/MapaVendasRegiao';
 
 // Interfaces para tipagem do componente
 interface DashboardFilter {
@@ -796,13 +797,13 @@ const EnhancedDashboard: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Não Vendas (Recusados) */}
+        {/* Venda perdidas (Recusados) */}
         <Card className="w-[33%] !py-3">
           <CardContent >
             <div className="flex items-start justify-between">
               <div>
                 <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
-                  Não Vendas (Recusados){" "}
+                  Venda perdidas (Recusados){" "}
                   <div className="bg-red-100 w-fit p-2 rounded-full">
                     <XCircle className="h-6 w-6 text-red-600" />
                   </div>
@@ -905,7 +906,7 @@ const EnhancedDashboard: React.FC = () => {
                       value="naoVendas"
                       className="text-xs px-3 py-1 rounded data-[state=active]:shadow"
                     >
-                      Não Vendas
+                      Venda perdidas
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
@@ -953,7 +954,7 @@ const EnhancedDashboard: React.FC = () => {
                       stackId="1"
                       stroke="#f43f5e"
                       fill="#f43f5e"
-                      name="Não Vendas"
+                      name="Venda perdidas"
                     />
                   )}
                 </AreaChart>
@@ -1458,7 +1459,7 @@ const EnhancedDashboard: React.FC = () => {
                                   <TableHead>Vendedor</TableHead>
                                   <TableHead>Email</TableHead>
                                   <TableHead>Vendas</TableHead>
-                                  <TableHead>Não Vendas</TableHead>
+                                  <TableHead>Venda perdidas</TableHead>
                                   <TableHead>Valor Total</TableHead>
                                   <TableHead>Taxa de Sucesso</TableHead>
                                   <TableHead>Última Venda</TableHead>
@@ -1610,7 +1611,7 @@ const EnhancedDashboard: React.FC = () => {
                                         </div>
                                         <div>
                                           <p className="text-xs text-gray-500">
-                                            Não Vendas
+                                            Venda perdidas
                                           </p>
                                           <p className="font-medium">
                                             {vendedor.quantidadeNaoVendas}
@@ -1962,7 +1963,10 @@ const EnhancedDashboard: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* <MapaVendasRegiao /> */}
+
     </div>
+    
   );
 };
 

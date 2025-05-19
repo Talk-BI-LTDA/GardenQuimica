@@ -23,3 +23,14 @@ export type UsuarioFormData = {
   role: UsuarioRole;
   regiao?: string;  
 };
+
+export type UsuarioEditFormData = {
+  nome: string;
+  email: string;
+  senha: string;
+  confirmacaoSenha: string;
+  cpf: string;
+  role: UsuarioRole;
+  regiao?: string;  
+};
+
