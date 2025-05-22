@@ -65,7 +65,15 @@ const productOptions = [
   "Lauril Éter Sulfossuccinato de Sódio (Garden Pon SGC)",
   "Massa de Vela (Garden MV)",
   "Adicionar Produto não catalogado...",
+  "Óleo Mineral",
+  "MYRJ",
+  "Poliquaternium 7",
+  "Substituto da Trietanolamina (ALC 85)",
+  "Monoetilenoglicol",
+  "Quaternário 16-50 e 16-29",
+  "Renex"
 ];
+
 
 interface ProdutoVendaFormProps {
   currentProduto: Produto;
