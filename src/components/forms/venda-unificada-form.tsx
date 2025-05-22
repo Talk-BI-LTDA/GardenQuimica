@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useForm, useFieldArray, FormProvider } from "react-hook-form";
+import { useForm, useFieldArray, } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -226,6 +226,10 @@ export function VendaUnificadaFormTipado({
   // Estado de carregamento
   const [loading, setLoading] = useState<boolean>(false);
 
+  // NOVOS ESTADOS PARA CONTROLE DE FORMULÁRIO
+  const [canSubmitForm, setCanSubmitForm] = useState<boolean>(true);
+  const [hasPendingMigratedProducts, setHasPendingMigratedProducts] = useState<boolean>(false);
+
   // Estados para diálogo de recorrência (vendas)
   const [showRecorrenciaDialog, setShowRecorrenciaDialog] =
     useState<boolean>(false);
@@ -353,11 +357,6 @@ export function VendaUnificadaFormTipado({
     defaultValues: defaultNaoVendaValues,
   });
 
-  // Form para o diálogo de concorrência
-  const concorrenciaForm = useForm<ProdutoConcorrenciaTemp>({
-    defaultValues: resetProdutoConcorrencia(),
-  });
-
   // Arrays de produtos com tipagem correta
   const {
     fields: vendaFields,
@@ -376,6 +375,42 @@ export function VendaUnificadaFormTipado({
     control: naoVendaForm.control,
     name: "produtosConcorrencia",
   });
+
+  // NOVO EFEITO PARA VERIFICAR PRODUTOS MIGRADOS PENDENTES
+  useEffect(() => {
+    const produtosPendentes = produtosMigrados.filter(p => !p.concorrenciaAdicionada);
+    setHasPendingMigratedProducts(produtosPendentes.length > 0);
+    
+    // Se há produtos pendentes, não permitir submissão automática
+    if (produtosPendentes.length > 0) {
+      setCanSubmitForm(false);
+    } else {
+      setCanSubmitForm(true);
+    }
+  }, [produtosMigrados]);
+
+  // NOVO COMPONENTE DE AVISO PARA PRODUTOS PENDENTES
+  const ProdutosPendentesWarning = () => {
+    if (!hasPendingMigratedProducts) return null;
+
+    const produtosPendentes = produtosMigrados.filter(p => !p.concorrenciaAdicionada);
+
+    return (
+      <div className=" border border-orange-400 text-orange-800 p-4 rounded-lg mb-4">
+        <div className="flex items-center">
+          <AlertCircle className="h-5 w-5 mr-2" />
+          <div>
+            <p className="font-medium">Produtos pendentes</p>
+            <p className="text-sm">
+              Você ainda precisa adicionar informações de concorrência para {produtosPendentes.length} produto(s).
+              Complete essas informações antes de salvar a cotação.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   useEffect(() => {
     if (initialData && isEditing) {
       // Determinar o tipo de dados baseado na estrutura
@@ -622,17 +657,13 @@ export function VendaUnificadaFormTipado({
     setProdutoConcorrencia((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Manipulação da concorrência de produto migrado
+  // FUNÇÃO CORRIGIDA - Manipulação da concorrência de produto migrado
   const handleChangeConcorrencia = (
     field: keyof ProdutoConcorrenciaTemp,
     value: string | number | boolean | null
   ) => {
     setCurrentConcorrencia((prev) => ({ ...prev, [field]: value }));
-    // Atualizar também no form para garantir consistência
-    concorrenciaForm.setValue(
-      field as keyof ProdutoConcorrenciaTemp,
-      value as never
-    );
+    // REMOVIDO: concorrenciaForm.setValue que estava causando conflito
   };
 
   // Handler para abrir o diálogo de objeção de produto novo
@@ -763,14 +794,14 @@ export function VendaUnificadaFormTipado({
     toast.success("Objeção adicionada ao produto");
   };
 
-  // Handler para abrir o diálogo de concorrência para produto migrado
+  // FUNÇÃO CORRIGIDA - Handler para abrir o diálogo de concorrência para produto migrado
   const handleAbrirConcorrenciaDialog = (indice: number) => {
     const produtoMigrado = produtosMigrados[indice];
     if (produtoMigrado) {
       // Resetar o estado de concorrência atual
       const concorrenciaDefault = resetProdutoConcorrencia();
       setCurrentConcorrencia(concorrenciaDefault);
-      concorrenciaForm.reset(concorrenciaDefault);
+      // REMOVIDO: concorrenciaForm.reset que estava causando conflito
 
       setCurrentProdutoMigradoIndice(indice);
       setProdutoAtual(produtoMigrado.produto);
@@ -778,14 +809,8 @@ export function VendaUnificadaFormTipado({
     }
   };
 
-  // Handler para salvar a concorrência de produto migrado
-  const handleSalvarConcorrencia = (event?: React.MouseEvent) => {
-    // Prevenir comportamento padrão se um evento for passado
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-
+  // FUNÇÃO CORRIGIDA - Handler para salvar a concorrência de produto migrado
+  const handleSalvarConcorrencia = () => {
     if (currentProdutoMigradoIndice < 0 || !produtoAtual) {
       toast.error("Produto não encontrado");
       return;
@@ -842,8 +867,7 @@ export function VendaUnificadaFormTipado({
 
     // Atualizar o produto migrado para indicar que a concorrência foi adicionada
     const novosProdutosMigrados = [...produtosMigrados];
-    novosProdutosMigrados[currentProdutoMigradoIndice].concorrenciaAdicionada =
-      true;
+    novosProdutosMigrados[currentProdutoMigradoIndice].concorrenciaAdicionada = true;
     setProdutosMigrados(novosProdutosMigrados);
 
     // Atualizar valor total do formulário
@@ -859,9 +883,11 @@ export function VendaUnificadaFormTipado({
     setCurrentProdutoMigradoIndice(-1);
     setProdutoAtual(null);
     setCurrentConcorrencia(resetProdutoConcorrencia());
-    concorrenciaForm.reset(resetProdutoConcorrencia());
 
     toast.success("Informações de concorrência adicionadas com sucesso");
+
+    // REMOVIDO: NÃO submeter o formulário automaticamente
+    // O usuário deve escolher quando submeter clicando no botão principal
   };
 
   const medidasOptions = ["Litro", "Kg"];
@@ -1307,11 +1333,23 @@ export function VendaUnificadaFormTipado({
     }
   };
 
-  // Manipular envio do formulário de Cotação Cancelada
+  // FUNÇÃO CORRIGIDA - Manipular envio do formulário de Cotação Cancelada
   const onSubmitNaoVenda = async (data: NaoVendaSchemaType) => {
+    // NOVA VALIDAÇÃO: Verificar se há produtos migrados pendentes
+    if (hasPendingMigratedProducts) {
+      toast.error("Adicione as informações de concorrência para todos os produtos antes de continuar");
+      return;
+    }
+
     // Verificar se há ao menos um produto
     if (data.produtosConcorrencia.length === 0) {
       toast.error("Adicione pelo menos um produto");
+      return;
+    }
+
+    // NOVA VALIDAÇÃO: Verificar se o formulário pode ser submetido
+    if (!canSubmitForm) {
+      toast.error("Finalize a adição de produtos antes de salvar");
       return;
     }
 
@@ -2064,7 +2102,7 @@ export function VendaUnificadaFormTipado({
                   isLoadingClientes={isLoadingClientes}
                 />
 
-                {/* Produtos Migrados que Necessitam de Concorrência */}
+                {/* SEÇÃO CORRIGIDA - Produtos Migrados que Necessitam de Concorrência */}
                 {produtosMigrados.length > 0 && (
                   <motion.div
                     initial={{ opacity: 0, y: 7 }}
@@ -2080,6 +2118,9 @@ export function VendaUnificadaFormTipado({
                       informações de concorrência para cada um.
                     </p>
 
+                    {/* NOVO COMPONENTE DE AVISO */}
+                    <ProdutosPendentesWarning />
+
                     <ScrollArea
                       className={
                         produtosMigrados.length > 3 ? "h-80" : "h-auto"
@@ -2092,7 +2133,7 @@ export function VendaUnificadaFormTipado({
                             className={`mb-4 ${
                               produtoMigrado.concorrenciaAdicionada
                                 ? "bg-gray-50"
-                                : ""
+                                : "border-[#00436a0e] bg-[#00436a09]"
                             }`}
                           >
                             <div className="p-4">
@@ -2154,7 +2195,7 @@ export function VendaUnificadaFormTipado({
                                 className={
                                   produtoMigrado.concorrenciaAdicionada
                                     ? "border-gray-200 text-gray-700"
-                                    : "bg-[#00446A]"
+                                    : "bg-[#00446A] hover:bg-[#003455]"
                                 }
                                 disabled={produtoMigrado.concorrenciaAdicionada}
                               >
@@ -2552,14 +2593,17 @@ export function VendaUnificadaFormTipado({
                       </motion.div>
                     )}
 
+                    {/* BOTÃO CORRIGIDO COM VALIDAÇÕES */}
                     <motion.div
                       whileHover={{ scale: 1.01 }}
                       whileTap={{ scale: 0.99 }}
                     >
                       <Button
                         type="submit"
-                        disabled={loading}
-                        className="bg-red-600 hover:bg-red-700"
+                        disabled={loading || hasPendingMigratedProducts}
+                        className={`bg-red-600 hover:bg-red-700 ${
+                          hasPendingMigratedProducts ? "opacity-50 cursor-not-allowed" : ""
+                        }`}
                       >
                         {loading ? (
                           <>
@@ -2787,318 +2831,278 @@ export function VendaUnificadaFormTipado({
 
       {/* Dialog para adicionar informações de concorrência a produto migrado */}
       <Dialog
-        open={showConcorrenciaDialog}
-        onOpenChange={setShowConcorrenciaDialog}
+  open={showConcorrenciaDialog}
+  onOpenChange={setShowConcorrenciaDialog}
+>
+  <DialogContent className="max-w-2xl">
+    <DialogHeader>
+      <DialogTitle>Adicionar Informações de Concorrência</DialogTitle>
+      <DialogDescription>
+        Adicione as informações da concorrência para o produto:{" "}
+        {produtoAtual?.nome}
+      </DialogDescription>
+    </DialogHeader>
+
+    <div className="py-4 space-y-6">
+      {/* Informações do produto original (somente leitura) */}
+      <div className="bg-gray-50 p-4 rounded-lg mb-4">
+        <h4 className="font-medium mb-2">Produto Original (Garden)</h4>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <p>
+            <span className="font-medium">Nome:</span>{" "}
+            {produtoAtual?.nome}
+          </p>
+          <p>
+            <span className="font-medium">Medida:</span>{" "}
+            {produtoAtual?.medida}
+          </p>
+          <p>
+            <span className="font-medium">Quantidade:</span>{" "}
+            {produtoAtual?.quantidade}
+          </p>
+          <p>
+            <span className="font-medium">Valor unitário:</span>{" "}
+            {produtoAtual
+              ? formatarValorBRL(produtoAtual.valor)
+              : "N/A"}
+          </p>
+          <p>
+            <span className="font-medium">Valor total:</span>{" "}
+            {produtoAtual
+              ? formatarValorBRL(
+                  produtoAtual.valor * produtoAtual.quantidade
+                )
+              : "N/A"}
+          </p>
+          {produtoAtual?.icms !== undefined &&
+            produtoAtual.icms > 0 && (
+              <p>
+                <span className="font-medium">ICMS:</span>{" "}
+                {produtoAtual.icms}%
+              </p>
+            )}
+          {produtoAtual?.ipi !== undefined && produtoAtual.ipi > 0 && (
+            <p>
+              <span className="font-medium">IPI:</span>{" "}
+              {produtoAtual.ipi}%
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Informações não disponíveis toggle */}
+      <div className="mb-4">
+        <div className="flex flex-row items-center space-x-3 space-y-0">
+          <Checkbox
+            checked={currentConcorrencia.infoNaoDisponivel}
+            onCheckedChange={(checked) => {
+              handleChangeConcorrencia(
+                "infoNaoDisponivel",
+                checked === true
+              );
+            }}
+          />
+          <div className="space-y-1 leading-none">
+            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              Informações da concorrência não disponíveis
+            </label>
+            <p className="text-xs text-gray-500">
+              Marque esta opção caso não tenha dados específicos da
+              concorrência
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Dados da concorrência */}
+      <div
+        className={`space-y-4 ${
+          currentConcorrencia.infoNaoDisponivel
+            ? "opacity-50 pointer-events-none"
+            : ""
+        }`}
       >
-        <FormProvider {...concorrenciaForm}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Adicionar Informações de Concorrência</DialogTitle>
-              <DialogDescription>
-                Adicione as informações da concorrência para o produto:{" "}
-                {produtoAtual?.nome}
-              </DialogDescription>
-            </DialogHeader>
+        <div>
+          <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+            Nome da Concorrência*
+          </label>
+          <Input
+            value={currentConcorrencia.nomeConcorrencia || ""}
+            onChange={(e) => {
+              handleChangeConcorrencia(
+                "nomeConcorrencia",
+                e.target.value
+              );
+            }}
+            placeholder="Nome da empresa concorrente"
+            className="mt-1"
+          />
+        </div>
 
-            <div className="py-4 space-y-6">
-              {/* Informações do produto original (somente leitura) */}
-              <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                <h4 className="font-medium mb-2">Produto Original (Garden)</h4>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <p>
-                    <span className="font-medium">Nome:</span>{" "}
-                    {produtoAtual?.nome}
-                  </p>
-                  <p>
-                    <span className="font-medium">Medida:</span>{" "}
-                    {produtoAtual?.medida}
-                  </p>
-                  <p>
-                    <span className="font-medium">Quantidade:</span>{" "}
-                    {produtoAtual?.quantidade}
-                  </p>
-                  <p>
-                    <span className="font-medium">Valor unitário:</span>{" "}
-                    {produtoAtual
-                      ? formatarValorBRL(produtoAtual.valor)
-                      : "N/A"}
-                  </p>
-                  <p>
-                    <span className="font-medium">Valor total:</span>{" "}
-                    {produtoAtual
-                      ? formatarValorBRL(
-                          produtoAtual.valor * produtoAtual.quantidade
-                        )
-                      : "N/A"}
-                  </p>
-                  {produtoAtual?.icms !== undefined &&
-                    produtoAtual.icms > 0 && (
-                      <p>
-                        <span className="font-medium">ICMS:</span>{" "}
-                        {produtoAtual.icms}%
-                      </p>
-                    )}
-                  {produtoAtual?.ipi !== undefined && produtoAtual.ipi > 0 && (
-                    <p>
-                      <span className="font-medium">IPI:</span>{" "}
-                      {produtoAtual.ipi}%
-                    </p>
-                  )}
-                </div>
-              </div>
+        <div>
+          <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+            Valor da Concorrência*
+          </label>
+          <div className="relative flex items-center mt-1">
+            <span className="absolute left-3 text-gray-500">
+              R$
+            </span>
+            <Input
+              className="px-8 h-10 rounded-md border border-input bg-background w-full"
+              value={
+                currentConcorrencia.valorConcorrencia === 0
+                  ? "0,00"
+                  : formatCurrency(
+                      Math.round(
+                        (currentConcorrencia.valorConcorrencia || 0) * 100
+                      ).toString()
+                    )
+              }
+              onChange={(e) => {
+                const rawValue = e.target.value.replace(
+                  /\D/g,
+                  ""
+                );
 
-              {/* Informações não disponíveis toggle */}
-              <div className="mb-4">
-                <FormField
-                  control={concorrenciaForm.control}
-                  name="infoNaoDisponivel"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={(checked) => {
-                            field.onChange(checked === true);
-                            handleChangeConcorrencia(
-                              "infoNaoDisponivel",
-                              checked === true
-                            );
-                          }}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>
-                          Informações da concorrência não disponíveis
-                        </FormLabel>
-                        <p className="text-xs text-gray-500">
-                          Marque esta opção caso não tenha dados específicos da
-                          concorrência
-                        </p>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-              </div>
+                // Trata explicitamente o zero
+                let numValue = 0;
+                if (rawValue !== "" && rawValue !== "0") {
+                  numValue = parseInt(rawValue, 10) / 100;
+                }
 
-              {/* Dados da concorrência */}
-              <div
-                className={`space-y-4 ${
-                  currentConcorrencia.infoNaoDisponivel
-                    ? "opacity-50 pointer-events-none"
-                    : ""
-                }`}
-              >
-                <FormField
-                  control={concorrenciaForm.control}
-                  name="nomeConcorrencia"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome da Concorrência*</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          value={field.value || ""}
-                          onChange={(e) => {
-                            field.onChange(e.target.value);
-                            handleChangeConcorrencia(
-                              "nomeConcorrencia",
-                              e.target.value
-                            );
-                          }}
-                          placeholder="Nome da empresa concorrente"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                handleChangeConcorrencia(
+                  "valorConcorrencia",
+                  numValue
+                );
+              }}
+              placeholder="0,00"
+            />
+          </div>
+        </div>
 
-                <FormField
-                  control={concorrenciaForm.control}
-                  name="valorConcorrencia"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Valor da Concorrência*</FormLabel>
-                      <FormControl>
-                        <div className="relative flex items-center">
-                          <span className="absolute left-3 text-gray-500">
-                            R$
-                          </span>
-                          <Input
-                            className="px-8 h-10 rounded-md border border-input bg-background w-full"
-                            value={
-                              field.value === 0
-                                ? "0,00"
-                                : formatCurrency(
-                                    Math.round(
-                                      (field.value || 0) * 100
-                                    ).toString()
-                                  )
-                            }
-                            onChange={(e) => {
-                              const rawValue = e.target.value.replace(
-                                /\D/g,
-                                ""
-                              );
-
-                              // Trata explicitamente o zero
-                              let numValue = 0;
-                              if (rawValue !== "" && rawValue !== "0") {
-                                numValue = parseInt(rawValue, 10) / 100;
-                              }
-
-                              field.onChange(numValue);
-                              handleChangeConcorrencia(
-                                "valorConcorrencia",
-                                numValue
-                              );
-                            }}
-                            placeholder="0,00"
-                          />
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={concorrenciaForm.control}
-                    name="icms"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>ICMS (%)</FormLabel>
-                        <FormControl>
-                          <div className="relative flex items-center">
-                            <Input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.01"
-                              value={field.value || ""}
-                              onChange={(e) => {
-                                const value =
-                                  e.target.value === ""
-                                    ? 0
-                                    : Number(e.target.value);
-                                field.onChange(value);
-                                handleChangeConcorrencia("icms", value);
-                              }}
-                              className="pr-8"
-                              placeholder="0.00"
-                            />
-                            <span className="absolute right-3 text-gray-500">
-                              %
-                            </span>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={concorrenciaForm.control}
-                    name="ipi"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>IPI (%)</FormLabel>
-                        <FormControl>
-                          <div className="relative flex items-center">
-                            <Input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.01"
-                              value={field.value || ""}
-                              onChange={(e) => {
-                                const value =
-                                  e.target.value === ""
-                                    ? 0
-                                    : Number(e.target.value);
-                                field.onChange(value);
-                                handleChangeConcorrencia("ipi", value);
-                              }}
-                              className="pr-8"
-                              placeholder="0.00"
-                            />
-                            <span className="absolute right-3 text-gray-500">
-                              %
-                            </span>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={concorrenciaForm.control}
-                  name="objecao"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Objeção</FormLabel>
-                      <FormControl>
-                        <select
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                          value={(field.value as string) || ""}
-                          onChange={(e) => {
-                            const valor = e.target.value || null;
-                            field.onChange(valor);
-                            handleChangeConcorrencia("objecao", valor);
-                          }}
-                        >
-                          <option value="">
-                            Selecione uma objeção (opcional)
-                          </option>
-                          {objOptions.map((obj) => (
-                            <option key={obj} value={obj}>
-                              {obj}
-                            </option>
-                          ))}
-                        </select>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {currentConcorrencia.objecao === "Outro" && (
-                  <div>
-                    <FormLabel>Descreva a objeção</FormLabel>
-                    <Input
-                      value={(currentConcorrencia.objecao as string) || ""}
-                      onChange={(e) => {
-                        const valor = e.target.value;
-                        handleChangeConcorrencia("objecao", valor);
-                        concorrenciaForm.setValue("objecao", valor);
-                      }}
-                      placeholder="Digite a objeção personalizada"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setShowConcorrenciaDialog(false);
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              ICMS (%)
+            </label>
+            <div className="relative flex items-center mt-1">
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={currentConcorrencia.icms || ""}
+                onChange={(e) => {
+                  const value =
+                    e.target.value === ""
+                      ? 0
+                      : Number(e.target.value);
+                  handleChangeConcorrencia("icms", value);
                 }}
-              >
-                Cancelar
-              </Button>
-              <Button onClick={(e) => handleSalvarConcorrencia(e)}>
-                Salvar Informações de Concorrência
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </FormProvider>
-      </Dialog>
+                className="pr-8"
+                placeholder="0.00"
+              />
+              <span className="absolute right-3 text-gray-500">
+                %
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              IPI (%)
+            </label>
+            <div className="relative flex items-center mt-1">
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={currentConcorrencia.ipi || ""}
+                onChange={(e) => {
+                  const value =
+                    e.target.value === ""
+                      ? 0
+                      : Number(e.target.value);
+                  handleChangeConcorrencia("ipi", value);
+                }}
+                className="pr-8"
+                placeholder="0.00"
+              />
+              <span className="absolute right-3 text-gray-500">
+                %
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+            Objeção
+          </label>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 mt-1"
+            value={(currentConcorrencia.objecao as string) || ""}
+            onChange={(e) => {
+              const valor = e.target.value || null;
+              handleChangeConcorrencia("objecao", valor);
+            }}
+          >
+            <option value="">
+              Selecione uma objeção (opcional)
+            </option>
+            {objOptions.map((obj) => (
+              <option key={obj} value={obj}>
+                {obj}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {currentConcorrencia.objecao === "Outro" && (
+          <div>
+            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              Descreva a objeção
+            </label>
+            <Input
+              value={(currentConcorrencia.objecao as string) || ""}
+              onChange={(e) => {
+                const valor = e.target.value;
+                handleChangeConcorrencia("objecao", valor);
+              }}
+              placeholder="Digite a objeção personalizada"
+              className="mt-1"
+            />
+          </div>
+        )}
+      </div>
+    </div>
+
+    <DialogFooter>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setShowConcorrenciaDialog(false);
+        }}
+      >
+        Cancelar
+      </Button>
+      <Button 
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleSalvarConcorrencia();
+        }}
+      >
+        Salvar Informações de Concorrência
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
     </>
   );
 }
