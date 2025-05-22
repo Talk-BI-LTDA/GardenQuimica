@@ -292,7 +292,6 @@ export function ProdutoConcorrenciaForm({
           <h4 className="font-medium mb-4 text-red-600">
             Produto (Concorrência)
           </h4>
-
           <div className="mb-4">
             <FormItem className="flex flex-row items-center space-x-3 space-y-0">
               <FormControl>

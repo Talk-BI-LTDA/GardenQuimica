@@ -4,7 +4,7 @@
 import { useState, useRef } from "react";
 import {  UseFormReturn, FieldValues, Path } from "react-hook-form";
 import { motion } from "framer-motion";
-import { User, Building } from "lucide-react";
+import { User, Building, Phone } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import {
@@ -59,12 +59,30 @@ const formatCNPJ = (value: string): string => {
     .replace(/(\d{4})(\d)/, "$1-$2")
     .substring(0, 18);
 };
-
+const aplicarMascaraTelefone = (valor: string): string => {
+  // Remove todos os caracteres não numéricos
+  const apenasNumeros = valor.replace(/\D/g, '');
+  
+  // Aplica a máscara conforme a quantidade de dígitos
+  if (apenasNumeros.length <= 2) {
+    return apenasNumeros.replace(/^(\d{0,2})/, '($1');
+  } else if (apenasNumeros.length <= 6) {
+    return apenasNumeros.replace(/^(\d{2})(\d{0,4})/, '($1) $2');
+  } else if (apenasNumeros.length <= 10) {
+    return apenasNumeros.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+  } else {
+    // Para celular (11 dígitos)
+    return apenasNumeros.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').slice(0, 16);
+  }
+};
 interface ClienteFormProps {
   formMode: ModoFormulario;
   vendaForm: UseFormReturn<VendaSchemaType>;
   naoVendaForm: UseFormReturn<NaoVendaSchemaType>;
   clientesRecorrentes: ClienteRecorrente[];
+  carregarClientesRecorrentes: () => Promise<void>;
+  isLoadingClientes: boolean;
+
   isEditing: boolean;
   handleClienteRecorrenteChange: (idCliente: string) => void;
 }
@@ -75,7 +93,9 @@ export function ClienteForm({
   naoVendaForm,
   clientesRecorrentes,
   isEditing,
-  handleClienteRecorrenteChange
+  handleClienteRecorrenteChange,
+  carregarClientesRecorrentes,
+  isLoadingClientes
 }: ClienteFormProps) {
   const [clienteSearchTerm, setClienteSearchTerm] = useState<string>("");
   const selectClienteRef = useRef<HTMLInputElement>(null);
@@ -84,7 +104,9 @@ export function ClienteForm({
   const filteredClientes = clientesRecorrentes.filter(cliente => 
     cliente.nome.toLowerCase().includes(clienteSearchTerm.toLowerCase())
   );
-
+  const handleSelectOpen = () => {
+    carregarClientesRecorrentes();
+  };
   // Função genérica para renderizar campo de cliente em ambos formulários
   const renderClienteField = <
     TFormValues extends FieldValues,
@@ -208,11 +230,40 @@ export function ClienteForm({
       )}
     />
   );
-
+  const renderWhatsAppField  = <
+    TFormValues extends FieldValues,
+    TName extends Path<TFormValues>
+  >(
+    form: UseFormReturn<TFormValues>,
+    fieldName: TName
+  ) => (
+  <FormField
+    control={form.control}
+    name={fieldName}
+    render={({ field }) => (
+      <FormItem>
+        <FormLabel>WhatsApp</FormLabel>
+        <FormControl>
+          <div className="flex items-center space-x-2">
+            <Phone className="w-4 h-4 text-gray-400" />
+            <Input
+              placeholder="(00) 00000-0000"
+              value={field.value || ""}
+              onChange={(e) => {
+                const maskedValue = aplicarMascaraTelefone(e.target.value);
+                field.onChange(maskedValue);
+              }}
+            />
+          </div>
+        </FormControl>
+        <FormMessage />
+      </FormItem>
+    )}
+  />
+);
   return (
     <>
-      {/* Cliente Recorrente (apenas para novas vendas) */}
-      {!isEditing && (
+       {!isEditing && (
         <motion.div
           className="bg-gray-50 p-4 rounded-lg"
           initial={{ opacity: 0, y: 7 }}
@@ -223,9 +274,9 @@ export function ClienteForm({
             Cliente Recorrente
           </h3>
           <div>
-            <Select onValueChange={handleClienteRecorrenteChange}>
+            <Select onValueChange={handleClienteRecorrenteChange} onOpenChange={handleSelectOpen}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecione um cliente recorrente" />
+                <SelectValue placeholder={isLoadingClientes ? "Carregando clientes..." : "Selecione um cliente recorrente"} />
               </SelectTrigger>
               <SelectContent>
                 <div className="px-3 py-2">
@@ -237,11 +288,15 @@ export function ClienteForm({
                     className="mb-2"
                   />
                 </div>
-                {filteredClientes.map((cliente) => (
-                  <SelectItem key={cliente.id} value={cliente.id}>
-                    {cliente.nome}
-                  </SelectItem>
-                ))}
+                {isLoadingClientes ? (
+                  <div className="p-2 text-center text-gray-500">Carregando...</div>
+                ) : (
+                  filteredClientes.map((cliente) => (
+                    <SelectItem key={cliente.id} value={cliente.id}>
+                      {cliente.nome}
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -275,6 +330,8 @@ export function ClienteForm({
               {renderSegmentoField(vendaForm, "cliente.segmento" as Path<VendaSchemaType>)}
               {renderCnpjField(vendaForm, "cliente.cnpj" as Path<VendaSchemaType>)}
               {renderRazaoSocialField(vendaForm, "cliente.razaoSocial" as Path<VendaSchemaType>)}
+              {renderWhatsAppField(vendaForm, "cliente.whatsapp" as Path<VendaSchemaType>)}
+
             </>
           ) : (
             // Campos para formulário de não venda
@@ -289,6 +346,8 @@ export function ClienteForm({
               {renderSegmentoField(naoVendaForm, "cliente.segmento" as Path<NaoVendaSchemaType>)}
               {renderCnpjField(naoVendaForm, "cliente.cnpj" as Path<NaoVendaSchemaType>)}
               {renderRazaoSocialField(naoVendaForm, "cliente.razaoSocial" as Path<NaoVendaSchemaType>)}
+              {renderWhatsAppField(naoVendaForm, "cliente.whatsapp" as Path<NaoVendaSchemaType>)}
+
             </>
           )}
         </div>

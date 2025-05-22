@@ -1,12 +1,13 @@
 // @/components/forms/venda-unificada-form.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useForm, useFieldArray, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { atualizarVenda, criarVenda } from "@/actions/venda-actions";
 
 import { atualizarNaoVenda } from "@/actions/nao-venda-actions";
@@ -81,12 +82,15 @@ import type { Vendedor, Cliente } from "@/types/usuario-tipos";
 // Importar ações
 import { criarNaoVenda } from "@/actions/nao-venda-actions";
 import { Cotacao } from "@/types/cotacao-tipos";
+import { getClientesRecorrentes } from "@/actions/clientes-actions";
 
 import {
   criarCotacao,
   atualizarCotacao,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   finalizarCotacao,
   cancelarCotacao,
+  converterCotacao,
   CotacaoFormData,
   StatusCotacao,
 } from "@/actions/cotacao-actions";
@@ -311,6 +315,7 @@ export function VendaUnificadaFormTipado({
             segmento: "",
             cnpj: "",
             razaoSocial: "",
+            whatsapp: "",
           },
           produtos: [],
           valorTotal: 0,
@@ -328,6 +333,7 @@ export function VendaUnificadaFormTipado({
             segmento: "",
             cnpj: "",
             razaoSocial: "",
+            whatsapp: "",
           },
           produtosConcorrencia: [],
           valorTotal: 0,
@@ -446,6 +452,7 @@ export function VendaUnificadaFormTipado({
                     cnpj: cliente.cnpj,
                     segmento: cliente.segmento,
                     razaoSocial: cliente.razaoSocial || "",
+                    whatsapp: cliente.whatsapp || "",
                   });
                 }
               });
@@ -554,15 +561,21 @@ export function VendaUnificadaFormTipado({
     if (formMode === "venda") {
       const clienteData = naoVendaForm.getValues("cliente");
       if (clienteData.nome || clienteData.cnpj) {
-        vendaForm.setValue("cliente", clienteData);
+        vendaForm.setValue("cliente", {
+          ...clienteData,
+          whatsapp: clienteData.whatsapp || ""
+        });
       }
     } else {
       const clienteData = vendaForm.getValues("cliente");
       if (clienteData.nome || clienteData.cnpj) {
-        naoVendaForm.setValue("cliente", clienteData);
+        naoVendaForm.setValue("cliente", {
+          ...clienteData,
+          whatsapp: clienteData.whatsapp || ""
+        });
       }
-
-      // Também podemos sincronizar condição de pagamento
+      
+      // Também sincronizar condição de pagamento
       const condicaoVenda = vendaForm.getValues("condicaoPagamento");
       if (condicaoVenda) {
         naoVendaForm.setValue("condicaoPagamento", condicaoVenda);
@@ -625,16 +638,11 @@ export function VendaUnificadaFormTipado({
   // Handler para abrir o diálogo de objeção de produto novo
   const handleAbrirObjecaoProduto = () => {
     // Verificar se os campos obrigatórios do produto estão preenchidos
-    if (
-      !currentProduto.medida ||
-      currentProduto.quantidade <= 0 ||
-      currentProduto.valor <= 0
-    ) {
+    if (!currentProduto.medida || currentProduto.quantidade <= 0) {
       // Mostrar toast com campos faltantes
       const camposFaltantes = [];
       if (!currentProduto.medida) camposFaltantes.push("Medida");
       if (currentProduto.quantidade <= 0) camposFaltantes.push("Quantidade");
-      if (currentProduto.valor <= 0) camposFaltantes.push("Valor");
 
       toast.error(
         `Preencha os campos obrigatórios primeiro: ${camposFaltantes.join(
@@ -771,7 +779,13 @@ export function VendaUnificadaFormTipado({
   };
 
   // Handler para salvar a concorrência de produto migrado
-  const handleSalvarConcorrencia = () => {
+  const handleSalvarConcorrencia = (event?: React.MouseEvent) => {
+    // Prevenir comportamento padrão se um evento for passado
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
     if (currentProdutoMigradoIndice < 0 || !produtoAtual) {
       toast.error("Produto não encontrado");
       return;
@@ -1177,37 +1191,33 @@ export function VendaUnificadaFormTipado({
 
   // Carregar dados do cliente recorrente
   const handleClienteRecorrenteChange = (idCliente: string): void => {
-    // Buscar o cliente selecionado da lista de clientes recorrentes
     const clienteSelecionado = clientesRecorrentes.find(
       (cliente) => cliente.id === idCliente
     );
-
+  
     if (clienteSelecionado) {
-      // Atualizar o formulário com os dados do cliente recorrente
       const dadosCliente = {
         nome: clienteSelecionado.nome,
         segmento: clienteSelecionado.segmento,
         cnpj: clienteSelecionado.cnpj,
         razaoSocial: clienteSelecionado.razaoSocial || "",
+        whatsapp: clienteSelecionado.whatsapp || "", 
       };
-
+  
       if (formMode === "venda") {
         vendaForm.setValue("cliente", dadosCliente);
-        // Definir o checkbox de venda recorrente como verdadeiro
         vendaForm.setValue("vendaRecorrente", true);
-        // Pré-configurar o nome da recorrência
         setNomeRecorrencia(clienteSelecionado.nome);
       } else {
         naoVendaForm.setValue("cliente", dadosCliente);
       }
-
-      toast.success(
-        `Cliente ${clienteSelecionado.nome} carregado com sucesso!`
-      );
+  
+      toast.success(`Cliente ${clienteSelecionado.nome} carregado com sucesso!`);
     } else {
       toast.error("Cliente não encontrado");
     }
   };
+  
 
   // Manipular envio do formulário de venda
   const onSubmitVenda = async (data: VendaSchemaType) => {
@@ -1245,45 +1255,21 @@ export function VendaUnificadaFormTipado({
 
       let result: { error?: string; success?: boolean; id?: string } = {};
 
-      // Decidir qual ação usar baseado no status e se está editando
-      if (statusCotacao === "pendente") {
-        // Criar/atualizar como cotação pendente
-        const cotacaoData: CotacaoFormData = {
-          cliente: formData.cliente,
-          produtos: formData.produtos,
-          valorTotal: formData.valorTotal,
-          condicaoPagamento: formData.condicaoPagamento,
-          vendaRecorrente: formData.vendaRecorrente,
-          nomeRecorrencia: formData.nomeRecorrencia,
-          status: statusCotacao,
-        };
-
-        if (isEditing && initialData && "id" in initialData) {
-          result = await atualizarCotacao(
-            initialData.id as string,
-            cotacaoData
-          );
-        } else {
-          result = await criarCotacao(cotacaoData);
-        }
-      } else if (statusCotacao === "finalizada") {
-        // Finalizar cotação ou atualizar venda
-        if (isEditing && initialData && "id" in initialData) {
-          // Se está editando uma cotação pendente, finalizar
-          if ("status" in initialData && initialData.status === "pendente") {
-            result = await finalizarCotacao(
-              initialData.id as string,
-              formData as VendaFormData
-            );
-          } else {
-            // Se está editando uma venda, atualizar
-            result = await atualizarVenda(
-              initialData.id as string,
-              formData as VendaFormData
-            );
-          }
-        } else {
-          // Criar nova venda
+      if (isEditing && initialData && "id" in initialData) {
+        // Usar a função de conversão
+        result = await converterCotacao(
+          initialData.id as string,
+          statusCotacao,
+          formData as VendaFormData
+        );
+      } else {
+        // Nova cotação
+        if (statusCotacao === "pendente") {
+          result = await criarCotacao({
+            ...formData,
+            status: statusCotacao,
+          } as CotacaoFormData);
+        } else if (statusCotacao === "finalizada") {
           result = await criarVenda(formData as VendaFormData);
         }
       }
@@ -1369,7 +1355,7 @@ export function VendaUnificadaFormTipado({
       if (statusCotacao === "pendente") {
         // Se for uma cotação pendente, criar como cotação
         const cotacaoData: CotacaoFormData = {
-          cliente: formData.cliente,
+            cliente: { ...formData.cliente, whatsapp: '' },
           produtos: formData.produtosConcorrencia.map((item) => ({
             nome: item.produtoGarden.nome,
             medida: item.produtoGarden.medida,
@@ -1513,6 +1499,27 @@ export function VendaUnificadaFormTipado({
     }
   }
 
+  const [isLoadingClientes, setIsLoadingClientes] = useState<boolean>(false);
+
+  const carregarClientesRecorrentes = useCallback(async () => {
+    if (clientesRecorrentes.length > 0 || isLoadingClientes) return;
+
+    setIsLoadingClientes(true);
+    try {
+      const result = await getClientesRecorrentes();
+      if (result.success && result.clientes) {
+        setClientesRecorrentes(result.clientes);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar clientes recorrentes:", error);
+      // Dados mockados em caso de erro
+      setClientesRecorrentes([
+        // Dados mockados
+      ]);
+    } finally {
+      setIsLoadingClientes(false);
+    }
+  }, [clientesRecorrentes.length, isLoadingClientes]);
   return (
     <>
       <div className="flex justify-between items-center mb-6">
@@ -1644,6 +1651,8 @@ export function VendaUnificadaFormTipado({
                   clientesRecorrentes={clientesRecorrentes}
                   isEditing={isEditing}
                   handleClienteRecorrenteChange={handleClienteRecorrenteChange}
+                  carregarClientesRecorrentes={carregarClientesRecorrentes}
+                  isLoadingClientes={isLoadingClientes}
                 />
 
                 {/* Produtos */}
@@ -1665,7 +1674,8 @@ export function VendaUnificadaFormTipado({
                       className="text-orange-500 border-orange-300 hover:bg-orange-50 shadow-md"
                     >
                       <AlertCircle className="mr-2 h-4 w-4 " />
-                      Garden não trabalha com o produto</Button>
+                      Garden não trabalha com o produto
+                    </Button>
                   </div>
                   <div>
                     <ProdutoVendaForm
@@ -1892,25 +1902,32 @@ export function VendaUnificadaFormTipado({
                               R$
                             </span>
                             <Input
-            className="px-8 h-10 rounded-md border border-input bg-background w-full"
-            value={
-              field.value === 0 
-                ? "0,00" 
-                : formatCurrency((Math.round((field.value || 0) * 100)).toString())
-            }
-            onChange={(e) => {
-              const rawValue = e.target.value.replace(/\D/g, "");
-              
-              // Trata explicitamente o zero
-              let numValue = 0;
-              if (rawValue !== "" && rawValue !== "0") {
-                numValue = parseInt(rawValue, 10) / 100;
-              }
-              
-              field.onChange(numValue);
-            }}
-            placeholder="0,00"
-          />
+                              className="px-8 h-10 rounded-md border border-input bg-background w-full"
+                              value={
+                                field.value === 0
+                                  ? "0,00"
+                                  : formatCurrency(
+                                      Math.round(
+                                        (field.value || 0) * 100
+                                      ).toString()
+                                    )
+                              }
+                              onChange={(e) => {
+                                const rawValue = e.target.value.replace(
+                                  /\D/g,
+                                  ""
+                                );
+
+                                // Trata explicitamente o zero
+                                let numValue = 0;
+                                if (rawValue !== "" && rawValue !== "0") {
+                                  numValue = parseInt(rawValue, 10) / 100;
+                                }
+
+                                field.onChange(numValue);
+                              }}
+                              placeholder="0,00"
+                            />
                           </div>
                         </FormControl>
                         <p className="text-xs text-gray-500 mt-1">
@@ -2043,6 +2060,8 @@ export function VendaUnificadaFormTipado({
                   clientesRecorrentes={clientesRecorrentes}
                   isEditing={isEditing}
                   handleClienteRecorrenteChange={handleClienteRecorrenteChange}
+                  carregarClientesRecorrentes={carregarClientesRecorrentes}
+                  isLoadingClientes={isLoadingClientes}
                 />
 
                 {/* Produtos Migrados que Necessitam de Concorrência */}
@@ -2153,6 +2172,7 @@ export function VendaUnificadaFormTipado({
 
                 {/* Produtos */}
                 <motion.div
+                  className="mt-6"
                   initial={{ opacity: 0, y: 7 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2, duration: 0.2 }}
@@ -2173,6 +2193,7 @@ export function VendaUnificadaFormTipado({
                     setShowProdutoNaoCatalogadoDialog={
                       setShowProdutoNaoCatalogadoDialog
                     }
+                    
                   />
 
                   {/* Lista de produtos adicionados */}
@@ -2431,25 +2452,32 @@ export function VendaUnificadaFormTipado({
                               R$
                             </span>
                             <Input
-            className="px-8 h-10 rounded-md border border-input bg-background w-full"
-            value={
-              field.value === 0 
-                ? "0,00" 
-                : formatCurrency((Math.round((field.value || 0) * 100)).toString())
-            }
-            onChange={(e) => {
-              const rawValue = e.target.value.replace(/\D/g, "");
-              
-              // Trata explicitamente o zero
-              let numValue = 0;
-              if (rawValue !== "" && rawValue !== "0") {
-                numValue = parseInt(rawValue, 10) / 100;
-              }
-              
-              field.onChange(numValue);
-            }}
-            placeholder="0,00"
-          />
+                              className="px-8 h-10 rounded-md border border-input bg-background w-full"
+                              value={
+                                field.value === 0
+                                  ? "0,00"
+                                  : formatCurrency(
+                                      Math.round(
+                                        (field.value || 0) * 100
+                                      ).toString()
+                                    )
+                              }
+                              onChange={(e) => {
+                                const rawValue = e.target.value.replace(
+                                  /\D/g,
+                                  ""
+                                );
+
+                                // Trata explicitamente o zero
+                                let numValue = 0;
+                                if (rawValue !== "" && rawValue !== "0") {
+                                  numValue = parseInt(rawValue, 10) / 100;
+                                }
+
+                                field.onChange(numValue);
+                              }}
+                              placeholder="0,00"
+                            />
                           </div>
                         </FormControl>
                         <p className="text-xs text-gray-500 mt-1">
@@ -3057,11 +3085,14 @@ export function VendaUnificadaFormTipado({
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => setShowConcorrenciaDialog(false)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowConcorrenciaDialog(false);
+                }}
               >
                 Cancelar
               </Button>
-              <Button onClick={handleSalvarConcorrencia}>
+              <Button onClick={(e) => handleSalvarConcorrencia(e)}>
                 Salvar Informações de Concorrência
               </Button>
             </DialogFooter>

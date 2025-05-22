@@ -67,7 +67,7 @@ model Cliente {
   editedBy    User?      @relation("ClienteEditedBy", fields: [editedById], references: [id])
   naoVendas   NaoVenda[]
   vendas      Venda[]
-
+whatsapp    String? 
   Cotacao Cotacao[]
 }
 

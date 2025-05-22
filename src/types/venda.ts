@@ -16,6 +16,7 @@ export type Cliente = {
   segmento: string;
   cnpj: string;
   razaoSocial?: string;
+  whatsapp?: string;
 };
 
 export type Venda = {

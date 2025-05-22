@@ -100,3 +100,19 @@ export const resetProdutoConcorrencia = (): ProdutoConcorrenciaTemp => ({
   objecao: null,
   infoNaoDisponivel: false
 });
+export const aplicarMascaraTelefone = (valor: string): string => {
+  // Remove todos os caracteres não numéricos
+  const apenasNumeros = valor.replace(/\D/g, '');
+  
+  // Aplica a máscara conforme a quantidade de dígitos
+  if (apenasNumeros.length <= 2) {
+    return apenasNumeros.replace(/^(\d{0,2})/, '($1');
+  } else if (apenasNumeros.length <= 6) {
+    return apenasNumeros.replace(/^(\d{2})(\d{0,4})/, '($1) $2');
+  } else if (apenasNumeros.length <= 10) {
+    return apenasNumeros.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+  } else {
+    // Para celular (11 dígitos)
+    return apenasNumeros.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').slice(0, 16);
+  }
+};

@@ -185,7 +185,10 @@ export function VendasTableAjustada({
 
   // Calcular totais dinâmicos
   const totalCotacoes = vendas.length + naoVendas.length + cotacoes.length;
-  const valorTotalCotacoesPendentes = cotacoes.reduce((total, cotacao) => total + cotacao.valorTotal, 0);
+  const valorTotalCotacoesPendentes = cotacoes.reduce(
+    (total, cotacao) => total + cotacao.valorTotal,
+    0
+  );
 
   // Ordenar dados
   const toggleSortDirection = () => {
@@ -571,7 +574,7 @@ export function VendasTableAjustada({
 
     // Ordenar por data
     return allItems.sort((a, b) => {
-      return sortDirection === "asc" 
+      return sortDirection === "asc"
         ? a.data.getTime() - b.data.getTime()
         : b.data.getTime() - a.data.getTime();
     });
@@ -649,9 +652,9 @@ export function VendasTableAjustada({
                 </h3>
                 <p className="text-xs text-gray-400 pl-12 mt-1">
                   {formatarValorBRL(
-                    (estatisticas.valorTotalVendas || 0) + 
-                    (estatisticas.valorTotalNaoVendas || 0) + 
-                    valorTotalCotacoesPendentes
+                    (estatisticas.valorTotalVendas || 0) +
+                      (estatisticas.valorTotalNaoVendas || 0) +
+                      valorTotalCotacoesPendentes
                   )}
                 </p>
               </div>
@@ -757,7 +760,7 @@ export function VendasTableAjustada({
         </TabsList>
 
         {/* Conteúdo da Tab Painel - TODAS AS COTAÇÕES */}
-        <TabsContent  value="painel">
+        <TabsContent value="painel">
           <div className="bg-white rounded-lg border shadow-sm">
             <Table>
               <TableHeader>
@@ -778,18 +781,16 @@ export function VendasTableAjustada({
                   getAllItems().map(({ item, tipo }, index) => (
                     <TableRow key={`${tipo}-${item.id}-${index}`}>
                       <TableCell className="font-medium">
-                        {tipo === "cotacao" 
-                          ? (item as Cotacao).codigoCotacao 
-                          : (item as Venda | NaoVenda).codigoVenda
-                        }
+                        {tipo === "cotacao"
+                          ? (item as Cotacao).codigoCotacao
+                          : (item as Venda | NaoVenda).codigoVenda}
                       </TableCell>
                       <TableCell>{item.vendedorNome}</TableCell>
                       <TableCell>{item.cliente.nome}</TableCell>
                       <TableCell>{item.cliente.cnpj}</TableCell>
-                      <TableCell>-</TableCell>
-                      <TableCell>
-                        {formatarValorBRL(item.valorTotal)}
-                      </TableCell>
+                      <TableCell>{item.cliente.whatsapp}</TableCell>
+
+                      <TableCell>{formatarValorBRL(item.valorTotal)}</TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
@@ -801,12 +802,11 @@ export function VendasTableAjustada({
                               : "bg-orange-100 text-orange-800"
                           }
                         >
-                          {tipo === "venda" 
-                            ? "Finalizada" 
-                            : tipo === "naoVenda" 
-                            ? "Cancelada" 
-                            : "Pendente"
-                          }
+                          {tipo === "venda"
+                            ? "Finalizada"
+                            : tipo === "naoVenda"
+                            ? "Cancelada"
+                            : "Pendente"}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -889,7 +889,7 @@ export function VendasTableAjustada({
                       <TableCell>{venda.vendedorNome}</TableCell>
                       <TableCell>{venda.cliente.nome}</TableCell>
                       <TableCell>{venda.cliente.cnpj}</TableCell>
-                      <TableCell>-</TableCell>
+                      <TableCell>{venda.cliente.whatsapp}</TableCell>
                       <TableCell>
                         {formatarValorBRL(venda.valorTotal)}
                       </TableCell>
@@ -976,7 +976,8 @@ export function VendasTableAjustada({
                       <TableCell>{naoVenda.vendedorNome}</TableCell>
                       <TableCell>{naoVenda.cliente.nome}</TableCell>
                       <TableCell>{naoVenda.cliente.cnpj}</TableCell>
-                      <TableCell>-</TableCell>
+                      <TableCell>{naoVenda.cliente.whatsapp}</TableCell>
+
                       <TableCell>
                         {formatarValorBRL(naoVenda.valorTotal)}
                       </TableCell>

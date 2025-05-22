@@ -5,7 +5,7 @@ export interface Cliente {
   nome: string;
   segmento: string;
   cnpj: string;
-  razaoSocial?: string; 
+  razaoSocial?: string;
   valorTotal: number;
   valorMedio: number;
   ultimaCompra: Date | null;
@@ -37,6 +37,7 @@ export interface ClienteFiltros {
 
 // Tipo para representar parâmetros de criação/edição de clientes
 export interface ClienteParams {
+  whatsapp?: string;
   nome: string;
   segmento: string;
   cnpj: string;

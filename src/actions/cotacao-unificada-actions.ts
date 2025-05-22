@@ -1,18 +1,21 @@
-// @/actions/cotacao-unificada-actions.ts
+// @/actions/cotacao-unificada-actions.ts - CORREÇÕES
+
 "use server";
 
 import { prisma } from "@/lib/supabase/prisma";
 import { auth } from "@/lib/auth";
 import { getCotacao } from "@/actions/cotacao-actions";
-import { StatusCotacao,  } from "@/types/cotacao-tipos";
+import { StatusCotacao } from "@/types/cotacao-tipos";
 
-// Função para buscar uma cotação de qualquer uma das tabelas
+// Função aprimorada para buscar uma cotação de qualquer uma das tabelas
 export async function getCotacaoUnificada(id: string, tipo?: string) {
   try {
     const session = await auth();
     if (!session || !session.user) {
       return { error: "Não autorizado" };
     }
+
+    console.log(`Buscando cotação unificada - ID: ${id}, Tipo: ${tipo || 'auto'}`);
 
     // Se o tipo foi especificado, buscar diretamente na tabela correta
     if (tipo) {
@@ -29,26 +32,31 @@ export async function getCotacaoUnificada(id: string, tipo?: string) {
     }
 
     // Se o tipo não foi especificado, tentar encontrar em qualquer uma das tabelas
-    
-    // Primeiro, tentar buscar na tabela de cotações pendentes
-    const cotacaoResult = await getCotacao(id);
-    if (cotacaoResult.success) {
-      return cotacaoResult;
+    // Estratégia: Tentar em paralelo para melhor performance
+    const [cotacaoResult, vendaResult, naoVendaResult] = await Promise.allSettled([
+      getCotacao(id),
+      buscarVenda(id),
+      buscarNaoVenda(id)
+    ]);
+
+    // Verificar qual busca teve sucesso
+    if (cotacaoResult.status === 'fulfilled' && cotacaoResult.value.success) {
+      console.log("Encontrado na tabela de cotações pendentes");
+      return cotacaoResult.value;
     }
 
-    // Se não encontrou, tentar buscar na tabela de vendas
-    const vendaResult = await buscarVenda(id);
-    if (vendaResult.success) {
-      return vendaResult;
+    if (vendaResult.status === 'fulfilled' && vendaResult.value.success) {
+      console.log("Encontrado na tabela de vendas");
+      return vendaResult.value;
     }
 
-    // Por último, tentar buscar na tabela de não-vendas
-    const naoVendaResult = await buscarNaoVenda(id);
-    if (naoVendaResult.success) {
-      return naoVendaResult;
+    if (naoVendaResult.status === 'fulfilled' && naoVendaResult.value.success) {
+      console.log("Encontrado na tabela de não-vendas");
+      return naoVendaResult.value;
     }
 
     // Se não encontrou em nenhuma tabela
+    console.log("Cotação não encontrada em nenhuma tabela");
     return { error: "Cotação não encontrada" };
   } catch (error) {
     console.error("Erro ao buscar cotação unificada:", error);
@@ -56,7 +64,7 @@ export async function getCotacaoUnificada(id: string, tipo?: string) {
   }
 }
 
-// Função para buscar uma venda
+// Função para buscar uma venda com tratamento de erro aprimorado
 async function buscarVenda(id: string) {
   try {
     const venda = await prisma.venda.findUnique({
@@ -77,7 +85,7 @@ async function buscarVenda(id: string) {
     });
 
     if (!venda) {
-      return { error: "Venda não encontrada" };
+      return { error: "Venda não encontrada", success: false };
     }
 
     // Formatar dados para o formulário
@@ -109,11 +117,11 @@ async function buscarVenda(id: string) {
     return { success: true, cotacao: formattedData };
   } catch (error) {
     console.error("Erro ao buscar venda:", error);
-    return { error: "Erro ao buscar venda. Por favor, tente novamente." };
+    return { error: "Erro ao buscar venda", success: false };
   }
 }
 
-// Função para buscar uma não-venda
+// Função para buscar uma não-venda com tratamento de erro aprimorado
 async function buscarNaoVenda(id: string) {
   try {
     const naoVenda = await prisma.naoVenda.findUnique({
@@ -134,7 +142,7 @@ async function buscarNaoVenda(id: string) {
     });
 
     if (!naoVenda) {
-      return { error: "Cotação cancelada não encontrada" };
+      return { error: "Cotação cancelada não encontrada", success: false };
     }
 
     // Formatar dados para o formulário de não-venda
@@ -173,6 +181,6 @@ async function buscarNaoVenda(id: string) {
     return { success: true, cotacao: formattedData };
   } catch (error) {
     console.error("Erro ao buscar não-venda:", error);
-    return { error: "Erro ao buscar cotação cancelada. Por favor, tente novamente." };
+    return { error: "Erro ao buscar cotação cancelada", success: false };
   }
 }

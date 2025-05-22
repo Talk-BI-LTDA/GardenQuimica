@@ -45,6 +45,7 @@ export async function criarNaoVenda(data: NaoVendaFormData) {
           cnpj: data.cliente.cnpj,
           razaoSocial: data.cliente.razaoSocial,
           createdById: session.user.id,
+          whatsapp: data.cliente.whatsapp,
         },
       });
     }
@@ -158,6 +159,7 @@ export async function getNaoVendas(filtros?: FiltrosVenda) {
         { cliente: { nome: { contains: termo, mode: "insensitive" } } },
         { cliente: { cnpj: { contains: termo, mode: "insensitive" } } },
         { cliente: { razaoSocial: { contains: termo, mode: "insensitive" } } },
+        { cliente: { whatsapp: { contains: termo, mode: "insensitive" } } },
       ];
     }
 
@@ -235,6 +237,7 @@ export async function getNaoVendas(filtros?: FiltrosVenda) {
         nome: naoVenda.cliente.nome,
         segmento: naoVenda.cliente.segmento,
         cnpj: naoVenda.cliente.cnpj,
+        whatsapp: naoVenda.cliente.whatsapp || undefined,
         razaoSocial: naoVenda.cliente.razaoSocial || undefined,
       },
       produtosConcorrencia: naoVenda.produtos.map((p) => ({
@@ -341,16 +344,13 @@ export async function atualizarNaoVenda(id: string, data: NaoVendaFormData) {
   }
 
   try {
-    // Verificar se a venda existe
-    const naoVendaExistente = await prisma.venda.findUnique({
+    // Verificar se a NÃO venda existe
+    const naoVendaExistente = await prisma.naoVenda.findUnique({
       where: { id },
       include: {
         produtos: true,
       },
-      
     });
-    console.log("Buscando cotação cancelada com ID:", id);
-    console.log("Cotação encontrada:", naoVendaExistente);
 
     if (!naoVendaExistente) {
       return { error: "Cotação cancelada não encontrada" };
@@ -381,6 +381,7 @@ export async function atualizarNaoVenda(id: string, data: NaoVendaFormData) {
           cnpj: data.cliente.cnpj,
           razaoSocial: data.cliente.razaoSocial,
           createdById: session.user.id,
+          whatsapp: data.cliente.whatsapp,
         },
       });
     }
@@ -448,6 +449,7 @@ export async function atualizarNaoVenda(id: string, data: NaoVendaFormData) {
     return { error: "Ocorreu um erro ao atualizar a cotação cancelada" };
   }
 }
+
 
 export async function excluirNaoVenda(id: string) {
   // Validar autenticação

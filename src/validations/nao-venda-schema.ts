@@ -34,6 +34,7 @@ const clienteSchema = z.object({
   segmento: z.string().min(1, 'Segmento é obrigatório'),
   cnpj: z.string().min(14, 'CNPJ inválido'),
   razaoSocial: z.string().optional(),
+  whatsapp: z.string().optional(),
 });
 
 // Schema principal para não venda (cotação cancelada)

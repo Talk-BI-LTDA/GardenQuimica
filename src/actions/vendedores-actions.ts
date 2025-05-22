@@ -47,6 +47,24 @@ export async function getVendedores(params?: VendedorParams) {
       },
     });
 
+    // Buscar clientes recorrentes
+    const clientesRecorrentes = await prisma.cliente.findMany({
+      where: {
+        vendas: {
+          some: {
+            vendaRecorrente: true
+          }
+        }
+      },
+      select: {
+        id: true,
+        nome: true,
+        cnpj: true,
+        segmento: true,
+        razaoSocial: true
+      }
+    });
+
     // Mapear para o tipo Usuario
     const vendedoresMapeados: Usuario[] = vendedores.map(vendedor => ({
       id: vendedor.id,
@@ -56,6 +74,14 @@ export async function getVendedores(params?: VendedorParams) {
       role: vendedor.role as 'ADMIN' | 'VENDEDOR',
       createdAt: new Date(), // Não estamos retornando a data real
       updatedAt: new Date(), // Não estamos retornando a data real
+      clientes: clientesRecorrentes.map(cliente => ({
+        id: cliente.id,
+        nome: cliente.nome,
+        cnpj: cliente.cnpj,
+        segmento: cliente.segmento,
+        razaoSocial: cliente.razaoSocial || "",
+        recorrente: true
+      }))
     }));
 
     return { success: true, vendedores: vendedoresMapeados };

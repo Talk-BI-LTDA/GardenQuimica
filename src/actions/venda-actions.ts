@@ -45,6 +45,7 @@ export async function criarVenda(data: VendaFormData) {
           cnpj: data.cliente.cnpj,
           razaoSocial: data.cliente.razaoSocial,
           createdById: session.user.id,
+          whatsapp: data.cliente.whatsapp,
         },
       });
     }
@@ -244,7 +245,8 @@ export async function getVendas(filtros?: FiltrosVenda) {
         nome: venda.cliente.nome,
         segmento: venda.cliente.segmento,
         cnpj: venda.cliente.cnpj,
-        razaoSocial: venda.cliente.razaoSocial || undefined
+        razaoSocial: venda.cliente.razaoSocial || undefined,
+        whatsapp: venda.cliente.whatsapp || undefined
       },
       produtos: venda.produtos.map(p => ({
         id: p.produto.id,
@@ -371,6 +373,7 @@ export async function atualizarVenda(id: string, data: VendaFormData) {
           cnpj: data.cliente.cnpj,
           razaoSocial: data.cliente.razaoSocial,
           createdById: session.user.id,
+          whatsapp: data.cliente.whatsapp,
         },
       });
     }

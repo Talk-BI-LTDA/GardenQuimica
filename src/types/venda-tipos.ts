@@ -23,6 +23,7 @@ export type Cliente = {
   segmento: string;
   cnpj: string;
   razaoSocial?: string;
+  whatsapp?: string;
 };
 
 // Tipo para formulário de venda
@@ -81,6 +82,7 @@ export type ClienteRecorrente = {
   cnpj: string;
   segmento: string;
   razaoSocial?: string;
+  whatsapp?: string;
 };
 
 // Modo do formulário

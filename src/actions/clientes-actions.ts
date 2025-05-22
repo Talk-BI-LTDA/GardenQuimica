@@ -7,7 +7,6 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { differenceInDays } from 'date-fns'
 import { Cliente, ClienteParams, ClienteFiltros } from '@/types/cliente'
-
 /**
  * Busca todos os clientes com opções de filtro
  */
@@ -771,6 +770,7 @@ export async function criarCliente(data: ClienteParams) {
         cnpj: data.cnpj || '',
         razaoSocial: data.razaoSocial || null,
         createdById: session.user.id,
+        whatsapp: data.whatsapp || null,
       }
     });
 
@@ -830,6 +830,7 @@ export async function atualizarCliente(id: string, data: ClienteParams) {
         cnpj: data.cnpj,
         razaoSocial: data.razaoSocial || null,
         editedById: session.user.id,
+        whatsapp: data.whatsapp || null, 
       }
     });
 
@@ -988,5 +989,52 @@ export async function getDadosMensaisComparacao() {
   } catch (error) {
     console.error('Erro ao buscar dados mensais:', error);
     return { success: false, error: 'Ocorreu um erro ao buscar os dados mensais' };
+  }
+}
+export async function getClientesRecorrentes() {
+  // Validar autenticação
+  const session = await auth();
+  
+  if (!session) {
+    redirect('/login');
+  }
+
+  try {
+    // Buscar clientes marcados como recorrentes (em vendas recorrentes)
+    const clientesRecorrentes = await prisma.cliente.findMany({
+      where: {
+        vendas: {
+          some: {
+            vendaRecorrente: true
+          }
+        }
+      },
+      select: {
+        id: true,
+        nome: true,
+        cnpj: true,
+        segmento: true,
+        razaoSocial: true,
+        whatsapp: true,
+      },
+      orderBy: {
+        nome: 'asc',
+      },
+    });
+
+    // Mapear para o tipo ClienteRecorrente
+    const clientesMapeados = clientesRecorrentes.map(cliente => ({
+      id: cliente.id,
+      nome: cliente.nome,
+      cnpj: cliente.cnpj,
+      segmento: cliente.segmento,
+      razaoSocial: cliente.razaoSocial || "",
+      whatsapp: cliente.whatsapp || ""
+    }));
+
+    return { success: true, clientes: clientesMapeados };
+  } catch (error) {
+    console.error('Erro ao buscar clientes recorrentes:', error);
+    return { error: 'Ocorreu um erro ao buscar os clientes recorrentes', clientes: [] };
   }
 }
