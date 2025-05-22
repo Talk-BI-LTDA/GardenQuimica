@@ -7,17 +7,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
-import { 
-  atualizarVenda, 
-  criarVenda 
-} from "@/actions/venda-actions";
+import { atualizarVenda, criarVenda } from "@/actions/venda-actions";
 
-import { 
-  atualizarNaoVenda 
-} from "@/actions/nao-venda-actions";
-import CurrencyInput from "react-currency-input-field";
+import { atualizarNaoVenda } from "@/actions/nao-venda-actions";
 import {
-  Save, 
+  Save,
   Loader2,
   AlertCircle,
   ThumbsDown,
@@ -88,13 +82,13 @@ import type { Vendedor, Cliente } from "@/types/usuario-tipos";
 import { criarNaoVenda } from "@/actions/nao-venda-actions";
 import { Cotacao } from "@/types/cotacao-tipos";
 
-import { 
-  criarCotacao, 
-  atualizarCotacao, 
-  finalizarCotacao, 
-  cancelarCotacao, 
-  CotacaoFormData, 
-  StatusCotacao 
+import {
+  criarCotacao,
+  atualizarCotacao,
+  finalizarCotacao,
+  cancelarCotacao,
+  CotacaoFormData,
+  StatusCotacao,
 } from "@/actions/cotacao-actions";
 import { getVendedores } from "@/actions/vendedores-actions";
 import { getProdutos } from "@/actions/produtos-actions";
@@ -200,9 +194,9 @@ export type ProdutoEstendido = {
   medida: string;
   quantidade: number;
   valor: number;
-  comissao: number; 
-  icms: number; 
-  ipi: number; 
+  comissao: number;
+  icms: number;
+  ipi: number;
   recorrencia?: string;
 };
 
@@ -213,10 +207,10 @@ export function VendaUnificadaFormTipado({
 }: VendaUnificadaFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
   // Obter o status da URL se disponível
   const statusParam = searchParams.get("status") as StatusCotacao | null;
-  
+
   // Modo do formulário (venda ou naoVenda)
   const [formMode, setFormMode] = useState<ModoFormulario>(initialMode);
 
@@ -379,14 +373,14 @@ export function VendaUnificadaFormTipado({
   useEffect(() => {
     if (initialData && isEditing) {
       // Determinar o tipo de dados baseado na estrutura
-      const hasProductosConcorrencia = 'produtosConcorrencia' in initialData;
-      const hasStatus = 'status' in initialData;
-  
+      const hasProductosConcorrencia = "produtosConcorrencia" in initialData;
+      const hasStatus = "status" in initialData;
+
       // Se tem produtosConcorrencia, é uma cotação cancelada
       if (hasProductosConcorrencia) {
         setFormMode("naoVenda");
         setStatusCotacao("cancelada");
-        
+
         // Carregar dados no formulário de não venda
         const naoVendaData = initialData as NaoVendaFormData;
         naoVendaForm.reset({
@@ -406,7 +400,7 @@ export function VendaUnificadaFormTipado({
           setFormMode("venda");
           setStatusCotacao("finalizada");
         }
-        
+
         // Carregar dados no formulário de venda
         const vendaData = initialData as VendaFormData;
         vendaForm.reset({
@@ -416,7 +410,7 @@ export function VendaUnificadaFormTipado({
           condicaoPagamento: vendaData.condicaoPagamento,
           vendaRecorrente: vendaData.vendaRecorrente || false,
         });
-  
+
         // Se é venda recorrente, carregar o nome da recorrência
         if (vendaData.vendaRecorrente && vendaData.nomeRecorrencia) {
           setNomeRecorrencia(vendaData.nomeRecorrencia);
@@ -516,7 +510,6 @@ export function VendaUnificadaFormTipado({
 
     carregarDados();
   }, []);
-
 
   // Efeito para verificar e migrar produtos quando o modo muda para naoVenda
   useEffect(() => {
@@ -783,7 +776,7 @@ export function VendaUnificadaFormTipado({
       toast.error("Produto não encontrado");
       return;
     }
-  
+
     // Validar dados de concorrência
     if (!currentConcorrencia.infoNaoDisponivel) {
       if (
@@ -796,7 +789,7 @@ export function VendaUnificadaFormTipado({
         return;
       }
     }
-  
+
     // Garantir que o produto tem um ID
     const produtoComId: ProdutoEstendido = {
       ...produtoAtual,
@@ -807,7 +800,7 @@ export function VendaUnificadaFormTipado({
       icms: produtoAtual.icms || 0,
       ipi: produtoAtual.ipi || 0,
     };
-  
+
     // Garantir todos os campos necessários no objeto de concorrência
     const novoProdutoConcorrencia = {
       id: `conc_${Date.now()}`, // Adicionar ID único para o item de concorrência
@@ -829,15 +822,16 @@ export function VendaUnificadaFormTipado({
         : currentConcorrencia.objecao,
       infoNaoDisponivel: currentConcorrencia.infoNaoDisponivel || false,
     };
-  
+
     // Adicionar ao formulário de não venda
     naoVendaAppend(novoProdutoConcorrencia);
-  
+
     // Atualizar o produto migrado para indicar que a concorrência foi adicionada
     const novosProdutosMigrados = [...produtosMigrados];
-    novosProdutosMigrados[currentProdutoMigradoIndice].concorrenciaAdicionada = true;
+    novosProdutosMigrados[currentProdutoMigradoIndice].concorrenciaAdicionada =
+      true;
     setProdutosMigrados(novosProdutosMigrados);
-  
+
     // Atualizar valor total do formulário
     const valorAtual = naoVendaForm.getValues("valorTotal") || 0;
     const valorProduto = produtoAtual.valor * produtoAtual.quantidade;
@@ -845,14 +839,14 @@ export function VendaUnificadaFormTipado({
       "valorTotal",
       Number((valorAtual + valorProduto).toFixed(2))
     );
-  
+
     // Fechar o diálogo e limpar o estado
     setShowConcorrenciaDialog(false);
     setCurrentProdutoMigradoIndice(-1);
     setProdutoAtual(null);
     setCurrentConcorrencia(resetProdutoConcorrencia());
     concorrenciaForm.reset(resetProdutoConcorrencia());
-  
+
     toast.success("Informações de concorrência adicionadas com sucesso");
   };
 
@@ -871,25 +865,30 @@ export function VendaUnificadaFormTipado({
         maisCaro: false,
       };
     }
-  
+
     // Verificar se temos valores válidos
-    if (!produtoGarden || !produtoGarden.valor || !produtoGarden.quantidade || valorConcorrencia <= 0) {
+    if (
+      !produtoGarden ||
+      !produtoGarden.valor ||
+      !produtoGarden.quantidade ||
+      valorConcorrencia <= 0
+    ) {
       return {
         valor: "N/A",
         percentual: "N/A",
         maisCaro: false,
       };
     }
-  
+
     // Calcula o valor total do produto Garden
     const valorTotalGarden = produtoGarden.valor * produtoGarden.quantidade;
-  
+
     // Calcula o valor total da concorrência (assumindo mesma quantidade)
     const valorTotalConcorrencia = valorConcorrencia * produtoGarden.quantidade;
-  
+
     // Calcula a diferença
     const diferenca = valorTotalGarden - valorTotalConcorrencia;
-  
+
     // Evita divisão por zero
     if (valorTotalConcorrencia === 0) {
       return {
@@ -898,17 +897,17 @@ export function VendaUnificadaFormTipado({
         maisCaro: diferenca > 0,
       };
     }
-  
+
     // Calcula o percentual de diferença
     const percentual =
       ((Math.abs(diferenca) / valorTotalConcorrencia) * 100).toFixed(2) + "%";
-  
+
     // Formata a diferença de valor
     const valorFormatado = formatarValorBRL(Math.abs(diferenca));
-  
+
     // Determina se Garden é mais caro
     const maisCaro = diferenca > 0;
-  
+
     return {
       valor: valorFormatado,
       percentual: percentual,
@@ -1217,7 +1216,7 @@ export function VendaUnificadaFormTipado({
       toast.error("Adicione pelo menos um produto");
       return;
     }
-  
+
     // Verificar recorrência
     if (
       data.vendaRecorrente &&
@@ -1232,10 +1231,10 @@ export function VendaUnificadaFormTipado({
       setShowRecorrenciaDialog(true);
       return;
     }
-  
+
     setLoading(true);
     setFormErros(null);
-  
+
     try {
       // Preparar dados do formulário
       const formData = {
@@ -1243,9 +1242,9 @@ export function VendaUnificadaFormTipado({
         valorTotal: Number(data.valorTotal.toFixed(2)),
         nomeRecorrencia: data.vendaRecorrente ? nomeRecorrencia : undefined,
       };
-  
+
       let result: { error?: string; success?: boolean; id?: string } = {};
-  
+
       // Decidir qual ação usar baseado no status e se está editando
       if (statusCotacao === "pendente") {
         // Criar/atualizar como cotação pendente
@@ -1256,62 +1255,72 @@ export function VendaUnificadaFormTipado({
           condicaoPagamento: formData.condicaoPagamento,
           vendaRecorrente: formData.vendaRecorrente,
           nomeRecorrencia: formData.nomeRecorrencia,
-          status: statusCotacao
+          status: statusCotacao,
         };
-  
+
         if (isEditing && initialData && "id" in initialData) {
-          result = await atualizarCotacao(initialData.id as string, cotacaoData);
+          result = await atualizarCotacao(
+            initialData.id as string,
+            cotacaoData
+          );
         } else {
           result = await criarCotacao(cotacaoData);
         }
-      } 
-      else if (statusCotacao === "finalizada") {
+      } else if (statusCotacao === "finalizada") {
         // Finalizar cotação ou atualizar venda
         if (isEditing && initialData && "id" in initialData) {
           // Se está editando uma cotação pendente, finalizar
-          if ('status' in initialData && initialData.status === 'pendente') {
-            result = await finalizarCotacao(initialData.id as string, formData as VendaFormData);
+          if ("status" in initialData && initialData.status === "pendente") {
+            result = await finalizarCotacao(
+              initialData.id as string,
+              formData as VendaFormData
+            );
           } else {
             // Se está editando uma venda, atualizar
-            result = await atualizarVenda(initialData.id as string, formData as VendaFormData);
+            result = await atualizarVenda(
+              initialData.id as string,
+              formData as VendaFormData
+            );
           }
         } else {
           // Criar nova venda
           result = await criarVenda(formData as VendaFormData);
         }
       }
-  
+
       if (result.error) {
         toast.error(result.error);
         setFormErros(result.error);
       } else {
-        const mensagem = isEditing 
-          ? statusCotacao === "finalizada" 
-            ? "Cotação finalizada atualizada com sucesso!" 
+        const mensagem = isEditing
+          ? statusCotacao === "finalizada"
+            ? "Cotação finalizada atualizada com sucesso!"
             : "Cotação atualizada com sucesso!"
           : "Cotação registrada com sucesso!";
-        
+
         toast.success(mensagem);
-        
+
         // Resetar formulários apenas se não estiver editando
         if (!isEditing) {
           vendaForm.reset(defaultVendaValues);
           setCurrentProduto(resetProduto() as ProdutoEstendido);
           setObjecoesIndividuais([]);
         }
-  
+
         // Navegar de volta à página de vendas após sucesso
         router.push("/vendas");
       }
     } catch (error) {
       console.error("Erro ao processar cotação:", error);
       toast.error("Ocorreu um erro ao processar a cotação");
-      setFormErros("Ocorreu um erro ao processar a cotação. Verifique o console para mais detalhes.");
+      setFormErros(
+        "Ocorreu um erro ao processar a cotação. Verifique o console para mais detalhes."
+      );
     } finally {
       setLoading(false);
     }
   };
-  
+
   // Manipular envio do formulário de Cotação Cancelada
   const onSubmitNaoVenda = async (data: NaoVendaSchemaType) => {
     // Verificar se há ao menos um produto
@@ -1319,12 +1328,12 @@ export function VendaUnificadaFormTipado({
       toast.error("Adicione pelo menos um produto");
       return;
     }
-  
+
     setLoading(true);
     setFormErros(null);
-  
+
     try {
-      // Preparar os dados para envio 
+      // Preparar os dados para envio
       const formData: NaoVendaFormData = {
         cliente: data.cliente,
         produtosConcorrencia: data.produtosConcorrencia.map((item) => ({
@@ -1334,8 +1343,14 @@ export function VendaUnificadaFormTipado({
             quantidade: item.produtoGarden.quantidade,
             valor: item.produtoGarden.valor,
             comissao: item.produtoGarden.comissao || 0,
-            icms: item.produtoGarden.icms !== null ? item.produtoGarden.icms : undefined,
-            ipi: item.produtoGarden.ipi !== null ? item.produtoGarden.ipi : undefined,
+            icms:
+              item.produtoGarden.icms !== null
+                ? item.produtoGarden.icms
+                : undefined,
+            ipi:
+              item.produtoGarden.ipi !== null
+                ? item.produtoGarden.ipi
+                : undefined,
           },
           valorConcorrencia: item.valorConcorrencia,
           nomeConcorrencia: item.nomeConcorrencia,
@@ -1348,14 +1363,14 @@ export function VendaUnificadaFormTipado({
         condicaoPagamento: data.condicaoPagamento,
         objecaoGeral: data.objecaoGeral || "",
       };
-  
+
       let result: { error?: string; success?: boolean; id?: string } = {};
-      
+
       if (statusCotacao === "pendente") {
         // Se for uma cotação pendente, criar como cotação
         const cotacaoData: CotacaoFormData = {
           cliente: formData.cliente,
-          produtos: formData.produtosConcorrencia.map(item => ({
+          produtos: formData.produtosConcorrencia.map((item) => ({
             nome: item.produtoGarden.nome,
             medida: item.produtoGarden.medida,
             quantidade: item.produtoGarden.quantidade,
@@ -1367,31 +1382,36 @@ export function VendaUnificadaFormTipado({
           valorTotal: formData.valorTotal,
           condicaoPagamento: formData.condicaoPagamento,
           vendaRecorrente: false,
-          status: statusCotacao
+          status: statusCotacao,
         };
-        
+
         if (isEditing && initialData && "id" in initialData) {
-          result = await atualizarCotacao(initialData.id as string, cotacaoData);
+          result = await atualizarCotacao(
+            initialData.id as string,
+            cotacaoData
+          );
         } else {
           result = await criarCotacao(cotacaoData);
         }
-      } 
-      else if (statusCotacao === "cancelada") {
+      } else if (statusCotacao === "cancelada") {
         // Cancelar cotação ou atualizar não venda
         if (isEditing && initialData && "id" in initialData) {
           // Se está editando uma cotação pendente, cancelar
-          if ('status' in initialData && initialData.status === 'pendente') {
+          if ("status" in initialData && initialData.status === "pendente") {
             result = await cancelarCotacao(initialData.id as string, formData);
           } else {
             // Se está editando uma não venda, atualizar
-            result = await atualizarNaoVenda(initialData.id as string, formData);
+            result = await atualizarNaoVenda(
+              initialData.id as string,
+              formData
+            );
           }
         } else {
           // Criar nova não venda
           result = await criarNaoVenda(formData);
         }
       }
-  
+
       if (result.error) {
         toast.error(result.error);
         setFormErros(result.error);
@@ -1401,9 +1421,9 @@ export function VendaUnificadaFormTipado({
             ? "Cotação cancelada atualizada com sucesso!"
             : "Cotação atualizada com sucesso!"
           : "Cotação registrada com sucesso!";
-        
+
         toast.success(mensagem);
-        
+
         // Resetar formulários apenas se não estiver editando
         if (!isEditing) {
           naoVendaForm.reset(defaultNaoVendaValues);
@@ -1411,14 +1431,16 @@ export function VendaUnificadaFormTipado({
           setProdutoConcorrencia(resetProdutoConcorrencia());
           setProdutosMigrados([]);
         }
-  
+
         // Navegar de volta à página de vendas após sucesso
         router.push("/vendas");
       }
     } catch (error) {
       console.error("Erro ao processar Cotação Cancelada:", error);
       toast.error("Ocorreu um erro ao processar a Cotação Cancelada");
-      setFormErros("Ocorreu um erro ao processar a Cotação Cancelada. Verifique o console para mais detalhes.");
+      setFormErros(
+        "Ocorreu um erro ao processar a Cotação Cancelada. Verifique o console para mais detalhes."
+      );
     } finally {
       setLoading(false);
     }
@@ -1428,25 +1450,25 @@ export function VendaUnificadaFormTipado({
     if (formMode === "venda") {
       const clienteData = vendaForm.getValues("cliente");
       const condicaoPagamento = vendaForm.getValues("condicaoPagamento");
-  
+
       naoVendaForm.setValue("cliente", clienteData);
       naoVendaForm.setValue("condicaoPagamento", condicaoPagamento);
-  
+
       // Verificar se temos produtos na venda para migrar para naoVenda
       const produtosVenda = vendaForm.getValues("produtos");
       if (produtosVenda && produtosVenda.length > 0) {
         setPrecisaMigrarProdutos(true);
       }
-  
+
       setFormMode("naoVenda");
       setStatusCotacao("cancelada");
     } else {
       const clienteData = naoVendaForm.getValues("cliente");
       const condicaoPagamento = naoVendaForm.getValues("condicaoPagamento");
-  
+
       vendaForm.setValue("cliente", clienteData);
       vendaForm.setValue("condicaoPagamento", condicaoPagamento);
-  
+
       setFormMode("venda");
       setStatusCotacao("finalizada");
     }
@@ -1454,7 +1476,7 @@ export function VendaUnificadaFormTipado({
   // Definir o status da cotação
   const definirStatusCotacao = (status: StatusCotacao): void => {
     setStatusCotacao(status);
-  
+
     if (status === "cancelada" && formMode !== "naoVenda") {
       // Se mudar para cancelada, alterar o modo do formulário também
       toggleFormMode();
@@ -1462,8 +1484,10 @@ export function VendaUnificadaFormTipado({
       // Se mudar para finalizada, alterar o modo do formulário também
       toggleFormMode();
     }
-    
-    toast.info(`Status da cotação alterado para ${status}. Salve para confirmar a alteração.`);
+
+    toast.info(
+      `Status da cotação alterado para ${status}. Salve para confirmar a alteração.`
+    );
   };
 
   // Voltar para página de vendas
@@ -1634,16 +1658,15 @@ export function VendaUnificadaFormTipado({
 
                   {/* ProdutoVendaForm Component */}
                   <div className="flex mb-4 justify-between mt-4">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleAbrirObjecaoProduto}
-                        className="text-orange-500 border-orange-300 hover:bg-orange-50"
-                      >
-                        <AlertCircle className="mr-2 h-4 w-4" />
-                        Adicionar Produto com Objeção
-                      </Button>
-                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleAbrirObjecaoProduto}
+                      className="text-orange-500 border-orange-300 hover:bg-orange-50 shadow-md"
+                    >
+                      <AlertCircle className="mr-2 h-4 w-4 " />
+                      Garden não trabalha com o produto</Button>
+                  </div>
                   <div>
                     <ProdutoVendaForm
                       currentProduto={currentProduto}
@@ -1658,8 +1681,6 @@ export function VendaUnificadaFormTipado({
                         throw new Error("Function not implemented.");
                       }}
                     />
-
-
                   </div>
 
                   {/* Lista de produtos adicionados */}
@@ -1764,8 +1785,7 @@ export function VendaUnificadaFormTipado({
                                             )
                                           }
                                           className="text-orange-500"
-                                        >
-                                        </Button>
+                                        ></Button>
                                         <motion.div
                                           whileHover={{ scale: 1.1 }}
                                           whileTap={{ scale: 0.9 }}
@@ -1871,18 +1891,26 @@ export function VendaUnificadaFormTipado({
                             <span className="absolute left-3  text-gray-500">
                               R$
                             </span>
-                            <CurrencyInput
-                              className="px-8 h-10 rounded-md border border-input bg-background w-full"
-                              value={field.value}
-                              onValueChange={(value) =>
-                                field.onChange(Number(value || 0))
-                              }
-                              decimalsLimit={2}
-                              decimalSeparator=","
-                              groupSeparator="."
-                              allowNegativeValue={false}
-                              placeholder="0,00"
-                            />
+                            <Input
+            className="px-8 h-10 rounded-md border border-input bg-background w-full"
+            value={
+              field.value === 0 
+                ? "0,00" 
+                : formatCurrency((Math.round((field.value || 0) * 100)).toString())
+            }
+            onChange={(e) => {
+              const rawValue = e.target.value.replace(/\D/g, "");
+              
+              // Trata explicitamente o zero
+              let numValue = 0;
+              if (rawValue !== "" && rawValue !== "0") {
+                numValue = parseInt(rawValue, 10) / 100;
+              }
+              
+              field.onChange(numValue);
+            }}
+            placeholder="0,00"
+          />
                           </div>
                         </FormControl>
                         <p className="text-xs text-gray-500 mt-1">
@@ -2402,18 +2430,26 @@ export function VendaUnificadaFormTipado({
                             <span className="absolute left-3 text-gray-500">
                               R$
                             </span>
-                            <CurrencyInput
-                              className="px-8 h-10 rounded-md border border-input bg-background w-full"
-                              value={field.value}
-                              onValueChange={(value) =>
-                                field.onChange(Number(value || 0))
-                              }
-                              decimalsLimit={2}
-                              decimalSeparator=","
-                              groupSeparator="."
-                              allowNegativeValue={false}
-                              placeholder="0,00"
-                            />
+                            <Input
+            className="px-8 h-10 rounded-md border border-input bg-background w-full"
+            value={
+              field.value === 0 
+                ? "0,00" 
+                : formatCurrency((Math.round((field.value || 0) * 100)).toString())
+            }
+            onChange={(e) => {
+              const rawValue = e.target.value.replace(/\D/g, "");
+              
+              // Trata explicitamente o zero
+              let numValue = 0;
+              if (rawValue !== "" && rawValue !== "0") {
+                numValue = parseInt(rawValue, 10) / 100;
+              }
+              
+              field.onChange(numValue);
+            }}
+            placeholder="0,00"
+          />
                           </div>
                         </FormControl>
                         <p className="text-xs text-gray-500 mt-1">
@@ -2862,15 +2898,27 @@ export function VendaUnificadaFormTipado({
                           </span>
                           <Input
                             className="px-8 h-10 rounded-md border border-input bg-background w-full"
-                            value={formatCurrency(field.value.toString())}
+                            value={
+                              field.value === 0
+                                ? "0,00"
+                                : formatCurrency(
+                                    Math.round(
+                                      (field.value || 0) * 100
+                                    ).toString()
+                                  )
+                            }
                             onChange={(e) => {
                               const rawValue = e.target.value.replace(
                                 /\D/g,
                                 ""
                               );
-                              const numValue = rawValue
-                                ? parseInt(rawValue, 10) / 100
-                                : 0;
+
+                              // Trata explicitamente o zero
+                              let numValue = 0;
+                              if (rawValue !== "" && rawValue !== "0") {
+                                numValue = parseInt(rawValue, 10) / 100;
+                              }
+
                               field.onChange(numValue);
                               handleChangeConcorrencia(
                                 "valorConcorrencia",

@@ -21,7 +21,7 @@ import {
   TooltipProvider,
   Tooltip,
   TooltipTrigger,
-  TooltipContent
+  TooltipContent,
 } from "@/components/ui/tooltip";
 
 import { formatCurrency } from "@/lib/utils";
@@ -83,14 +83,14 @@ export function ProdutoVendaForm({
   handleAddProdutoVenda,
   temObjecao,
   setTemObjecao,
-  setShowProdutoNaoCatalogadoDialog
+  setShowProdutoNaoCatalogadoDialog,
 }: ProdutoVendaFormProps) {
   const [produtoSearchTerm, setProdutoSearchTerm] = useState<string>("");
   const selectProdutoRef = useRef<HTMLInputElement>(null);
 
   // Filtrar produtos baseado na busca
-  const filteredProducts = productOptions.filter(
-    (product) => product.toLowerCase().includes(produtoSearchTerm.toLowerCase())
+  const filteredProducts = productOptions.filter((product) =>
+    product.toLowerCase().includes(produtoSearchTerm.toLowerCase())
   );
 
   const handleProductSelect = (value: string) => {
@@ -117,8 +117,8 @@ export function ProdutoVendaForm({
                 </SelectTrigger>
                 <SelectContent>
                   <div className="px-3 py-2">
-                    <Input 
-                      placeholder="Buscar produto..." 
+                    <Input
+                      placeholder="Buscar produto..."
                       value={produtoSearchTerm}
                       onChange={(e) => setProdutoSearchTerm(e.target.value)}
                       ref={selectProdutoRef}
@@ -138,9 +138,7 @@ export function ProdutoVendaForm({
               <FormLabel className="mb-1">Medida*</FormLabel>
               <Select
                 value={currentProduto.medida}
-                onValueChange={(value) =>
-                  handleChangeProduto("medida", value)
-                }
+                onValueChange={(value) => handleChangeProduto("medida", value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Medida" />
@@ -164,10 +162,7 @@ export function ProdutoVendaForm({
                 min="1"
                 value={currentProduto.quantidade || ""}
                 onChange={(e) =>
-                  handleChangeProduto(
-                    "quantidade",
-                    Number(e.target.value)
-                  )
+                  handleChangeProduto("quantidade", Number(e.target.value))
                 }
                 className="w-full"
               />
@@ -176,22 +171,28 @@ export function ProdutoVendaForm({
             <div className="w-1/3">
               <FormLabel className="mb-1">Valor*</FormLabel>
               <div className="relative flex items-center">
-                <span className="absolute left-3 text-gray-500">
-                  R$
-                </span>
+                <span className="absolute left-3 text-gray-500">R$</span>
                 <Input
                   className="px-8 h-10 rounded-md border border-input bg-background w-full"
-                  value={formatCurrency(
-                    currentProduto.valor.toString()
-                  )}
+                  value={
+                    currentProduto.valor === 0
+                      ? "0,00"
+                      : formatCurrency(
+                          Math.round(
+                            (currentProduto.valor || 0) * 100
+                          ).toString()
+                        )
+                  }
                   onChange={(e) => {
-                    const rawValue = e.target.value.replace(
-                      /\D/g,
-                      ""
-                    );
-                    const numValue = rawValue
-                      ? parseInt(rawValue, 10) / 100
-                      : 0;
+                    const rawValue = e.target.value.replace(/\D/g, "");
+
+                    // Trata explicitamente o zero
+                    if (rawValue === "" || rawValue === "0") {
+                      handleChangeProduto("valor", 0);
+                      return;
+                    }
+
+                    const numValue = parseInt(rawValue, 10) / 100;
                     handleChangeProduto("valor", numValue);
                   }}
                   placeholder="0,00"
@@ -209,17 +210,12 @@ export function ProdutoVendaForm({
                   step="0.01"
                   value={currentProduto.comissao || ""}
                   onChange={(e) =>
-                    handleChangeProduto(
-                      "comissao",
-                      Number(e.target.value)
-                    )
+                    handleChangeProduto("comissao", Number(e.target.value))
                   }
                   className="pr-8 w-full"
                   placeholder="0.00"
                 />
-                <span className="absolute right-3 text-gray-500">
-                  %
-                </span>
+                <span className="absolute right-3 text-gray-500">%</span>
               </div>
             </div>
           </div>
@@ -235,17 +231,12 @@ export function ProdutoVendaForm({
                   step="0.01"
                   value={currentProduto.icms || ""}
                   onChange={(e) =>
-                    handleChangeProduto(
-                      "icms",
-                      Number(e.target.value)
-                    )
+                    handleChangeProduto("icms", Number(e.target.value))
                   }
                   className="pr-8 w-full"
                   placeholder="0.00"
                 />
-                <span className="absolute right-3 text-gray-500">
-                  %
-                </span>
+                <span className="absolute right-3 text-gray-500">%</span>
               </div>
             </div>
 
@@ -259,24 +250,19 @@ export function ProdutoVendaForm({
                   step="0.01"
                   value={currentProduto.ipi || ""}
                   onChange={(e) =>
-                    handleChangeProduto(
-                      "ipi",
-                      Number(e.target.value)
-                    )
+                    handleChangeProduto("ipi", Number(e.target.value))
                   }
                   className="pr-8 w-full"
                   placeholder="0.00"
                 />
-                <span className="absolute right-3 text-gray-500">
-                  %
-                </span>
+                <span className="absolute right-3 text-gray-500">%</span>
               </div>
             </div>
           </div>
-          
+
           {/* Opção para adicionar objeção individual ao produto */}
           <div className="flex items-center mt-2">
-            <Checkbox 
+            <Checkbox
               id="tem-objecao"
               className="mr-2"
               checked={temObjecao}
@@ -284,7 +270,7 @@ export function ProdutoVendaForm({
                 setTemObjecao(checked === true);
               }}
             />
-            <label 
+            <label
               htmlFor="tem-objecao"
               className="text-sm cursor-pointer flex items-center"
             >
@@ -296,8 +282,8 @@ export function ProdutoVendaForm({
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="max-w-xs text-xs">
-                      Marque esta opção quando o cliente realizou a compra, 
-                      mas com alguma objeção específica para este produto.
+                      Marque esta opção quando o cliente realizou a compra, mas
+                      com alguma objeção específica para este produto.
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -307,11 +293,7 @@ export function ProdutoVendaForm({
         </div>
 
         <div className="mt-4 flex justify-end">
-          <motion.div
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-          >
-            
+          <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
             <Button type="button" onClick={handleAddProdutoVenda}>
               <Plus className="mr-2 h-4 w-4" />
               Adicionar Produto

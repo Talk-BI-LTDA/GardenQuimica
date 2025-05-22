@@ -747,7 +747,7 @@ export function VendasTableAjustada({
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
-        className="space-y-4"
+        className="space-y-4 "
       >
         <TabsList className="bg-gray-100 p-1">
           <TabsTrigger value="painel">Todas as Cotações</TabsTrigger>
@@ -757,7 +757,7 @@ export function VendasTableAjustada({
         </TabsList>
 
         {/* Conteúdo da Tab Painel - TODAS AS COTAÇÕES */}
-        <TabsContent value="painel">
+        <TabsContent  value="painel">
           <div className="bg-white rounded-lg border shadow-sm">
             <Table>
               <TableHeader>

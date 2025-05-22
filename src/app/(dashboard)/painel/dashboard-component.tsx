@@ -778,13 +778,13 @@ const EnhancedDashboard: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Vendas (Aprovados) */}
+        {/* Cotações Finalizadas */}
         <Card className="w-[33%] !py-3">
           <CardContent >
             <div className="flex items-start justify-between">
               <div>
                 <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
-                  Vendas (Aprovados){" "}
+                  Cotações Finalizadas{" "}
                   <div className="bg-green-100 w-fit p-2 rounded-full">
                     <CheckCircle className="h-6 w-6 text-green-600" />
                   </div>
@@ -803,7 +803,7 @@ const EnhancedDashboard: React.FC = () => {
             <div className="flex items-start justify-between">
               <div>
                 <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
-                  Venda perdidas (Recusados){" "}
+                  Cotações Canceladas{" "}
                   <div className="bg-red-100 w-fit p-2 rounded-full">
                     <XCircle className="h-6 w-6 text-red-600" />
                   </div>
@@ -836,7 +836,7 @@ const EnhancedDashboard: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Vendas Perdidas */}
+        {/* Vendas Canceladas */}
         <Card className="w-[33%] !py-3">
           <CardContent >
             <div className="flex items-start justify-between">

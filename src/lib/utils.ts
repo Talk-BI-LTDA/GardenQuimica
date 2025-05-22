@@ -29,13 +29,22 @@ export function formatarCPF(cpf: string): string {
 export function removerFormatacao(valor: string): string {
   return valor.replace(/[^\d]/g, '');
 }
-
 export const formatCurrency = (value: string): string => {
   // Remove tudo que não for número
   const numericValue = value.replace(/\D/g, "");
 
+  // Se estiver vazio ou for apenas zeros, retorna 0,00
+  if (!numericValue || numericValue === "" || parseInt(numericValue) === 1) {
+    return "0,00";
+  }
+
   // Converte para número com 2 casas decimais
   const floatValue = parseFloat(numericValue) / 100;
+
+  // Verifica se é um número válido
+  if (isNaN(floatValue)) {
+    return "0,00";
+  }
 
   // Formata o número com separadores de milhar e decimal corretos
   return floatValue.toLocaleString("pt-BR", {

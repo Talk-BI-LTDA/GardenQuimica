@@ -458,7 +458,7 @@ export function VendasTable({
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-gray-500">Vendas (Aprovados)</p>
+                <p className="text-sm text-gray-500">Cotações Finalizadas</p>
                 <h3 className="text-3xl font-bold mt-1">{estatisticas.totalVendas || 0}</h3>
               </div>
               <div className="bg-green-100 p-2 rounded-full">

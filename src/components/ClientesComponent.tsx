@@ -30,7 +30,6 @@ import {
   RepeatIcon,
   MoreHorizontal,
   Edit,
-  Trash,
   Timer,
   Info,
   BadgePercent,
@@ -234,6 +233,7 @@ const DonutChart: React.FC<DonutChartProps> = ({ data, title, height = 320 }) =>
 };
 
 // Componente principal da página de clientes
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const ClientesComponent: React.FC<{ session: SessionProps }> = ({ session }) => {
   const router = useRouter();
 
@@ -1326,7 +1326,7 @@ const ClientesComponent: React.FC<{ session: SessionProps }> = ({ session }) => 
                                   <Edit className="mr-2 h-4 w-4" />
                                   Editar cliente
                                 </DropdownMenuItem>
-                                {session.user.role === "ADMIN" && (
+                                {/* {session.user.role === "ADMIN" && (
                                   <DropdownMenuItem
                                     onClick={() => {
                                       setClienteSelecionado(cliente);
@@ -1337,7 +1337,7 @@ const ClientesComponent: React.FC<{ session: SessionProps }> = ({ session }) => 
                                     <Trash className="mr-2 h-4 w-4" />
                                     Excluir cliente
                                   </DropdownMenuItem>
-                                )}
+                                )} */}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>

@@ -905,7 +905,7 @@
 //                 </div>
                 
 //                 <div>
-//                   <p className="text-xs text-gray-500">Vendas Perdidas</p>
+//                   <p className="text-xs text-gray-500">Vendas Canceladas</p>
 //                   <p className="font-medium">{estadoHoverDetalhes.totalNaoVendas}</p>
 //                 </div>
 //               </div>

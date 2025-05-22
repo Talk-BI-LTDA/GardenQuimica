@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency } from "@/lib/utils";
 import type { Produto } from "@/types/venda-tipos";
 import type { ProdutoConcorrenciaTemp } from "@/types/venda-tipos";
 
@@ -82,7 +82,10 @@ interface ProdutoConcorrenciaFormProps {
   currentProduto: Produto;
   produtoConcorrencia: ProdutoConcorrenciaTemp;
   handleChangeProduto: (field: keyof Produto, value: string | number) => void;
-  handleChangeProdutoConcorrencia: (field: keyof ProdutoConcorrenciaTemp, value: string | number | boolean | null) => void;
+  handleChangeProdutoConcorrencia: (
+    field: keyof ProdutoConcorrenciaTemp,
+    value: string | number | boolean | null
+  ) => void;
   handleAddProdutoNaoVenda: () => void;
   setShowProdutoNaoCatalogadoDialog: (value: boolean) => void;
 }
@@ -93,15 +96,15 @@ export function ProdutoConcorrenciaForm({
   handleChangeProduto,
   handleChangeProdutoConcorrencia,
   handleAddProdutoNaoVenda,
-  setShowProdutoNaoCatalogadoDialog
+  setShowProdutoNaoCatalogadoDialog,
 }: ProdutoConcorrenciaFormProps) {
   const [produtoSearchTerm, setProdutoSearchTerm] = useState<string>("");
   const [objecaoInputOpen, setObjecaoInputOpen] = useState<boolean>(false);
   const selectProdutoRef = useRef<HTMLInputElement>(null);
 
   // Filtrar produtos baseado na busca
-  const filteredProducts = productOptions.filter(
-    (product) => product.toLowerCase().includes(produtoSearchTerm.toLowerCase())
+  const filteredProducts = productOptions.filter((product) =>
+    product.toLowerCase().includes(produtoSearchTerm.toLowerCase())
   );
 
   const handleProductSelect = (value: string) => {
@@ -132,9 +135,7 @@ export function ProdutoConcorrenciaForm({
       {/* Formulário de adição de produto Garden */}
       <Card className="mb-6">
         <CardContent className="pt-6">
-          <h4 className="font-medium mb-4 text-[#00446A]">
-            Produto (Garden)
-          </h4>
+          <h4 className="font-medium mb-4 text-[#00446A]">Produto (Garden)</h4>
           <div className="flex flex-col gap-4">
             <div className="flex justify-between gap-4">
               <div className="w-full">
@@ -148,8 +149,8 @@ export function ProdutoConcorrenciaForm({
                   </SelectTrigger>
                   <SelectContent>
                     <div className="px-3 py-2">
-                      <Input 
-                        placeholder="Buscar produto..." 
+                      <Input
+                        placeholder="Buscar produto..."
                         value={produtoSearchTerm}
                         onChange={(e) => setProdutoSearchTerm(e.target.value)}
                         ref={selectProdutoRef}
@@ -195,10 +196,7 @@ export function ProdutoConcorrenciaForm({
                   min="1"
                   value={currentProduto.quantidade || ""}
                   onChange={(e) =>
-                    handleChangeProduto(
-                      "quantidade",
-                      Number(e.target.value)
-                    )
+                    handleChangeProduto("quantidade", Number(e.target.value))
                   }
                   className="w-full"
                 />
@@ -207,22 +205,27 @@ export function ProdutoConcorrenciaForm({
               <div className="w-1/3">
                 <FormLabel>Valor*</FormLabel>
                 <div className="relative flex items-center">
-                  <span className="absolute left-3 text-gray-500">
-                    R$
-                  </span>
+                  <span className="absolute left-3 text-gray-500">R$</span>
                   <Input
                     className="px-8 h-10 rounded-md border border-input bg-background w-full"
-                    value={formatCurrency(
-                      currentProduto.valor.toString()
-                    )}
+                    value={
+                      currentProduto.valor === 0
+                        ? "0,00"
+                        : formatCurrency(
+                            Math.round(
+                              (currentProduto.valor || 0) * 100
+                            ).toString()
+                          )
+                    }
                     onChange={(e) => {
-                      const rawValue = e.target.value.replace(
-                        /\D/g,
-                        ""
-                      );
-                      const numValue = rawValue
-                        ? parseInt(rawValue, 10) / 100
-                        : 0;
+                      const rawValue = e.target.value.replace(/\D/g, "");
+
+                      // Trata explicitamente o zero
+                      let numValue = 0;
+                      if (rawValue !== "" && rawValue !== "0") {
+                        numValue = parseInt(rawValue, 10) / 100;
+                      }
+
                       handleChangeProduto("valor", numValue);
                     }}
                     placeholder="0,00"
@@ -240,17 +243,12 @@ export function ProdutoConcorrenciaForm({
                     step="0.01"
                     value={currentProduto.icms || ""}
                     onChange={(e) =>
-                      handleChangeProduto(
-                        "icms",
-                        Number(e.target.value)
-                      )
+                      handleChangeProduto("icms", Number(e.target.value))
                     }
                     className="pr-8"
                     placeholder="0.00"
                   />
-                  <span className="absolute right-3 text-gray-500">
-                    %
-                  </span>
+                  <span className="absolute right-3 text-gray-500">%</span>
                 </div>
               </div>
             </div>
@@ -266,31 +264,20 @@ export function ProdutoConcorrenciaForm({
                     step="0.01"
                     value={currentProduto.ipi || ""}
                     onChange={(e) =>
-                      handleChangeProduto(
-                        "ipi",
-                        Number(e.target.value)
-                      )
+                      handleChangeProduto("ipi", Number(e.target.value))
                     }
                     className="pr-8"
                     placeholder="0.00"
                   />
-                  <span className="absolute right-3 text-gray-500">
-                    %
-                  </span>
+                  <span className="absolute right-3 text-gray-500">%</span>
                 </div>
               </div>
             </div>
           </div>
-      
+
           <div className="mt-4 flex justify-end">
-            <motion.div
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-            >
-              <Button
-                type="button"
-                onClick={handleAddProdutoNaoVenda}
-              >
+            <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
+              <Button type="button" onClick={handleAddProdutoNaoVenda}>
                 <Plus className="mr-2 h-4 w-4" />
                 Adicionar Comparação
               </Button>
@@ -305,14 +292,17 @@ export function ProdutoConcorrenciaForm({
           <h4 className="font-medium mb-4 text-red-600">
             Produto (Concorrência)
           </h4>
-          
+
           <div className="mb-4">
             <FormItem className="flex flex-row items-center space-x-3 space-y-0">
               <FormControl>
                 <Checkbox
                   checked={produtoConcorrencia.infoNaoDisponivel}
-                  onCheckedChange={(checked) => 
-                    handleChangeProdutoConcorrencia("infoNaoDisponivel", checked === true)
+                  onCheckedChange={(checked) =>
+                    handleChangeProdutoConcorrencia(
+                      "infoNaoDisponivel",
+                      checked === true
+                    )
                   }
                 />
               </FormControl>
@@ -321,13 +311,20 @@ export function ProdutoConcorrenciaForm({
                   Informações da concorrência não disponíveis
                 </FormLabel>
                 <p className="text-xs text-gray-500">
-                  Marque esta opção caso não tenha dados específicos da concorrência
+                  Marque esta opção caso não tenha dados específicos da
+                  concorrência
                 </p>
               </div>
             </FormItem>
           </div>
-          
-          <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${produtoConcorrencia.infoNaoDisponivel ? "opacity-50 pointer-events-none" : ""}`}>
+
+          <div
+            className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${
+              produtoConcorrencia.infoNaoDisponivel
+                ? "opacity-50 pointer-events-none"
+                : ""
+            }`}
+          >
             <div>
               <FormLabel>Nome da Concorrência*</FormLabel>
               <Input
@@ -345,23 +342,31 @@ export function ProdutoConcorrenciaForm({
             <div>
               <FormLabel>Valor da Concorrência*</FormLabel>
               <div className="relative flex items-center">
-                <span className="absolute left-3 text-gray-500">
-                  R$
-                </span>
+                <span className="absolute left-3 text-gray-500">R$</span>
                 <Input
                   className="px-8 h-10 rounded-md border border-input bg-background w-full"
-                  value={formatCurrency(
-                    produtoConcorrencia.valorConcorrencia.toString()
-                  )}
+                  value={
+                    produtoConcorrencia.valorConcorrencia === 0
+                      ? "0,00"
+                      : formatCurrency(
+                          Math.round(
+                            (produtoConcorrencia.valorConcorrencia || 0) * 100
+                          ).toString()
+                        )
+                  }
                   onChange={(e) => {
-                    const rawValue = e.target.value.replace(
-                      /\D/g,
-                      ""
+                    const rawValue = e.target.value.replace(/\D/g, "");
+
+                    // Trata explicitamente o zero
+                    let numValue = 0;
+                    if (rawValue !== "" && rawValue !== "0") {
+                      numValue = parseInt(rawValue, 10) / 100;
+                    }
+
+                    handleChangeProdutoConcorrencia(
+                      "valorConcorrencia",
+                      numValue
                     );
-                    const numValue = rawValue
-                      ? parseInt(rawValue, 10) / 100
-                      : 0;
-                    handleChangeProdutoConcorrencia("valorConcorrencia", numValue);
                   }}
                   placeholder="0,00"
                 />
@@ -380,17 +385,13 @@ export function ProdutoConcorrenciaForm({
                   onChange={(e) =>
                     handleChangeProdutoConcorrencia(
                       "icms",
-                      e.target.value === ""
-                        ? 0
-                        : Number(e.target.value)
+                      e.target.value === "" ? 0 : Number(e.target.value)
                     )
                   }
                   className="pr-8"
                   placeholder="0.00"
                 />
-                <span className="absolute right-3 text-gray-500">
-                  %
-                </span>
+                <span className="absolute right-3 text-gray-500">%</span>
               </div>
             </div>
 
@@ -406,17 +407,13 @@ export function ProdutoConcorrenciaForm({
                   onChange={(e) =>
                     handleChangeProdutoConcorrencia(
                       "ipi",
-                      e.target.value === ""
-                        ? 0
-                        : Number(e.target.value)
+                      e.target.value === "" ? 0 : Number(e.target.value)
                     )
                   }
                   className="pr-8"
                   placeholder="0.00"
                 />
-                <span className="absolute right-3 text-gray-500">
-                  %
-                </span>
+                <span className="absolute right-3 text-gray-500">%</span>
               </div>
             </div>
 
@@ -479,14 +476,9 @@ export function ProdutoConcorrenciaForm({
                       <div className="border-t p-2 mt-2">
                         <Input
                           placeholder="Digite uma objeção personalizada"
-                          value={
-                            (produtoConcorrencia.objecao as string) ||
-                            ""
-                          }
+                          value={(produtoConcorrencia.objecao as string) || ""}
                           onChange={(e) =>
-                            handleCustomObjecaoChange(
-                              e.target.value
-                            )
+                            handleCustomObjecaoChange(e.target.value)
                           }
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
