@@ -1,6 +1,7 @@
 // src/lib/utils.ts
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { ProdutoConcorrenciaTemp, Produto } from "@/types/venda-tipos";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -28,3 +29,65 @@ export function formatarCPF(cpf: string): string {
 export function removerFormatacao(valor: string): string {
   return valor.replace(/[^\d]/g, '');
 }
+
+export const formatCurrency = (value: string): string => {
+  // Remove tudo que não for número
+  const numericValue = value.replace(/\D/g, "");
+
+  // Converte para número com 2 casas decimais
+  const floatValue = parseFloat(numericValue) / 100;
+
+  // Formata o número com separadores de milhar e decimal corretos
+  return floatValue.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+// Calcular diferença de valor (para Cotação Cancelada)
+export const calcularDiferencaValor = (
+  produtoGarden: Produto,
+  valorConcorrencia: number,
+  infoNaoDisponivel: boolean
+): { valor: string; percentual: string; maisCaro: boolean } => {
+  if (infoNaoDisponivel) {
+    return {
+      valor: "N/A",
+      percentual: "N/A",
+      maisCaro: false
+    };
+  }
+  
+  const valorTotalGarden = produtoGarden.valor * produtoGarden.quantidade;
+  const valorDiferenca = valorTotalGarden - valorConcorrencia;
+
+  return {
+    valor: formatarValorBRL(Math.abs(valorDiferenca)),
+    percentual:
+      ((Math.abs(valorDiferenca) / valorTotalGarden) * 100).toFixed(2) + "%",
+    maisCaro: valorDiferenca > 0,
+  };
+};
+
+
+
+// Reset de produto
+export const resetProduto = (): Produto => ({
+  nome: "",
+  medida: "",
+  quantidade: 0,
+  valor: 0,
+  comissao: 0,
+  icms: 0,
+  ipi: 0
+});
+
+// Reset de produto concorrência
+export const resetProdutoConcorrencia = (): ProdutoConcorrenciaTemp => ({
+  valorConcorrencia: 0,
+  nomeConcorrencia: "",
+  icms: 0,
+  ipi: 0,
+  objecao: null,
+  infoNaoDisponivel: false
+});

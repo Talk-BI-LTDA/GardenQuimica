@@ -1,39 +1,35 @@
+// @/components/forms/venda-unificada-form.tsx
 "use client";
 
 import { useState, useEffect } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { useSearchParams } from "next/navigation";
+import { 
+  atualizarVenda, 
+  criarVenda 
+} from "@/actions/venda-actions";
+
+import { 
+  atualizarNaoVenda 
+} from "@/actions/nao-venda-actions";
 import CurrencyInput from "react-currency-input-field";
 import {
-  Plus,
-  Trash2,
-  Save,
-  X,
-  Package,
+  Save, 
   Loader2,
-  User,
-  Building,
-  CreditCard,
-  Repeat,
   AlertCircle,
   ThumbsDown,
   ThumbsUp,
-  Tag,
-  ChevronDown,
+  Search,
+  ArrowLeft,
+  Trash2,
+  CreditCard,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Card } from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -49,19 +45,31 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
+
+// Componentes divididos
+import { ClienteForm } from "./cotacao/ClienteForm";
+import { ProdutoVendaForm } from "./cotacao/ProdutoVendaForm";
+import { ProdutoConcorrenciaForm } from "./cotacao/ProdutoConcorrenciaForm";
 
 // Importar os validadores e tipos de Zod
 import { vendaSchema } from "@/validations/venda-schema";
 import { naoVendaSchema } from "@/validations/nao-venda-schema";
 import type { z } from "zod";
+import { useRouter } from "next/navigation";
 
 // Importar os tipos
 import {
@@ -69,30 +77,82 @@ import {
   VendaFormData,
   NaoVendaFormData,
   ProdutoConcorrenciaTemp,
-  VendaUnificadaFormProps,
   ClienteRecorrente,
   ModoFormulario,
   ProdutoComId,
   ProdutoConcorrenciaComId,
 } from "@/types/venda-tipos";
+import type { Vendedor, Cliente } from "@/types/usuario-tipos";
 
 // Importar ações
-import { criarVenda, atualizarVenda } from "@/actions/venda-actions";
-import { criarNaoVenda, atualizarNaoVenda } from "@/actions/nao-venda-actions";
-import { formatarValorBRL } from "@/lib/utils";
+import { criarNaoVenda } from "@/actions/nao-venda-actions";
+import { Cotacao } from "@/types/cotacao-tipos";
+
+import { 
+  criarCotacao, 
+  atualizarCotacao, 
+  finalizarCotacao, 
+  cancelarCotacao, 
+  CotacaoFormData, 
+  StatusCotacao 
+} from "@/actions/cotacao-actions";
+import { getVendedores } from "@/actions/vendedores-actions";
+import { getProdutos } from "@/actions/produtos-actions";
+import { formatarValorBRL, formatCurrency } from "@/lib/utils";
 import { type SubmitHandler } from "react-hook-form";
 
+// Utils compartilhados
+import { resetProduto, resetProdutoConcorrencia } from "@/lib/utils";
+
 // Usando inferência de tipos para o Zod
-type VendaSchemaType = z.infer<typeof vendaSchema>;
-type NaoVendaSchemaType = z.infer<typeof naoVendaSchema>;
+export type VendaSchemaType = z.infer<typeof vendaSchema>;
+export type NaoVendaSchemaType = z.infer<typeof naoVendaSchema>;
+
+// Atualizar a interface VendaUnificadaFormProps
+interface VendaUnificadaFormProps {
+  initialData?: (VendaFormData | NaoVendaFormData | Cotacao) & {
+    id?: string;
+    status?: StatusCotacao;
+  };
+  initialMode?: ModoFormulario;
+  isEditing?: boolean;
+}
 
 // Tipo seguro para ProdutoConcorrencia
 type ProdutoConcorrenciaSchema = {
   produtoGarden: Produto;
   valorConcorrencia: number;
   nomeConcorrencia: string;
+  icms?: number | null;
+  ipi?: number | null;
+  objecao?: string | null;
+  infoNaoDisponivel?: boolean;
+};
+
+// Tipo para produto não catalogado
+type ProdutoNaoCatalogado = {
+  nome: string;
+  medida: string;
+  quantidade: number;
+  valor: number;
+  comissao?: number;
   icms?: number;
-  objecao?: string;
+  ipi?: number;
+  objecao?: string | null;
+};
+
+// Tipo para definir objeção individual do produto
+type ObjecaoIndividual = {
+  produtoId: string;
+  objecao: string | null;
+  tipoObjecao: string;
+};
+
+// Tipo para produto aguardando dados de concorrência
+type ProdutoMigrado = {
+  produto: ProdutoEstendido;
+  concorrenciaAdicionada: boolean;
+  index: number;
 };
 
 // Lista de objeções
@@ -106,82 +166,6 @@ const objOptions = [
   "Outro",
 ];
 
-// Lista de recorrências
-const recorrenciaOptions = [
-  "7 dias",
-  "14 dias",
-  "21 dias",
-  "28 dias",
-  "35 dias",
-  "42 dias",
-  "49 dias",
-  "56 dias", // 8 semanas
-  "63 dias", // 9 semanas
-  "70 dias", // 10 semanas
-  "77 dias", // 11 semanas
-  "84 dias", // 12 semanas / 3 meses
-  "91 dias", // 13 semanas
-  "98 dias", // 14 semanas
-  "105 dias", // 15 semanas
-  "112 dias", // 16 semanas
-  "119 dias", // 17 semanas
-  "Outro",
-];
-
-// Lista de segmentos
-const segmentoOptions = [
-  "Home Care (Saneantes)",
-  "Personal Care (Cosméticos)",
-  "Plásticos, Borrachas e Papéis",
-  "Pet",
-  "Automotivo",
-  "Alimentos",
-  "Tratamento de Água",
-  "Têxtil",
-  "Especialidades",
-  "Químicos",
-  "Agro",
-  "Farma",
-  "Tintas e Vernizes",
-  "Oil e Gás",
-  "Lubrificantes",
-];
-const productOptions = [
-  "Ácido Esteárico Dupla Pressão Vegetal (Garden AE D - Vegetal)",
-  "Ácido Esteárico Dupla Pressão Animal (Garden AE T)",
-  "Ácido Esteárico Tripla Pressão Vegetal (Garden AE T - Vegetal)",
-  "Ácido Esteárico Tripla Pressão Animal (Garden AE T)",
-  "Ácido Glioxílico",
-  "Ácido Sulfônico 90 (Garden Pon LAS 90)",
-  "Álcool Cereais (Garden Alc Cereais)",
-  "Álcool Cetílico",
-  "Álcool Ceto Estearílico 30/70",
-  "Álcool Ceto Etoxilado (Garden ACE - 200F)",
-  "Álcool Etílico Anidro 99 (Garden Alc 99)",
-  "Álcool Etílico Hidratado 96 (Garden Alc 96)",
-  "Álcool Polivinílico (Garden APV Pó)",
-  "Amida 60 (Garden MID DC 60)",
-  "Amida 80 (Garden MID DC 80)",
-  "Amida 90 (Garden MID DC 90)",
-  "Base Amaciante (Garden Quat)",
-  "Base Amaciante (Garden Quat Plus)",
-  "Base Perolada (Garden Pon BP)",
-  "Betaína 30% (Garden Ampho CB Plus)",
-  "Cloreto de Sódio Micronizado sem Iodo",
-  "Conservante Cosméticos (Garden CC20)",
-  "D-Pantenol - Vitamina B5",
-  "EDTA Dissídico",
-  "Espessante Sintético (Garden Pon APV)",
-  "Formol Inibido 37%",
-  "Glicerina Bi Destilada Grau USP",
-  "Lauril 27% (Garden Pon LESS 27)",
-  "Lauril Éter Sulfato de Sódio 70% (Garden Pon LESS 70)",
-  "Lauril Éter Sulfossuccinato de Sódio (Garden Pon SGC)",
-  "Massa de Vela (Garden MV)",
-];
-// Lista de medidas
-const medidasOptions = ["Litro", "Galão", "Caixa", "Unidade", "Kg"];
-
 // Lista de condições de pagamento
 const condicoesPagamentoOptions = [
   "À vista",
@@ -192,20 +176,6 @@ const condicoesPagamentoOptions = [
   "PIX",
   "Outro",
 ];
-
-// Função para formatar CNPJ
-const formatCNPJ = (value: string): string => {
-  // Remove todos os caracteres não numéricos
-  const numericValue = value.replace(/\D/g, "");
-
-  // Aplica a máscara de CNPJ: 00.000.000/0000-00
-  return numericValue
-    .replace(/^(\d{2})(\d)/, "$1.$2")
-    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
-    .replace(/\.(\d{3})(\d)/, ".$1/$2")
-    .replace(/(\d{4})(\d)/, "$1-$2")
-    .substring(0, 18);
-};
 
 // Tipos para resolver problemas de tipagem com o zodResolver
 type CustomResolver<T> = (
@@ -222,26 +192,38 @@ function createTypedSubmitHandler<T>(
 ): SubmitHandler<T> {
   return handler as SubmitHandler<T>;
 }
-const formatCurrency = (value: string): string => {
-  // Remove tudo que não for número
-  const numericValue = value.replace(/\D/g, "");
 
-  // Converte para número com 2 casas decimais
-  const floatValue = parseFloat(numericValue) / 100;
-
-  // Formata o número com separadores de milhar e decimal corretos
-  return floatValue.toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+// Versão estendida do tipo Produto para garantir compatibilidade em todos os lugares
+export type ProdutoEstendido = {
+  id?: string;
+  nome: string;
+  medida: string;
+  quantidade: number;
+  valor: number;
+  comissao: number; 
+  icms: number; 
+  ipi: number; 
+  recorrencia?: string;
 };
+
 export function VendaUnificadaFormTipado({
   initialData,
   initialMode = "venda",
   isEditing = false,
 }: VendaUnificadaFormProps) {
-  // Modo do formulário (venda ou Venda-Perdida)
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // Obter o status da URL se disponível
+  const statusParam = searchParams.get("status") as StatusCotacao | null;
+  
+  // Modo do formulário (venda ou naoVenda)
   const [formMode, setFormMode] = useState<ModoFormulario>(initialMode);
+
+  // Status da cotação (pendente, finalizada, cancelada)
+  const [statusCotacao, setStatusCotacao] = useState<StatusCotacao>(
+    statusParam || (initialData?.status as StatusCotacao) || "pendente"
+  );
 
   // Estado de carregamento
   const [loading, setLoading] = useState<boolean>(false);
@@ -249,31 +231,81 @@ export function VendaUnificadaFormTipado({
   // Estados para diálogo de recorrência (vendas)
   const [showRecorrenciaDialog, setShowRecorrenciaDialog] =
     useState<boolean>(false);
-  const [nomeRecorrencia, setNomeRecorrencia] = useState<string>("");
+  const [nomeRecorrencia, setNomeRecorrencia] = useState<string>(
+    isEditing && initialData && "nomeRecorrencia" in initialData
+      ? initialData.nomeRecorrencia || ""
+      : ""
+  );
+
+  // Estado para o diálogo de produto para objeção
+  const [showObjecaoProdutoDialog, setShowObjecaoProdutoDialog] =
+    useState<boolean>(false);
+  const [nomeProdutoObjecao, setNomeProdutoObjecao] = useState<string>("");
 
   // Estado para os produtos sendo adicionados
-  const [currentProduto, setCurrentProduto] = useState<Produto>({
-    nome: "",
-    medida: "",
-    quantidade: 0,
-    valor: 0,
-    recorrencia: "",
-  });
+  const [currentProduto, setCurrentProduto] = useState<ProdutoEstendido>(
+    resetProduto() as ProdutoEstendido
+  );
 
-  // Estado para produto da concorrência (Venda-Perdidas)
+  // Estado para produto da concorrência (naoVenda)
   const [produtoConcorrencia, setProdutoConcorrencia] =
-    useState<ProdutoConcorrenciaTemp>({
-      valorConcorrencia: 0,
-      nomeConcorrencia: "",
-      icms: null,
+    useState<ProdutoConcorrenciaTemp>(resetProdutoConcorrencia());
+
+  // Estado para produtos não catalogados
+  const [showProdutoNaoCatalogadoDialog, setShowProdutoNaoCatalogadoDialog] =
+    useState<boolean>(false);
+  const [produtoNaoCatalogado, setProdutoNaoCatalogado] =
+    useState<ProdutoNaoCatalogado>({
+      nome: "",
+      medida: "Kg",
+      quantidade: 0,
+      valor: 0,
+      comissao: 0,
+      icms: 0,
+      ipi: 0,
       objecao: null,
     });
 
-  // Estado para exibir dropdown de objeção
-  const [objecaoInputOpen, setObjecaoInputOpen] = useState<boolean>(false);
+  // Estado para objeções individuais
+  const [objecoesIndividuais, setObjecoesIndividuais] = useState<
+    ObjecaoIndividual[]
+  >([]);
+  const [showObjecaoDialog, setShowObjecaoDialog] = useState<boolean>(false);
+  const [currentProdutoComObjecao, setCurrentProdutoComObjecao] =
+    useState<string>("");
+  const [currentObjecao, setCurrentObjecao] = useState<string | null>(null);
+
+  // Estado para edição de concorrência de produto migrado
+  const [showConcorrenciaDialog, setShowConcorrenciaDialog] =
+    useState<boolean>(false);
+  const [currentProdutoMigradoIndice, setCurrentProdutoMigradoIndice] =
+    useState<number>(-1);
+  const [currentConcorrencia, setCurrentConcorrencia] =
+    useState<ProdutoConcorrenciaTemp>(resetProdutoConcorrencia());
+  const [produtoAtual, setProdutoAtual] = useState<ProdutoEstendido | null>(
+    null
+  );
 
   // Estado para clientes recorrentes
-  const [clientesRecorrentes] = useState<ClienteRecorrente[]>([]);
+  const [clientesRecorrentes, setClientesRecorrentes] = useState<
+    ClienteRecorrente[]
+  >([]);
+
+  // Estado para busca de produtos
+  const [produtoAddedSearchTerm, setProdutoAddedSearchTerm] =
+    useState<string>("");
+
+  // Estado para controlar se precisa migrar produtos
+  const [precisaMigrarProdutos, setPrecisaMigrarProdutos] =
+    useState<boolean>(false);
+
+  // Estado para rastrear produtos originais quando migrar para cotação cancelada
+  const [produtosMigrados, setProdutosMigrados] = useState<ProdutoMigrado[]>(
+    []
+  );
+
+  // Estado para acompanhar erros do formulário
+  const [formErros, setFormErros] = useState<string | null>(null);
 
   // Definir valores padrão do formulário para venda
   const defaultVendaValues: VendaSchemaType =
@@ -292,7 +324,7 @@ export function VendaUnificadaFormTipado({
           vendaRecorrente: false,
         };
 
-  // Definir valores padrão do formulário para Venda-Perdida
+  // Definir valores padrão do formulário para naoVenda
   const defaultNaoVendaValues: NaoVendaSchemaType =
     formMode === "naoVenda" && initialData
       ? (initialData as NaoVendaSchemaType)
@@ -321,6 +353,11 @@ export function VendaUnificadaFormTipado({
     defaultValues: defaultNaoVendaValues,
   });
 
+  // Form para o diálogo de concorrência
+  const concorrenciaForm = useForm<ProdutoConcorrenciaTemp>({
+    defaultValues: resetProdutoConcorrencia(),
+  });
+
   // Arrays de produtos com tipagem correta
   const {
     fields: vendaFields,
@@ -339,6 +376,185 @@ export function VendaUnificadaFormTipado({
     control: naoVendaForm.control,
     name: "produtosConcorrencia",
   });
+  useEffect(() => {
+    if (initialData && isEditing) {
+      // Determinar o tipo de dados baseado na estrutura
+      const hasProductosConcorrencia = 'produtosConcorrencia' in initialData;
+      const hasStatus = 'status' in initialData;
+  
+      // Se tem produtosConcorrencia, é uma cotação cancelada
+      if (hasProductosConcorrencia) {
+        setFormMode("naoVenda");
+        setStatusCotacao("cancelada");
+        
+        // Carregar dados no formulário de não venda
+        const naoVendaData = initialData as NaoVendaFormData;
+        naoVendaForm.reset({
+          cliente: naoVendaData.cliente,
+          produtosConcorrencia: naoVendaData.produtosConcorrencia || [],
+          valorTotal: naoVendaData.valorTotal,
+          condicaoPagamento: naoVendaData.condicaoPagamento,
+          objecaoGeral: naoVendaData.objecaoGeral || "",
+        });
+      } else {
+        // Se tem status e é pendente, é uma cotação
+        if (hasStatus && (initialData as Cotacao).status === "pendente") {
+          setFormMode("venda");
+          setStatusCotacao("pendente");
+        } else {
+          // Caso contrário, é uma venda finalizada
+          setFormMode("venda");
+          setStatusCotacao("finalizada");
+        }
+        
+        // Carregar dados no formulário de venda
+        const vendaData = initialData as VendaFormData;
+        vendaForm.reset({
+          cliente: vendaData.cliente,
+          produtos: vendaData.produtos || [],
+          valorTotal: vendaData.valorTotal,
+          condicaoPagamento: vendaData.condicaoPagamento,
+          vendaRecorrente: vendaData.vendaRecorrente || false,
+        });
+  
+        // Se é venda recorrente, carregar o nome da recorrência
+        if (vendaData.vendaRecorrente && vendaData.nomeRecorrencia) {
+          setNomeRecorrencia(vendaData.nomeRecorrencia);
+        }
+      }
+    }
+  }, [initialData, isEditing, naoVendaForm, vendaForm]);
+  // Efeito para carregar produtos e clientes do banco de dados
+  useEffect(() => {
+    const carregarDados = async () => {
+      try {
+        // Buscar produtos cadastrados no banco
+        const produtosResult = await getProdutos();
+        if (produtosResult.success) {
+          // Aqui você poderia atualizar a lista de produtos
+          // Se a API retornar produtos, você poderia atualizar productOptions
+        }
+
+        // Buscar vendedores para obter clientes recorrentes
+        const vendedoresResult = await getVendedores();
+        if (vendedoresResult.success && vendedoresResult.vendedores) {
+          // Extrair clientes recorrentes dos vendedores
+          const clientes: ClienteRecorrente[] = [];
+
+          // Iterar sobre vendedores e seus clientes
+          vendedoresResult.vendedores.forEach((vendedor: Vendedor) => {
+            if (vendedor.clientes && Array.isArray(vendedor.clientes)) {
+              vendedor.clientes.forEach((cliente: Cliente) => {
+                if (cliente.recorrente) {
+                  clientes.push({
+                    id: cliente.id || "",
+                    nome: cliente.nome,
+                    cnpj: cliente.cnpj,
+                    segmento: cliente.segmento,
+                    razaoSocial: cliente.razaoSocial || "",
+                  });
+                }
+              });
+            }
+          });
+
+          setClientesRecorrentes(clientes);
+        } else {
+          // Usar dados mockados para desenvolvimento
+          setClientesRecorrentes([
+            {
+              id: "1",
+              nome: "Empresa ABC Ltda",
+              cnpj: "12.345.678/0001-90",
+              segmento: "Químicos",
+              razaoSocial: "ABC Indústria Química Ltda",
+            },
+            {
+              id: "2",
+              nome: "Indústria XYZ S.A.",
+              cnpj: "98.765.432/0001-10",
+              segmento: "Têxtil",
+              razaoSocial: "XYZ Indústria Têxtil S.A.",
+            },
+            {
+              id: "3",
+              nome: "Farmacêutica 123",
+              cnpj: "45.678.901/0001-23",
+              segmento: "Farma",
+              razaoSocial: "Laboratórios 123 S.A.",
+            },
+          ]);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar dados:", error);
+        // Usar dados mockados em caso de erro
+        setClientesRecorrentes([
+          {
+            id: "1",
+            nome: "Empresa ABC Ltda",
+            cnpj: "12.345.678/0001-90",
+            segmento: "Químicos",
+            razaoSocial: "ABC Indústria Química Ltda",
+          },
+          {
+            id: "2",
+            nome: "Indústria XYZ S.A.",
+            cnpj: "98.765.432/0001-10",
+            segmento: "Têxtil",
+            razaoSocial: "XYZ Indústria Têxtil S.A.",
+          },
+          {
+            id: "3",
+            nome: "Farmacêutica 123",
+            cnpj: "45.678.901/0001-23",
+            segmento: "Farma",
+            razaoSocial: "Laboratórios 123 S.A.",
+          },
+        ]);
+      }
+    };
+
+    carregarDados();
+  }, []);
+
+
+  // Efeito para verificar e migrar produtos quando o modo muda para naoVenda
+  useEffect(() => {
+    if (formMode === "naoVenda" && precisaMigrarProdutos) {
+      // Obter produtos do formulário de venda
+      const produtos = vendaForm.getValues("produtos");
+
+      // Criar lista de produtos migrados aguardando informações de concorrência
+      const produtosMigradosArray: ProdutoMigrado[] = produtos.map(
+        (produto, index) => {
+          // Garantir que o produto tenha campos obrigatórios
+          const produtoCompleto: ProdutoEstendido = {
+            ...produto,
+            comissao: produto.comissao || 0,
+            icms: produto.icms || 0,
+            ipi: produto.ipi || 0,
+          };
+
+          return {
+            produto: produtoCompleto,
+            concorrenciaAdicionada: false,
+            index: index,
+          };
+        }
+      );
+
+      setProdutosMigrados(produtosMigradosArray);
+
+      // Limpar o formulário de naoVenda
+      naoVendaForm.setValue("produtosConcorrencia", []);
+
+      // Atualizar valor total
+      naoVendaForm.setValue("valorTotal", vendaForm.getValues("valorTotal"));
+
+      // Resetar o flag para não migrar novamente
+      setPrecisaMigrarProdutos(false);
+    }
+  }, [formMode, precisaMigrarProdutos, naoVendaForm, vendaForm]);
 
   // Efeito para sincronizar informações de cliente entre os formulários
   useEffect(() => {
@@ -361,35 +577,375 @@ export function VendaUnificadaFormTipado({
     }
   }, [formMode, naoVendaForm, vendaForm]);
 
+  // Filtrar produtos adicionados baseado na busca
+  const filteredVendaFields = produtoAddedSearchTerm
+    ? vendaFields.filter((field) => {
+        const produto = field as unknown as ProdutoComId;
+        return produto.nome
+          .toLowerCase()
+          .includes(produtoAddedSearchTerm.toLowerCase());
+      })
+    : vendaFields;
+
+  const filteredNaoVendaFields = produtoAddedSearchTerm
+    ? naoVendaFields.filter((field) => {
+        const item = field as unknown as ProdutoConcorrenciaComId;
+        return item.produtoGarden.nome
+          .toLowerCase()
+          .includes(produtoAddedSearchTerm.toLowerCase());
+      })
+    : naoVendaFields;
+
   // Manipulação do produto atual
   const handleChangeProduto = (
-    field: keyof Produto,
+    field: keyof ProdutoEstendido,
     value: string | number
   ) => {
+    if (field === "nome" && value === "Adicionar Produto não catalogado...") {
+      setShowProdutoNaoCatalogadoDialog(true);
+      return;
+    }
     setCurrentProduto((prev) => ({ ...prev, [field]: value }));
   };
 
   // Manipulação do produto da concorrência
   const handleChangeProdutoConcorrencia = (
     field: keyof ProdutoConcorrenciaTemp,
-    value: string | number | null
+    value: string | number | boolean | null
   ) => {
     setProdutoConcorrencia((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Handler para seleção de objeção
-  const handleObjecaoSelect = (objValue: string) => {
-    if (objValue === "Outro") {
-      setProdutoConcorrencia((prev) => ({ ...prev, objecao: "" }));
+  // Manipulação da concorrência de produto migrado
+  const handleChangeConcorrencia = (
+    field: keyof ProdutoConcorrenciaTemp,
+    value: string | number | boolean | null
+  ) => {
+    setCurrentConcorrencia((prev) => ({ ...prev, [field]: value }));
+    // Atualizar também no form para garantir consistência
+    concorrenciaForm.setValue(
+      field as keyof ProdutoConcorrenciaTemp,
+      value as never
+    );
+  };
+
+  // Handler para abrir o diálogo de objeção de produto novo
+  const handleAbrirObjecaoProduto = () => {
+    // Verificar se os campos obrigatórios do produto estão preenchidos
+    if (
+      !currentProduto.medida ||
+      currentProduto.quantidade <= 0 ||
+      currentProduto.valor <= 0
+    ) {
+      // Mostrar toast com campos faltantes
+      const camposFaltantes = [];
+      if (!currentProduto.medida) camposFaltantes.push("Medida");
+      if (currentProduto.quantidade <= 0) camposFaltantes.push("Quantidade");
+      if (currentProduto.valor <= 0) camposFaltantes.push("Valor");
+
+      toast.error(
+        `Preencha os campos obrigatórios primeiro: ${camposFaltantes.join(
+          ", "
+        )}`
+      );
+      return;
+    }
+
+    setShowObjecaoProdutoDialog(true);
+  };
+
+  // Handler para salvar o produto com objeção
+  const handleSalvarObjecaoProduto = () => {
+    if (!nomeProdutoObjecao) {
+      toast.error("Digite o nome do produto para adicionar a objeção");
+      return;
+    }
+
+    // Atualizar o nome do produto atual
+    const produtoComObjecao: ProdutoEstendido = {
+      ...currentProduto,
+      nome: nomeProdutoObjecao,
+      id: `produto_obj_${Date.now()}`,
+    };
+
+    // Adicionar à lista de produtos
+    vendaAppend(produtoComObjecao);
+
+    // Adicionar a objeção para este produto
+    setObjecoesIndividuais((prev) => [
+      ...prev,
+      {
+        produtoId: produtoComObjecao.id as string,
+        objecao: "Produto que não trabalhamos",
+        tipoObjecao: "padrao",
+      },
+    ]);
+
+    // Limpar e fechar o diálogo
+    setNomeProdutoObjecao("");
+    setShowObjecaoProdutoDialog(false);
+
+    // Atualizar valor total sugerido
+    const valorAtual = vendaForm.getValues("valorTotal") || 0;
+    const valorProduto = produtoComObjecao.valor * produtoComObjecao.quantidade;
+    vendaForm.setValue(
+      "valorTotal",
+      Number((valorAtual + valorProduto).toFixed(2))
+    );
+
+    toast.success("Produto adicionado com objeção");
+  };
+
+  // Handler para registrar objeção individual em um produto
+  const handleAddObjecaoIndividual = (produtoId: string) => {
+    setCurrentProdutoComObjecao(produtoId);
+    // Se já registrou objection antes, abre o dialog diretamente
+    if (objecoesIndividuais.some((obj) => obj.produtoId === produtoId)) {
+      setShowObjecaoDialog(true);
+      const objecao = objecoesIndividuais.find(
+        (obj) => obj.produtoId === produtoId
+      );
+      if (objecao) {
+        setCurrentObjecao(objecao.objecao);
+      }
     } else {
-      setProdutoConcorrencia((prev) => ({ ...prev, objecao: objValue }));
-      setObjecaoInputOpen(false);
+      // Adiciona diretamente com o valor padrão "Produto que não trabalhamos"
+      setObjecoesIndividuais((prev) => [
+        ...prev,
+        {
+          produtoId,
+          objecao: "Produto que não trabalhamos",
+          tipoObjecao: "padrao",
+        },
+      ]);
+      toast.success("Objeção adicionada ao produto");
     }
   };
 
-  // Handler para alteração manual da objeção
-  const handleCustomObjecaoChange = (value: string) => {
-    setProdutoConcorrencia((prev) => ({ ...prev, objecao: value }));
+  // Handler para salvar objeção individual
+  const handleSaveObjecaoIndividual = () => {
+    if (!currentProdutoComObjecao || !currentObjecao) {
+      toast.error("Selecione um produto e uma objeção");
+      return;
+    }
+
+    // Verificar se já existe objeção para este produto
+    const existeObjecao = objecoesIndividuais.findIndex(
+      (obj) => obj.produtoId === currentProdutoComObjecao
+    );
+
+    if (existeObjecao >= 0) {
+      // Atualizar objeção existente
+      const novasObjecoes = [...objecoesIndividuais];
+      novasObjecoes[existeObjecao] = {
+        ...novasObjecoes[existeObjecao],
+        objecao: currentObjecao,
+        tipoObjecao: currentObjecao === "Outro" ? "custom" : "padrao",
+      };
+      setObjecoesIndividuais(novasObjecoes);
+    } else {
+      // Adicionar nova objeção
+      setObjecoesIndividuais([
+        ...objecoesIndividuais,
+        {
+          produtoId: currentProdutoComObjecao,
+          objecao: currentObjecao,
+          tipoObjecao: currentObjecao === "Outro" ? "custom" : "padrao",
+        },
+      ]);
+    }
+
+    setShowObjecaoDialog(false);
+    setCurrentProdutoComObjecao("");
+    setCurrentObjecao(null);
+
+    toast.success("Objeção adicionada ao produto");
+  };
+
+  // Handler para abrir o diálogo de concorrência para produto migrado
+  const handleAbrirConcorrenciaDialog = (indice: number) => {
+    const produtoMigrado = produtosMigrados[indice];
+    if (produtoMigrado) {
+      // Resetar o estado de concorrência atual
+      const concorrenciaDefault = resetProdutoConcorrencia();
+      setCurrentConcorrencia(concorrenciaDefault);
+      concorrenciaForm.reset(concorrenciaDefault);
+
+      setCurrentProdutoMigradoIndice(indice);
+      setProdutoAtual(produtoMigrado.produto);
+      setShowConcorrenciaDialog(true);
+    }
+  };
+
+  // Handler para salvar a concorrência de produto migrado
+  const handleSalvarConcorrencia = () => {
+    if (currentProdutoMigradoIndice < 0 || !produtoAtual) {
+      toast.error("Produto não encontrado");
+      return;
+    }
+  
+    // Validar dados de concorrência
+    if (!currentConcorrencia.infoNaoDisponivel) {
+      if (
+        !currentConcorrencia.nomeConcorrencia ||
+        currentConcorrencia.valorConcorrencia <= 0
+      ) {
+        toast.error(
+          "Preencha todos os dados da concorrência ou marque 'Informações não disponíveis'"
+        );
+        return;
+      }
+    }
+  
+    // Garantir que o produto tem um ID
+    const produtoComId: ProdutoEstendido = {
+      ...produtoAtual,
+      id:
+        produtoAtual.id ||
+        `produto_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      comissao: produtoAtual.comissao || 0,
+      icms: produtoAtual.icms || 0,
+      ipi: produtoAtual.ipi || 0,
+    };
+  
+    // Garantir todos os campos necessários no objeto de concorrência
+    const novoProdutoConcorrencia = {
+      id: `conc_${Date.now()}`, // Adicionar ID único para o item de concorrência
+      produtoGarden: produtoComId,
+      valorConcorrencia: currentConcorrencia.infoNaoDisponivel
+        ? 0
+        : currentConcorrencia.valorConcorrencia,
+      nomeConcorrencia: currentConcorrencia.infoNaoDisponivel
+        ? "Não disponível"
+        : currentConcorrencia.nomeConcorrencia,
+      icms: currentConcorrencia.infoNaoDisponivel
+        ? null
+        : currentConcorrencia.icms,
+      ipi: currentConcorrencia.infoNaoDisponivel
+        ? null
+        : currentConcorrencia.ipi,
+      objecao: currentConcorrencia.infoNaoDisponivel
+        ? null
+        : currentConcorrencia.objecao,
+      infoNaoDisponivel: currentConcorrencia.infoNaoDisponivel || false,
+    };
+  
+    // Adicionar ao formulário de não venda
+    naoVendaAppend(novoProdutoConcorrencia);
+  
+    // Atualizar o produto migrado para indicar que a concorrência foi adicionada
+    const novosProdutosMigrados = [...produtosMigrados];
+    novosProdutosMigrados[currentProdutoMigradoIndice].concorrenciaAdicionada = true;
+    setProdutosMigrados(novosProdutosMigrados);
+  
+    // Atualizar valor total do formulário
+    const valorAtual = naoVendaForm.getValues("valorTotal") || 0;
+    const valorProduto = produtoAtual.valor * produtoAtual.quantidade;
+    naoVendaForm.setValue(
+      "valorTotal",
+      Number((valorAtual + valorProduto).toFixed(2))
+    );
+  
+    // Fechar o diálogo e limpar o estado
+    setShowConcorrenciaDialog(false);
+    setCurrentProdutoMigradoIndice(-1);
+    setProdutoAtual(null);
+    setCurrentConcorrencia(resetProdutoConcorrencia());
+    concorrenciaForm.reset(resetProdutoConcorrencia());
+  
+    toast.success("Informações de concorrência adicionadas com sucesso");
+  };
+
+  const medidasOptions = ["Litro", "Kg"];
+
+  const calcularDiferencaValor = (
+    produtoGarden: Produto,
+    valorConcorrencia: number,
+    infoNaoDisponivel: boolean
+  ) => {
+    // Se informações da concorrência não estão disponíveis, retorna objeto default
+    if (infoNaoDisponivel) {
+      return {
+        valor: "N/A",
+        percentual: "N/A",
+        maisCaro: false,
+      };
+    }
+  
+    // Verificar se temos valores válidos
+    if (!produtoGarden || !produtoGarden.valor || !produtoGarden.quantidade || valorConcorrencia <= 0) {
+      return {
+        valor: "N/A",
+        percentual: "N/A",
+        maisCaro: false,
+      };
+    }
+  
+    // Calcula o valor total do produto Garden
+    const valorTotalGarden = produtoGarden.valor * produtoGarden.quantidade;
+  
+    // Calcula o valor total da concorrência (assumindo mesma quantidade)
+    const valorTotalConcorrencia = valorConcorrencia * produtoGarden.quantidade;
+  
+    // Calcula a diferença
+    const diferenca = valorTotalGarden - valorTotalConcorrencia;
+  
+    // Evita divisão por zero
+    if (valorTotalConcorrencia === 0) {
+      return {
+        valor: formatarValorBRL(Math.abs(diferenca)),
+        percentual: "100%",
+        maisCaro: diferenca > 0,
+      };
+    }
+  
+    // Calcula o percentual de diferença
+    const percentual =
+      ((Math.abs(diferenca) / valorTotalConcorrencia) * 100).toFixed(2) + "%";
+  
+    // Formata a diferença de valor
+    const valorFormatado = formatarValorBRL(Math.abs(diferenca));
+  
+    // Determina se Garden é mais caro
+    const maisCaro = diferenca > 0;
+  
+    return {
+      valor: valorFormatado,
+      percentual: percentual,
+      maisCaro: maisCaro,
+    };
+  };
+
+  // Adicionar produto não catalogado
+  const handleAddProdutoNaoCatalogado = () => {
+    if (!produtoNaoCatalogado.nome || !produtoNaoCatalogado.medida) {
+      toast.error("Preencha o nome e a medida do produto");
+      return;
+    }
+
+    // Adicionar produto não catalogado à lista atual
+    setCurrentProduto({
+      nome: produtoNaoCatalogado.nome,
+      medida: produtoNaoCatalogado.medida,
+      quantidade: 0,
+      valor: 0,
+      comissao: 0,
+      icms: 0,
+      ipi: 0,
+    });
+
+    // Fechar diálogo
+    setShowProdutoNaoCatalogadoDialog(false);
+
+    // Resetar estado
+    setProdutoNaoCatalogado({
+      nome: "",
+      medida: "Kg",
+      quantidade: 0,
+      valor: 0,
+    });
+
+    toast.success("Produto adicionado à seleção");
   };
 
   // Adicionar produto à lista de vendas
@@ -406,39 +962,48 @@ export function VendaUnificadaFormTipado({
     }
 
     // Verificar duplicidade exata
-    const isDuplicate = vendaFields.some(
-      (produto) =>
-        produto.nome === currentProduto.nome &&
-        produto.medida === currentProduto.medida &&
-        produto.quantidade === currentProduto.quantidade &&
-        produto.valor === currentProduto.valor &&
-        produto.recorrencia === currentProduto.recorrencia
-    );
+    const isDuplicate = vendaFields.some((produto) => {
+      const prod = produto as unknown as ProdutoComId;
+      return (
+        prod.nome === currentProduto.nome &&
+        prod.medida === currentProduto.medida &&
+        prod.quantidade === currentProduto.quantidade &&
+        prod.valor === currentProduto.valor
+      );
+    });
 
     if (isDuplicate) {
       toast.error("Este produto já foi adicionado com as mesmas informações");
       return;
     }
 
-    // Adicionar à lista
-    vendaAppend(currentProduto);
+    // Gerar ID temporário para o produto
+    const produtoId = `produto_${Date.now()}`;
+
+    // Adicionar à lista com ID e garantindo os campos obrigatórios
+    const novoProduto: ProdutoEstendido = {
+      ...currentProduto,
+      id: produtoId,
+      comissao: currentProduto.comissao || 0,
+      icms: currentProduto.icms || 0,
+      ipi: currentProduto.ipi || 0,
+    };
+
+    vendaAppend(novoProduto);
 
     // Resetar campos
-    setCurrentProduto({
-      nome: "",
-      medida: "",
-      quantidade: 0,
-      valor: 0,
-      recorrencia: "",
-    });
+    setCurrentProduto(resetProduto() as ProdutoEstendido);
 
     // Atualizar valor total sugerido
     const valorAtual = vendaForm.getValues("valorTotal") || 0;
     const valorProduto = currentProduto.valor * currentProduto.quantidade;
-    vendaForm.setValue("valorTotal", valorAtual + valorProduto);
+    vendaForm.setValue(
+      "valorTotal",
+      Number((valorAtual + valorProduto).toFixed(2))
+    );
   };
 
-  // Adicionar produto à lista de Venda-Perdidas
+  // Adicionar produto à lista de Cancelado
   const handleAddProdutoNaoVenda = () => {
     // Validação básica para produto Garden
     if (
@@ -450,21 +1015,21 @@ export function VendaUnificadaFormTipado({
       toast.error("Preencha todos os campos obrigatórios do produto Garden");
       return;
     }
-  
-    // CORREÇÃO: Pegar o valor da concorrência do formulário principal
-    const valorConcorrencia = naoVendaForm.getValues("valorTotal");
-  
-    // Validação básica para produto concorrência
-    if (
-      !produtoConcorrencia.nomeConcorrencia ||
-      valorConcorrencia <= 0
-    ) {
-      toast.error(
-        "Preencha todos os campos obrigatórios do produto da concorrência"
-      );
-      return;
+
+    // Se informações não disponíveis estiver marcado, não precisa validar concorrência
+    if (!produtoConcorrencia.infoNaoDisponivel) {
+      // Validação básica para produto concorrência
+      if (
+        !produtoConcorrencia.nomeConcorrencia ||
+        produtoConcorrencia.valorConcorrencia <= 0
+      ) {
+        toast.error(
+          "Preencha todos os campos obrigatórios do produto da concorrência"
+        );
+        return;
+      }
     }
-  
+
     // Verificar duplicidade exata
     const isDuplicate = naoVendaFields.some((item) => {
       const pc = item as unknown as ProdutoConcorrenciaSchema;
@@ -472,58 +1037,64 @@ export function VendaUnificadaFormTipado({
         pc.produtoGarden?.nome === currentProduto.nome &&
         pc.produtoGarden?.medida === currentProduto.medida &&
         pc.produtoGarden?.quantidade === currentProduto.quantidade &&
-        pc.valorConcorrencia === valorConcorrencia &&
+        pc.valorConcorrencia === produtoConcorrencia.valorConcorrencia &&
         pc.nomeConcorrencia === produtoConcorrencia.nomeConcorrencia
       );
     });
-  
+
     if (isDuplicate) {
       toast.error(
         "Esta comparação de produtos já foi adicionada com as mesmas informações"
       );
       return;
     }
-  
+
+    // Gerar ID temporário para o produto
+    const produtoId = `produto_concorrencia_${Date.now()}`;
+
     // Criar objeto de produto concorrência com tipagem correta
     const novoProdutoConcorrencia: ProdutoConcorrenciaSchema = {
-      produtoGarden: currentProduto,
-      valorConcorrencia: valorConcorrencia, // CORREÇÃO: Usar o valor do formulário
-      nomeConcorrencia: produtoConcorrencia.nomeConcorrencia,
-      icms:
-        produtoConcorrencia.icms !== null
-          ? (produtoConcorrencia.icms as number)
-          : undefined,
-      objecao:
-        produtoConcorrencia.objecao !== null
-          ? (produtoConcorrencia.objecao as string)
-          : undefined,
+      produtoGarden: {
+        ...currentProduto,
+        id: produtoId,
+        icms: currentProduto.icms || 0,
+        ipi: currentProduto.ipi || 0,
+        comissao: currentProduto.comissao || 0,
+      },
+      valorConcorrencia: produtoConcorrencia.infoNaoDisponivel
+        ? 0
+        : produtoConcorrencia.valorConcorrencia,
+      nomeConcorrencia: produtoConcorrencia.infoNaoDisponivel
+        ? "Não disponível"
+        : produtoConcorrencia.nomeConcorrencia,
+      icms: produtoConcorrencia.infoNaoDisponivel
+        ? null
+        : produtoConcorrencia.icms,
+      ipi: produtoConcorrencia.infoNaoDisponivel
+        ? null
+        : produtoConcorrencia.ipi,
+      objecao: produtoConcorrencia.infoNaoDisponivel
+        ? null
+        : produtoConcorrencia.objecao,
+      infoNaoDisponivel: produtoConcorrencia.infoNaoDisponivel,
     };
-  
+
     // Adicionar à lista com tipagem segura
     naoVendaAppend(
       novoProdutoConcorrencia as unknown as NaoVendaSchemaType["produtosConcorrencia"][0]
     );
-  
+
     // Resetar campos
-    setCurrentProduto({
-      nome: "",
-      medida: "",
-      quantidade: 0,
-      valor: 0,
-      recorrencia: "",
-    });
-  
-    setProdutoConcorrencia({
-      valorConcorrencia: 0,
-      nomeConcorrencia: "",
-      icms: null,
-      objecao: null,
-    });
+    setCurrentProduto(resetProduto() as ProdutoEstendido);
+    setProdutoConcorrencia(resetProdutoConcorrencia());
 
     // Atualizar valor total sugerido
     const valorAtual = naoVendaForm.getValues("valorTotal") || 0;
     const valorProduto = currentProduto.valor * currentProduto.quantidade;
-    naoVendaForm.setValue("valorTotal", valorAtual + valorProduto);
+    naoVendaForm.setValue(
+      "valorTotal",
+      Number((valorAtual + valorProduto).toFixed(2))
+    );
   };
 
   // Remover produto da lista de vendas
@@ -532,13 +1103,16 @@ export function VendaUnificadaFormTipado({
     const produto = vendaForm.getValues(`produtos.${index}`);
     const valorAtual = vendaForm.getValues("valorTotal") || 0;
     const valorProduto = produto.valor * produto.quantidade;
-    vendaForm.setValue("valorTotal", valorAtual - valorProduto);
+    vendaForm.setValue(
+      "valorTotal",
+      Number((valorAtual - valorProduto).toFixed(2))
+    );
 
     // Remover da lista
     vendaRemove(index);
   };
 
-  // Remover produto da lista de Venda-Perdidas
+  // Remover produto da lista de Cancelado
   const handleRemoveProdutoNaoVenda = (index: number) => {
     // Obter o produto
     const produtos = naoVendaForm.getValues("produtosConcorrencia");
@@ -551,7 +1125,24 @@ export function VendaUnificadaFormTipado({
     const valorAtual = naoVendaForm.getValues("valorTotal") || 0;
     const valorProduto =
       produto.produtoGarden.valor * produto.produtoGarden.quantidade;
-    naoVendaForm.setValue("valorTotal", valorAtual - valorProduto);
+    naoVendaForm.setValue(
+      "valorTotal",
+      Number((valorAtual - valorProduto).toFixed(2))
+    );
+
+    // Se o produto era migrado, atualizar para permitir readição
+    if (produto.produtoGarden.id) {
+      const produtoMigradoIndex = produtosMigrados.findIndex(
+        (p) => p.produto.id === produto.produtoGarden.id
+      );
+
+      if (produtoMigradoIndex >= 0) {
+        const novosProdutosMigrados = [...produtosMigrados];
+        novosProdutosMigrados[produtoMigradoIndex].concorrenciaAdicionada =
+          false;
+        setProdutosMigrados(novosProdutosMigrados);
+      }
+    }
 
     // Remover da lista
     naoVendaRemove(index);
@@ -560,45 +1151,63 @@ export function VendaUnificadaFormTipado({
   // Calcular valor total sugerido para vendas
   const calcularValorSugeridoVenda = (): number => {
     const produtos = vendaForm.getValues("produtos");
-    return produtos.reduce((acumulador: number, produto: Produto) => {
-      return acumulador + produto.valor * produto.quantidade;
-    }, 0);
+    return Number(
+      produtos
+        .reduce((acumulador: number, produto: Produto) => {
+          return acumulador + produto.valor * produto.quantidade;
+        }, 0)
+        .toFixed(2)
+    );
   };
 
-  // Calcular valor total sugerido para Venda-Perdidas
+  // Calcular valor total sugerido para Cancelado
   const calcularValorSugeridoNaoVenda = (): number => {
     const produtos = naoVendaForm.getValues("produtosConcorrencia");
-    return produtos.reduce((acumulador: number, item) => {
-      const produto = item as unknown as ProdutoConcorrenciaSchema;
-      return (
-        acumulador +
-        produto.produtoGarden.valor * produto.produtoGarden.quantidade
-      );
-    }, 0);
-  };
-
-  // Calcular diferença de valor (para Venda-Perdidas)
-  const calcularDiferencaValor = (
-    produtoGarden: Produto,
-    valorConcorrencia: number
-  ): { valor: string; percentual: string; maisCaro: boolean } => {
-    const valorTotalGarden = produtoGarden.valor * produtoGarden.quantidade;
-    const valorDiferenca = valorTotalGarden - valorConcorrencia;
-
-    return {
-      valor: formatarValorBRL(Math.abs(valorDiferenca)),
-      percentual:
-        ((Math.abs(valorDiferenca) / valorTotalGarden) * 100).toFixed(2) + "%",
-      maisCaro: valorDiferenca > 0,
-    };
+    return Number(
+      produtos
+        .reduce((acumulador: number, item) => {
+          const produto = item as unknown as ProdutoConcorrenciaSchema;
+          return (
+            acumulador +
+            produto.produtoGarden.valor * produto.produtoGarden.quantidade
+          );
+        }, 0)
+        .toFixed(2)
+    );
   };
 
   // Carregar dados do cliente recorrente
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleClienteRecorrenteChange = (idCliente: string): void => {
-    // Implementar lógica para buscar cliente recorrente
-    // e preencher os campos do formulário
-    toast.info("Funcionalidade em desenvolvimento");
+    // Buscar o cliente selecionado da lista de clientes recorrentes
+    const clienteSelecionado = clientesRecorrentes.find(
+      (cliente) => cliente.id === idCliente
+    );
+
+    if (clienteSelecionado) {
+      // Atualizar o formulário com os dados do cliente recorrente
+      const dadosCliente = {
+        nome: clienteSelecionado.nome,
+        segmento: clienteSelecionado.segmento,
+        cnpj: clienteSelecionado.cnpj,
+        razaoSocial: clienteSelecionado.razaoSocial || "",
+      };
+
+      if (formMode === "venda") {
+        vendaForm.setValue("cliente", dadosCliente);
+        // Definir o checkbox de venda recorrente como verdadeiro
+        vendaForm.setValue("vendaRecorrente", true);
+        // Pré-configurar o nome da recorrência
+        setNomeRecorrencia(clienteSelecionado.nome);
+      } else {
+        naoVendaForm.setValue("cliente", dadosCliente);
+      }
+
+      toast.success(
+        `Cliente ${clienteSelecionado.nome} carregado com sucesso!`
+      );
+    } else {
+      toast.error("Cliente não encontrado");
+    }
   };
 
   // Manipular envio do formulário de venda
@@ -608,140 +1217,277 @@ export function VendaUnificadaFormTipado({
       toast.error("Adicione pelo menos um produto");
       return;
     }
-
+  
     // Verificar recorrência
-    if (data.vendaRecorrente && !nomeRecorrencia) {
+    if (
+      data.vendaRecorrente &&
+      !nomeRecorrencia &&
+      !(
+        isEditing &&
+        initialData &&
+        "nomeRecorrencia" in initialData &&
+        initialData.nomeRecorrencia
+      )
+    ) {
       setShowRecorrenciaDialog(true);
       return;
     }
-
+  
     setLoading(true);
-
+    setFormErros(null);
+  
     try {
-      // Usar a action diretamente para criar ou atualizar a venda
+      // Preparar dados do formulário
       const formData = {
         ...data,
+        valorTotal: Number(data.valorTotal.toFixed(2)),
         nomeRecorrencia: data.vendaRecorrente ? nomeRecorrencia : undefined,
       };
-
-      let result;
-      if (isEditing && initialData?.id) {
-        result = await atualizarVenda(
-          initialData.id,
-          formData as VendaFormData
-        );
-      } else {
-        result = await criarVenda(formData as VendaFormData);
+  
+      let result: { error?: string; success?: boolean; id?: string } = {};
+  
+      // Decidir qual ação usar baseado no status e se está editando
+      if (statusCotacao === "pendente") {
+        // Criar/atualizar como cotação pendente
+        const cotacaoData: CotacaoFormData = {
+          cliente: formData.cliente,
+          produtos: formData.produtos,
+          valorTotal: formData.valorTotal,
+          condicaoPagamento: formData.condicaoPagamento,
+          vendaRecorrente: formData.vendaRecorrente,
+          nomeRecorrencia: formData.nomeRecorrencia,
+          status: statusCotacao
+        };
+  
+        if (isEditing && initialData && "id" in initialData) {
+          result = await atualizarCotacao(initialData.id as string, cotacaoData);
+        } else {
+          result = await criarCotacao(cotacaoData);
+        }
+      } 
+      else if (statusCotacao === "finalizada") {
+        // Finalizar cotação ou atualizar venda
+        if (isEditing && initialData && "id" in initialData) {
+          // Se está editando uma cotação pendente, finalizar
+          if ('status' in initialData && initialData.status === 'pendente') {
+            result = await finalizarCotacao(initialData.id as string, formData as VendaFormData);
+          } else {
+            // Se está editando uma venda, atualizar
+            result = await atualizarVenda(initialData.id as string, formData as VendaFormData);
+          }
+        } else {
+          // Criar nova venda
+          result = await criarVenda(formData as VendaFormData);
+        }
       }
-
+  
       if (result.error) {
         toast.error(result.error);
+        setFormErros(result.error);
       } else {
-        toast.success(
-          isEditing
-            ? "Venda atualizada com sucesso!"
-            : "Venda cadastrada com sucesso!"
-        );
-        vendaForm.reset(defaultVendaValues);
-        setCurrentProduto({
-          nome: "",
-          medida: "",
-          quantidade: 0,
-          valor: 0,
-          recorrencia: "",
-        });
+        const mensagem = isEditing 
+          ? statusCotacao === "finalizada" 
+            ? "Cotação finalizada atualizada com sucesso!" 
+            : "Cotação atualizada com sucesso!"
+          : "Cotação registrada com sucesso!";
+        
+        toast.success(mensagem);
+        
+        // Resetar formulários apenas se não estiver editando
+        if (!isEditing) {
+          vendaForm.reset(defaultVendaValues);
+          setCurrentProduto(resetProduto() as ProdutoEstendido);
+          setObjecoesIndividuais([]);
+        }
+  
+        // Navegar de volta à página de vendas após sucesso
+        router.push("/vendas");
       }
     } catch (error) {
-      console.error("Erro ao processar venda:", error);
-      toast.error("Ocorreu um erro ao processar a venda");
+      console.error("Erro ao processar cotação:", error);
+      toast.error("Ocorreu um erro ao processar a cotação");
+      setFormErros("Ocorreu um erro ao processar a cotação. Verifique o console para mais detalhes.");
     } finally {
       setLoading(false);
     }
   };
-
-  // Manipular envio do formulário de Venda-Perdida
+  
+  // Manipular envio do formulário de Cotação Cancelada
   const onSubmitNaoVenda = async (data: NaoVendaSchemaType) => {
     // Verificar se há ao menos um produto
     if (data.produtosConcorrencia.length === 0) {
       toast.error("Adicione pelo menos um produto");
       return;
     }
-
+  
     setLoading(true);
-
+    setFormErros(null);
+  
     try {
-      // Usar a action diretamente para criar ou atualizar a Venda-Perdida
-      let result;
-      if (isEditing && initialData?.id) {
-        result = await atualizarNaoVenda(
-          initialData.id,
-          data as unknown as NaoVendaFormData
-        );
-      } else {
-        result = await criarNaoVenda(data as unknown as NaoVendaFormData);
+      // Preparar os dados para envio 
+      const formData: NaoVendaFormData = {
+        cliente: data.cliente,
+        produtosConcorrencia: data.produtosConcorrencia.map((item) => ({
+          produtoGarden: {
+            nome: item.produtoGarden.nome,
+            medida: item.produtoGarden.medida,
+            quantidade: item.produtoGarden.quantidade,
+            valor: item.produtoGarden.valor,
+            comissao: item.produtoGarden.comissao || 0,
+            icms: item.produtoGarden.icms !== null ? item.produtoGarden.icms : undefined,
+            ipi: item.produtoGarden.ipi !== null ? item.produtoGarden.ipi : undefined,
+          },
+          valorConcorrencia: item.valorConcorrencia,
+          nomeConcorrencia: item.nomeConcorrencia,
+          icms: item.icms !== null ? item.icms : undefined,
+          ipi: item.ipi !== null ? item.ipi : undefined,
+          objecao: item.objecao !== null ? item.objecao : undefined,
+          infoNaoDisponivel: item.infoNaoDisponivel || false,
+        })),
+        valorTotal: Number(data.valorTotal.toFixed(2)),
+        condicaoPagamento: data.condicaoPagamento,
+        objecaoGeral: data.objecaoGeral || "",
+      };
+  
+      let result: { error?: string; success?: boolean; id?: string } = {};
+      
+      if (statusCotacao === "pendente") {
+        // Se for uma cotação pendente, criar como cotação
+        const cotacaoData: CotacaoFormData = {
+          cliente: formData.cliente,
+          produtos: formData.produtosConcorrencia.map(item => ({
+            nome: item.produtoGarden.nome,
+            medida: item.produtoGarden.medida,
+            quantidade: item.produtoGarden.quantidade,
+            valor: item.produtoGarden.valor,
+            comissao: item.produtoGarden.comissao,
+            icms: item.produtoGarden.icms,
+            ipi: item.produtoGarden.ipi,
+          })),
+          valorTotal: formData.valorTotal,
+          condicaoPagamento: formData.condicaoPagamento,
+          vendaRecorrente: false,
+          status: statusCotacao
+        };
+        
+        if (isEditing && initialData && "id" in initialData) {
+          result = await atualizarCotacao(initialData.id as string, cotacaoData);
+        } else {
+          result = await criarCotacao(cotacaoData);
+        }
+      } 
+      else if (statusCotacao === "cancelada") {
+        // Cancelar cotação ou atualizar não venda
+        if (isEditing && initialData && "id" in initialData) {
+          // Se está editando uma cotação pendente, cancelar
+          if ('status' in initialData && initialData.status === 'pendente') {
+            result = await cancelarCotacao(initialData.id as string, formData);
+          } else {
+            // Se está editando uma não venda, atualizar
+            result = await atualizarNaoVenda(initialData.id as string, formData);
+          }
+        } else {
+          // Criar nova não venda
+          result = await criarNaoVenda(formData);
+        }
       }
-
+  
       if (result.error) {
         toast.error(result.error);
+        setFormErros(result.error);
       } else {
-        toast.success(
-          isEditing
-            ? "Venda-Perdida atualizada com sucesso!"
-            : "Venda-Perdida cadastrada com sucesso!"
-        );
-        naoVendaForm.reset(defaultNaoVendaValues);
-        setCurrentProduto({
-          nome: "",
-          medida: "",
-          quantidade: 0,
-          valor: 0,
-          recorrencia: "",
-        });
-        setProdutoConcorrencia({
-          valorConcorrencia: 0,
-          nomeConcorrencia: "",
-          icms: null,
-          objecao: null,
-        });
+        const mensagem = isEditing
+          ? statusCotacao === "cancelada"
+            ? "Cotação cancelada atualizada com sucesso!"
+            : "Cotação atualizada com sucesso!"
+          : "Cotação registrada com sucesso!";
+        
+        toast.success(mensagem);
+        
+        // Resetar formulários apenas se não estiver editando
+        if (!isEditing) {
+          naoVendaForm.reset(defaultNaoVendaValues);
+          setCurrentProduto(resetProduto() as ProdutoEstendido);
+          setProdutoConcorrencia(resetProdutoConcorrencia());
+          setProdutosMigrados([]);
+        }
+  
+        // Navegar de volta à página de vendas após sucesso
+        router.push("/vendas");
       }
     } catch (error) {
-      console.error("Erro ao processar Venda-Perdida:", error);
-      toast.error("Ocorreu um erro ao processar a Venda-Perdida");
+      console.error("Erro ao processar Cotação Cancelada:", error);
+      toast.error("Ocorreu um erro ao processar a Cotação Cancelada");
+      setFormErros("Ocorreu um erro ao processar a Cotação Cancelada. Verifique o console para mais detalhes.");
     } finally {
       setLoading(false);
     }
   };
-
-  // Alternar entre os modos de formulário
   const toggleFormMode = (): void => {
     // Transferir dados do cliente entre formulários
     if (formMode === "venda") {
       const clienteData = vendaForm.getValues("cliente");
       const condicaoPagamento = vendaForm.getValues("condicaoPagamento");
-
+  
       naoVendaForm.setValue("cliente", clienteData);
       naoVendaForm.setValue("condicaoPagamento", condicaoPagamento);
-
+  
+      // Verificar se temos produtos na venda para migrar para naoVenda
+      const produtosVenda = vendaForm.getValues("produtos");
+      if (produtosVenda && produtosVenda.length > 0) {
+        setPrecisaMigrarProdutos(true);
+      }
+  
       setFormMode("naoVenda");
+      setStatusCotacao("cancelada");
     } else {
       const clienteData = naoVendaForm.getValues("cliente");
       const condicaoPagamento = naoVendaForm.getValues("condicaoPagamento");
-
+  
       vendaForm.setValue("cliente", clienteData);
       vendaForm.setValue("condicaoPagamento", condicaoPagamento);
-
+  
       setFormMode("venda");
+      setStatusCotacao("finalizada");
     }
+  };
+  // Definir o status da cotação
+  const definirStatusCotacao = (status: StatusCotacao): void => {
+    setStatusCotacao(status);
+  
+    if (status === "cancelada" && formMode !== "naoVenda") {
+      // Se mudar para cancelada, alterar o modo do formulário também
+      toggleFormMode();
+    } else if (status === "finalizada" && formMode !== "venda") {
+      // Se mudar para finalizada, alterar o modo do formulário também
+      toggleFormMode();
+    }
+    
+    toast.info(`Status da cotação alterado para ${status}. Salve para confirmar a alteração.`);
+  };
+
+  // Voltar para página de vendas
+  const handleCancelar = () => {
+    router.push("/vendas");
   };
 
   // Verificar se estamos no modo de edição e definir o título correto
-  const formTitle = isEditing
-    ? formMode === "venda"
-      ? "Editar Venda"
-      : "Editar Venda-Perdida"
-    : formMode === "venda"
-    ? "Registrar Nova Venda"
-    : "Registrar Nova Venda-Perdida";
+  let formTitle = "Nova Cotação";
+  if (isEditing) {
+    if (statusCotacao === "pendente") {
+      formTitle = "Editar Cotação";
+    } else if (statusCotacao === "finalizada") {
+      formTitle = "Editar Cotação Finalizada";
+    } else if (statusCotacao === "cancelada") {
+      formTitle = "Editar Cotação Cancelada";
+    }
+  } else {
+    if (statusCotacao === "finalizada") {
+      formTitle = "Registrar Cotação Finalizada";
+    } else if (statusCotacao === "cancelada") {
+      formTitle = "Registrar Cotação Cancelada";
+    }
+  }
 
   return (
     <>
@@ -759,7 +1505,7 @@ export function VendaUnificadaFormTipado({
         <div className="flex items-center gap-2">
           <AnimatePresence mode="wait">
             <motion.div
-              key={formMode}
+              key={statusCotacao}
               initial={{ opacity: 0, x: formMode === "venda" ? -20 : 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: formMode === "venda" ? 20 : -20 }}
@@ -767,41 +1513,88 @@ export function VendaUnificadaFormTipado({
             >
               <Badge
                 className={`px-3 py-1 ${
-                  formMode === "venda"
+                  statusCotacao === "finalizada"
                     ? "bg-green-100 text-green-800"
-                    : "bg-red-100 text-red-800"
+                    : statusCotacao === "cancelada"
+                    ? "bg-red-100 text-red-800"
+                    : "bg-blue-100 text-blue-800"
                 }`}
               >
-                {formMode === "venda" ? "Modo Venda" : "Modo Venda-Perdida"}
+                {statusCotacao === "finalizada"
+                  ? "Modo Cotação Finalizada"
+                  : statusCotacao === "cancelada"
+                  ? "Modo Cotação Cancelada"
+                  : "Modo Cotação"}
               </Badge>
             </motion.div>
           </AnimatePresence>
 
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Button
-              variant="outline"
-              onClick={toggleFormMode}
-              className={
-                formMode === "venda"
-                  ? "text-red-600 border-red-300 hover:bg-red-50"
-                  : "text-green-600 border-green-300 hover:bg-green-50"
-              }
-            >
-              {formMode === "venda" ? (
-                <>
-                  <ThumbsDown className="mr-2 h-4 w-4" />
-                  Alternar para Venda-Perdida
-                </>
-              ) : (
-                <>
+          {isEditing && statusCotacao === "pendente" && (
+            <div className="flex flex-col gap-2">
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Button
+                  variant="outline"
+                  onClick={() => definirStatusCotacao("finalizada")}
+                  className="text-green-600 border-green-300 hover:bg-green-50"
+                >
                   <ThumbsUp className="mr-2 h-4 w-4" />
-                  Alternar para Venda
-                </>
-              )}
-            </Button>
-          </motion.div>
+                  Definir como Finalizada
+                </Button>
+              </motion.div>
+
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Button
+                  variant="outline"
+                  onClick={() => definirStatusCotacao("cancelada")}
+                  className="text-red-600 border-red-300 hover:bg-red-50"
+                >
+                  <ThumbsDown className="mr-2 h-4 w-4" />
+                  Definir como Cancelada
+                </Button>
+              </motion.div>
+            </div>
+          )}
+
+          {isEditing && statusCotacao !== "pendente" && (
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button
+                variant="outline"
+                onClick={toggleFormMode}
+                className={
+                  formMode === "venda"
+                    ? "text-red-600 border-red-300 hover:bg-red-50"
+                    : "text-green-600 border-green-300 hover:bg-green-50"
+                }
+              >
+                {formMode === "venda" ? (
+                  <>
+                    <ThumbsDown className="mr-2 h-4 w-4" />
+                    Alternar para Cotação Cancelada
+                  </>
+                ) : (
+                  <>
+                    <ThumbsUp className="mr-2 h-4 w-4" />
+                    Alternar para Cotação Finalizada
+                  </>
+                )}
+              </Button>
+            </motion.div>
+          )}
         </div>
       </div>
+
+      {formErros && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-md mb-4">
+          <p className="font-medium">Erro ao salvar formulário:</p>
+          <p>{formErros}</p>
+        </div>
+      )}
 
       <AnimatePresence mode="wait">
         {formMode === "venda" ? (
@@ -819,136 +1612,15 @@ export function VendaUnificadaFormTipado({
                 )}
                 className="space-y-8"
               >
-                {/* Cliente Recorrente (apenas para novas vendas) */}
-                {!isEditing && (
-                  <motion.div
-                    className="bg-gray-50 p-4 rounded-lg"
-                    initial={{ opacity: 0, y: 7 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1, duration: 0.2 }}
-                  >
-                    <h3 className="text-lg font-medium mb-4">
-                      Cliente Recorrente
-                    </h3>
-                    <Select onValueChange={handleClienteRecorrenteChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione um cliente recorrente" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {clientesRecorrentes.map((cliente) => (
-                          <SelectItem key={cliente.id} value={cliente.id}>
-                            {cliente.nome}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-sm text-gray-500 mt-2">
-                      Selecione um cliente recorrente para preencher
-                      automaticamente os dados
-                    </p>
-                  </motion.div>
-                )}
-
-                {/* Informações do Cliente */}
-                <motion.div
-                  initial={{ opacity: 0, y: 7 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2, duration: 0.2 }}
-                >
-                  <h3 className="text-lg font-medium mb-4">
-                    Informações do Cliente
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Campo para nome do cliente */}
-                    <FormField
-                      control={vendaForm.control}
-                      name="cliente.nome"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nome do Cliente*</FormLabel>
-                          <FormControl>
-                            <div className="flex items-center space-x-2">
-                              <User className="w-4 h-4 text-gray-400" />
-                              <Input {...field} placeholder="Nome do cliente" />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {/* Campo para segmento */}
-                    <FormField
-                      control={vendaForm.control}
-                      name="cliente.segmento"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Segmento da Empresa*</FormLabel>
-                          <FormControl>
-                            <div className="flex items-center space-x-2">
-                              <Building className="w-4 h-4 text-gray-400" />
-                              <Select
-                                value={field.value}
-                                onValueChange={field.onChange}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecione o segmento" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {segmentoOptions.map((segmento) => (
-                                    <SelectItem key={segmento} value={segmento}>
-                                      {segmento}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {/* Campo para CNPJ com máscara */}
-                    <FormField
-                      control={vendaForm.control}
-                      name="cliente.cnpj"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>CNPJ*</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="00.000.000/0000-00"
-                              value={formatCNPJ(field.value)}
-                              onChange={(e) => field.onChange(e.target.value)}
-                              maxLength={18}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {/* Campo para Razão Social */}
-                    <FormField
-                      control={vendaForm.control}
-                      name="cliente.razaoSocial"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Razão Social</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="Razão social (opcional)"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </motion.div>
+                {/* Componente de Cliente */}
+                <ClienteForm
+                  formMode={formMode}
+                  vendaForm={vendaForm}
+                  naoVendaForm={naoVendaForm}
+                  clientesRecorrentes={clientesRecorrentes}
+                  isEditing={isEditing}
+                  handleClienteRecorrenteChange={handleClienteRecorrenteChange}
+                />
 
                 {/* Produtos */}
                 <motion.div
@@ -956,189 +1628,183 @@ export function VendaUnificadaFormTipado({
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3, duration: 0.2 }}
                 >
-                  <h3 className="text-lg font-medium mb-4">Produtos</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-medium">Produtos</h3>
+                  </div>
 
-                  {/* Formulário de adição de produto */}
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="flex gap-4">
-                        <div className="md:col-span-1">
-                          <FormLabel className="mb-1">Nome*</FormLabel>
-                          <Select
-                            value={currentProduto.nome}
-                            onValueChange={(value) =>
-                              handleChangeProduto("nome", value)
-                            }
-                          >
-                            <SelectTrigger className="">
-                              <SelectValue placeholder="Produto" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {productOptions.map((produto) => (
-                                <SelectItem key={produto} value={produto}>
-                                  {produto}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                  {/* ProdutoVendaForm Component */}
+                  <div className="flex mb-4 justify-between mt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleAbrirObjecaoProduto}
+                        className="text-orange-500 border-orange-300 hover:bg-orange-50"
+                      >
+                        <AlertCircle className="mr-2 h-4 w-4" />
+                        Adicionar Produto com Objeção
+                      </Button>
+                    </div>
+                  <div>
+                    <ProdutoVendaForm
+                      currentProduto={currentProduto}
+                      handleChangeProduto={handleChangeProduto}
+                      handleAddProdutoVenda={handleAddProdutoVenda}
+                      statusCotacao={statusCotacao}
+                      setShowProdutoNaoCatalogadoDialog={
+                        setShowProdutoNaoCatalogadoDialog
+                      }
+                      temObjecao={false}
+                      setTemObjecao={function (): void {
+                        throw new Error("Function not implemented.");
+                      }}
+                    />
 
-                        <div>
-                          <FormLabel className="mb-1">Medida*</FormLabel>
-                          <Select
-                            value={currentProduto.medida}
-                            onValueChange={(value) =>
-                              handleChangeProduto("medida", value)
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Medida" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {medidasOptions.map((medida) => (
-                                <SelectItem key={medida} value={medida}>
-                                  {medida}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
 
-                        <div>
-                          <FormLabel className="mb-1">Quantidade*</FormLabel>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={currentProduto.quantidade || ""}
-                            onChange={(e) =>
-                              handleChangeProduto(
-                                "quantidade",
-                                Number(e.target.value)
-                              )
-                            }
-                            className="w-full"
-                          />
-                        </div>
-
-                        <div>
-                          <FormLabel className="mb-1">Valor*</FormLabel>
-                          <div className="relative flex items-center">
-                            <span className="absolute left-3 text-gray-500">
-                              R$
-                            </span>
-                            <Input
-                              className="px-8 h-10 rounded-md border border-input bg-background w-full"
-                              value={formatCurrency(
-                                currentProduto.valor.toString()
-                              )}
-                              onChange={(e) => {
-                                const rawValue = e.target.value.replace(
-                                  /\D/g,
-                                  ""
-                                );
-                                const numValue = rawValue
-                                  ? parseInt(rawValue, 10) / 100
-                                  : 0;
-                                handleChangeProduto("valor", numValue);
-                              }}
-                              placeholder="0,00"
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <FormLabel className="mb-1">Recorrência</FormLabel>
-                          <Select
-                            value={currentProduto.recorrencia || ""}
-                            onValueChange={(value) =>
-                              handleChangeProduto("recorrencia", value)
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {recorrenciaOptions.map((recorrencia) => (
-                                <SelectItem
-                                  key={recorrencia}
-                                  value={recorrencia}
-                                >
-                                  {recorrencia}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 flex justify-end">
-                        <motion.div
-                          whileHover={{ scale: 1.01 }}
-                          whileTap={{ scale: 0.99 }}
-                        >
-                          <Button type="button" onClick={handleAddProdutoVenda}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Adicionar Produto
-                          </Button>
-                        </motion.div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  </div>
 
                   {/* Lista de produtos adicionados */}
                   {vendaFields.length > 0 ? (
                     <div className="mt-4 space-y-4">
-                      <h4 className="font-medium">
-                        Produtos Adicionados ({vendaFields.length})
-                      </h4>
-                      <AnimatePresence>
-                        {vendaFields.map((field, index) => {
-                          const produto = field as unknown as ProdutoComId;
-                          return (
-                            <motion.div
-                              key={produto.id || index}
-                              initial={{ opacity: 0, y: 15 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -15 }}
-                              transition={{ duration: 0.2 }}
-                            >
-                              <Card>
-                                <CardContent className="p-4 flex items-center justify-between">
-                                  <div className="flex items-center">
-                                    <Package className="h-5 w-5 text-[#00446A] mr-3" />
-                                    <div>
-                                      <p className="font-medium">
-                                        {produto.nome}
-                                      </p>
-                                      <p className="text-sm text-gray-500">
-                                        {produto.quantidade} {produto.medida} -{" "}
-                                        {formatarValorBRL(produto.valor)}
-                                        {produto.recorrencia &&
-                                          ` - ${produto.recorrencia}`}
-                                      </p>
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-medium">
+                          Produtos Adicionados ({vendaFields.length})
+                        </h4>
+                        {vendaFields.length > 4 && (
+                          <div className="relative w-64">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                            <Input
+                              placeholder="Buscar produto adicionado"
+                              className="pl-9"
+                              value={produtoAddedSearchTerm}
+                              onChange={(e) =>
+                                setProdutoAddedSearchTerm(e.target.value)
+                              }
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <ScrollArea
+                        className={vendaFields.length > 4 ? "h-80" : "h-auto"}
+                      >
+                        <AnimatePresence>
+                          {filteredVendaFields.map((field, index) => {
+                            const produto = field as unknown as ProdutoComId;
+                            const realIndex = vendaFields.findIndex((f) => {
+                              const p = f as unknown as ProdutoComId;
+                              return p.id === produto.id;
+                            });
+
+                            // Verificar se o produto tem objeção
+                            const temObjecao = objecoesIndividuais.some(
+                              (obj) => obj.produtoId === produto.id
+                            );
+                            const objecaoText = temObjecao
+                              ? objecoesIndividuais.find(
+                                  (obj) => obj.produtoId === produto.id
+                                )?.objecao
+                              : null;
+
+                            return (
+                              <motion.div
+                                key={produto.id || index}
+                                initial={{ opacity: 0, y: 15 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -15 }}
+                                transition={{ duration: 0.2 }}
+                              >
+                                <Card className="mb-3">
+                                  <div className="p-4">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center">
+                                        <div>
+                                          <p className="font-medium">
+                                            {produto.nome}
+                                          </p>
+                                          <div className="flex items-center gap-6 text-sm text-gray-500">
+                                            <span>
+                                              {produto.quantidade}{" "}
+                                              {produto.medida}
+                                            </span>
+                                            <span>
+                                              {formatarValorBRL(
+                                                produto.valor *
+                                                  produto.quantidade
+                                              )}
+                                            </span>
+                                            {produto.comissao !== undefined &&
+                                              produto.comissao > 0 && (
+                                                <span className="flex items-center">
+                                                  {produto.comissao.toFixed(2)}%
+                                                </span>
+                                              )}
+                                            {produto.icms !== undefined &&
+                                              produto.icms > 0 && (
+                                                <span>
+                                                  ICMS:{" "}
+                                                  {produto.icms.toFixed(2)}%
+                                                </span>
+                                              )}
+                                            {produto.ipi !== undefined &&
+                                              produto.ipi > 0 && (
+                                                <span>
+                                                  IPI: {produto.ipi.toFixed(2)}%
+                                                </span>
+                                              )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          type="button"
+                                          onClick={() =>
+                                            handleAddObjecaoIndividual(
+                                              produto.id || ""
+                                            )
+                                          }
+                                          className="text-orange-500"
+                                        >
+                                        </Button>
+                                        <motion.div
+                                          whileHover={{ scale: 1.1 }}
+                                          whileTap={{ scale: 0.9 }}
+                                        >
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            type="button"
+                                            onClick={() =>
+                                              handleRemoveProdutoVenda(
+                                                realIndex
+                                              )
+                                            }
+                                          >
+                                            <Trash2 className="h-4 w-4 text-red-500" />
+                                          </Button>
+                                        </motion.div>
+                                      </div>
                                     </div>
+
+                                    {/* Mostrar objeção se existir */}
+                                    {temObjecao && objecaoText && (
+                                      <div className="mt-2 pt-2 border-t border-orange-200 bg-orange-50 px-3 py-2 rounded-md">
+                                        <p className="text-sm text-orange-800 flex items-center">
+                                          <AlertCircle className="h-4 w-4 mr-2" />
+                                          <span className="font-medium">
+                                            Objeção:
+                                          </span>{" "}
+                                          {objecaoText}
+                                        </p>
+                                      </div>
+                                    )}
                                   </div>
-                                  <motion.div
-                                    whileHover={{ scale: 1.1 }}
-                                    whileTap={{ scale: 0.9 }}
-                                  >
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      type="button"
-                                      onClick={() =>
-                                        handleRemoveProdutoVenda(index)
-                                      }
-                                    >
-                                      <Trash2 className="h-4 w-4 text-red-500" />
-                                    </Button>
-                                  </motion.div>
-                                </CardContent>
-                              </Card>
-                            </motion.div>
-                          );
-                        })}
-                      </AnimatePresence>
+                                </Card>
+                              </motion.div>
+                            );
+                          })}
+                        </AnimatePresence>
+                      </ScrollArea>
 
                       <div className="bg-gray-50 p-4 rounded-lg">
                         <p className="text-sm text-gray-600">
@@ -1168,28 +1834,26 @@ export function VendaUnificadaFormTipado({
                     name="condicaoPagamento"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="mb-1">
+                        <FormLabel className="mb-1 flex items-center gap-2">
+                          <CreditCard className="h-4 w-4 text-gray-400" />
                           Condição de Pagamento*
                         </FormLabel>
                         <FormControl>
-                          <div className="flex items-center space-x-2">
-                            <CreditCard className="w-4 h-4 text-gray-400" />
-                            <Select
-                              value={field.value}
-                              onValueChange={field.onChange}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecione" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {condicoesPagamentoOptions.map((condicao) => (
-                                  <SelectItem key={condicao} value={condicao}>
-                                    {condicao}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
+                          <Select
+                            value={field.value}
+                            onValueChange={field.onChange}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Selecione uma condição de pagamento" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {condicoesPagamentoOptions.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1243,10 +1907,7 @@ export function VendaUnificadaFormTipado({
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
-                          <FormLabel className="flex items-center">
-                            <Repeat className="w-4 h-4 mr-2 text-gray-400" />
-                            Venda Recorrente
-                          </FormLabel>
+                          <FormLabel>Cliente Recorrente</FormLabel>
                           <p className="text-xs text-gray-500">
                             Marque esta opção para salvar como cliente
                             recorrente
@@ -1262,17 +1923,8 @@ export function VendaUnificadaFormTipado({
                   initial={{ opacity: 0, y: 7 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.5, duration: 0.2 }}
-                  className="flex justify-end space-x-4 mt-8"
+                  className="flex justify-between space-x-4 mt-8"
                 >
-                  <motion.div
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                  >
-                    <Button variant="outline" type="button">
-                      <X className="mr-2 h-4 w-4" />
-                      Cancelar
-                    </Button>
-                  </motion.div>
                   <motion.div
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.99 }}
@@ -1280,35 +1932,62 @@ export function VendaUnificadaFormTipado({
                     <Button
                       variant="outline"
                       type="button"
-                      onClick={toggleFormMode}
-                      className="text-red-600 border-red-300 hover:bg-red-50"
+                      onClick={handleCancelar}
                     >
-                      <ThumbsDown className="mr-2 h-4 w-4" />
-                      Registrar como Venda-Perdida
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Voltar
                     </Button>
                   </motion.div>
-                  <motion.div
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                  >
-                    <Button
-                      type="submit"
-                      disabled={loading}
-                      className="bg-green-600 hover:bg-green-700"
+
+                  <div className="flex space-x-4">
+                    {isEditing && statusCotacao !== "cancelada" && (
+                      <motion.div
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                      >
+                        <Button
+                          variant="outline"
+                          type="button"
+                          onClick={() => definirStatusCotacao("cancelada")}
+                          className="text-red-600 border-red-300 hover:bg-red-50"
+                        >
+                          <ThumbsDown className="mr-2 h-4 w-4" />
+                          Registrar como Cotação Cancelada
+                        </Button>
+                      </motion.div>
+                    )}
+
+                    <motion.div
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
                     >
-                      {loading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Processando...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="mr-2 h-4 w-4" />
-                          {isEditing ? "Atualizar Venda" : "Registrar Venda"}
-                        </>
-                      )}
-                    </Button>
-                  </motion.div>
+                      <Button
+                        type="submit"
+                        disabled={loading}
+                        className={`${
+                          statusCotacao === "finalizada"
+                            ? "bg-green-600 hover:bg-green-700"
+                            : "bg-blue-600 hover:bg-blue-700"
+                        }`}
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Processando...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="mr-2 h-4 w-4" />
+                            {isEditing
+                              ? "Atualizar Cotação"
+                              : statusCotacao === "finalizada"
+                              ? "Finalizar Cotação"
+                              : "Salvar Cotação"}
+                          </>
+                        )}
+                      </Button>
+                    </motion.div>
+                  </div>
                 </motion.div>
               </form>
             </Form>
@@ -1328,102 +2007,121 @@ export function VendaUnificadaFormTipado({
                 )}
                 className="space-y-8"
               >
-                {/* Informações do Cliente */}
-                <motion.div
-                  initial={{ opacity: 0, y: 7 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1, duration: 0.2 }}
-                >
-                  <h3 className="text-lg font-medium mb-4">
-                    Informações do Cliente
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={naoVendaForm.control}
-                      name="cliente.nome"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nome do Cliente*</FormLabel>
-                          <FormControl>
-                            <div className="flex items-center space-x-2">
-                              <User className="w-4 h-4 text-gray-400" />
-                              <Input {...field} placeholder="Nome do cliente" />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                {/* Componente de Cliente */}
+                <ClienteForm
+                  formMode={formMode}
+                  vendaForm={vendaForm}
+                  naoVendaForm={naoVendaForm}
+                  clientesRecorrentes={clientesRecorrentes}
+                  isEditing={isEditing}
+                  handleClienteRecorrenteChange={handleClienteRecorrenteChange}
+                />
 
-                    <FormField
-                      control={naoVendaForm.control}
-                      name="cliente.segmento"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Segmento da Empresa*</FormLabel>
-                          <FormControl>
-                            <div className="flex items-center space-x-2">
-                              <Building className="w-4 h-4 text-gray-400" />
-                              <Select
-                                value={field.value}
-                                onValueChange={field.onChange}
+                {/* Produtos Migrados que Necessitam de Concorrência */}
+                {produtosMigrados.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 7 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2, duration: 0.2 }}
+                    className="mb-8"
+                  >
+                    <h3 className="text-lg font-medium mb-4">
+                      Produtos da Cotação Original
+                    </h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Abaixo estão os produtos da cotação original. Adicione as
+                      informações de concorrência para cada um.
+                    </p>
+
+                    <ScrollArea
+                      className={
+                        produtosMigrados.length > 3 ? "h-80" : "h-auto"
+                      }
+                    >
+                      <div className="space-y-4">
+                        {produtosMigrados.map((produtoMigrado, index) => (
+                          <Card
+                            key={index}
+                            className={`mb-4 ${
+                              produtoMigrado.concorrenciaAdicionada
+                                ? "bg-gray-50"
+                                : ""
+                            }`}
+                          >
+                            <div className="p-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <h4 className="font-medium">
+                                  {produtoMigrado.produto.nome}
+                                </h4>
+                                <Badge
+                                  className={
+                                    produtoMigrado.concorrenciaAdicionada
+                                      ? "bg-green-100 text-green-800"
+                                      : "bg-orange-100 text-orange-800"
+                                  }
+                                >
+                                  {produtoMigrado.concorrenciaAdicionada
+                                    ? "Concorrência Adicionada"
+                                    : "Pendente"}
+                                </Badge>
+                              </div>
+
+                              <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-3">
+                                <span>
+                                  Quantidade:{" "}
+                                  {produtoMigrado.produto.quantidade}{" "}
+                                  {produtoMigrado.produto.medida}
+                                </span>
+                                <span>
+                                  Valor:{" "}
+                                  {formatarValorBRL(
+                                    produtoMigrado.produto.valor *
+                                      produtoMigrado.produto.quantidade
+                                  )}
+                                </span>
+                                {produtoMigrado.produto.icms !== undefined &&
+                                  produtoMigrado.produto.icms > 0 && (
+                                    <span>
+                                      ICMS:{" "}
+                                      {produtoMigrado.produto.icms.toFixed(2)}%
+                                    </span>
+                                  )}
+                                {produtoMigrado.produto.ipi !== undefined &&
+                                  produtoMigrado.produto.ipi > 0 && (
+                                    <span>
+                                      IPI:{" "}
+                                      {produtoMigrado.produto.ipi.toFixed(2)}%
+                                    </span>
+                                  )}
+                              </div>
+
+                              <Button
+                                onClick={() =>
+                                  handleAbrirConcorrenciaDialog(index)
+                                }
+                                variant={
+                                  produtoMigrado.concorrenciaAdicionada
+                                    ? "outline"
+                                    : "default"
+                                }
+                                className={
+                                  produtoMigrado.concorrenciaAdicionada
+                                    ? "border-gray-200 text-gray-700"
+                                    : "bg-[#00446A]"
+                                }
+                                disabled={produtoMigrado.concorrenciaAdicionada}
                               >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecione o segmento" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {segmentoOptions.map((segmento) => (
-                                    <SelectItem key={segmento} value={segmento}>
-                                      {segmento}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                                {produtoMigrado.concorrenciaAdicionada
+                                  ? "Concorrência já adicionada"
+                                  : "Adicionar informações de concorrência"}
+                              </Button>
                             </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={naoVendaForm.control}
-                      name="cliente.cnpj"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>CNPJ*</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="00.000.000/0000-00"
-                              value={formatCNPJ(field.value)}
-                              onChange={(e) => field.onChange(e.target.value)}
-                              maxLength={18}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={naoVendaForm.control}
-                      name="cliente.razaoSocial"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Razão Social</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="Razão social (opcional)"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </motion.div>
+                          </Card>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </motion.div>
+                )}
 
                 {/* Produtos */}
                 <motion.div
@@ -1435,428 +2133,209 @@ export function VendaUnificadaFormTipado({
                     Produtos Garden vs Concorrência
                   </h3>
 
-                  {/* Formulário de adição de produto Garden */}
-                  <Card className="mb-6">
-                    <CardContent className="pt-6">
-                      <h4 className="font-medium mb-4 text-[#00446A]">
-                        Produto (Garden)
-                      </h4>
-                      <div className="flex w-fit gap-4">
-                        <div className="md:col-span-1">
-                          <FormLabel>Nome*</FormLabel>
-                          <Select
-                            value={currentProduto.nome}
-                            onValueChange={(value) =>
-                              handleChangeProduto("nome", value)
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Produto" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {productOptions.map((produto) => (
-                                <SelectItem key={produto} value={produto}>
-                                  {produto}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <FormLabel>Medida*</FormLabel>
-                          <Select
-                            value={currentProduto.medida}
-                            onValueChange={(value) =>
-                              handleChangeProduto("medida", value)
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Medida" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {medidasOptions.map((medida) => (
-                                <SelectItem key={medida} value={medida}>
-                                  {medida}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <FormLabel>Quantidade*</FormLabel>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={currentProduto.quantidade || ""}
-                            onChange={(e) =>
-                              handleChangeProduto(
-                                "quantidade",
-                                Number(e.target.value)
-                              )
-                            }
-                            className="w-full"
-                          />
-                        </div>
-
-                        <div>
-                          <div>
-                            <FormLabel>Valor*</FormLabel>
-                            <div className="relative flex items-center">
-                              <span className="absolute left-3  text-gray-500">
-                                R$
-                              </span>
-                              <Input
-                                className="px-8 h-10 rounded-md border border-input bg-background w-full"
-                                value={formatCurrency(
-                                  currentProduto.valor.toString()
-                                )}
-                                onChange={(e) => {
-                                  const rawValue = e.target.value.replace(
-                                    /\D/g,
-                                    ""
-                                  );
-                                  const numValue = rawValue
-                                    ? parseInt(rawValue, 10) / 100
-                                    : 0;
-                                  handleChangeProduto("valor", numValue);
-                                }}
-                                placeholder="0,00"
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <FormLabel>Recorrência</FormLabel>
-                          <Select
-                            value={currentProduto.recorrencia || ""}
-                            onValueChange={(value) =>
-                              handleChangeProduto("recorrencia", value)
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {recorrenciaOptions.map((recorrencia) => (
-                                <SelectItem
-                                  key={recorrencia}
-                                  value={recorrencia}
-                                >
-                                  {recorrencia}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Formulário de adição de produto da concorrência */}
-                  <Card>
-                    <CardContent className="pt-6">
-                      <h4 className="font-medium mb-4 text-red-600">
-                        Produto (Concorrência)
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <FormLabel>Nome da Concorrência*</FormLabel>
-                          <Input
-                            value={produtoConcorrencia.nomeConcorrencia || ""}
-                            onChange={(e) =>
-                              handleChangeProdutoConcorrencia(
-                                "nomeConcorrencia",
-                                e.target.value
-                              )
-                            }
-                            placeholder="Nome da empresa concorrente"
-                          />
-                        </div>
-
-                        <div>
-                          <FormField
-                            control={naoVendaForm.control}
-                            name="valorTotal"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Valor Total*</FormLabel>
-                                <FormControl>
-                                  <div className="relative flex items-center">
-
-                                    <span className="absolute left-3  text-gray-500">
-                                      R$
-                                    </span>
-                                    <Input
-                                      className="px-8 h-10 rounded-md border border-input bg-background w-full"
-                                      value={formatCurrency(
-                                        field.value.toString()
-                                      )}
-                                      onChange={(e) => {
-                                        const rawValue = e.target.value.replace(
-                                          /\D/g,
-                                          ""
-                                        );
-                                        const numValue = rawValue
-                                          ? parseInt(rawValue, 10) / 100
-                                          : 0;
-                                        field.onChange(numValue);
-                                      }}
-                                      placeholder="0,00"
-                                    />
-                                  </div>
-                                </FormControl>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  Valor sugerido:{" "}
-                                  {formatarValorBRL(
-                                    calcularValorSugeridoNaoVenda()
-                                  )}{" "}
-                                  (Soma de todos os produtos Garden)
-                                </p>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-
-                        <div>
-                          <FormLabel>ICMS (%)</FormLabel>
-                          <Input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={produtoConcorrencia.icms || ""}
-                            onChange={(e) =>
-                              handleChangeProdutoConcorrencia(
-                                "icms",
-                                e.target.value === ""
-                                  ? null
-                                  : Number(e.target.value)
-                              )
-                            }
-                            placeholder="Porcentagem de ICMS"
-                          />
-                        </div>
-
-                        <div>
-                          <FormLabel>Objeção</FormLabel>
-                          <div className="relative">
-                            <Popover
-                              open={objecaoInputOpen}
-                              onOpenChange={setObjecaoInputOpen}
-                            >
-                              <PopoverTrigger asChild>
-                                <div className="flex items-center space-x-2 w-full border border-input rounded-md px-3 py-2 h-10 cursor-pointer">
-                                  {produtoConcorrencia.objecao ? (
-                                    <Badge className="px-2 py-1 bg-gray-100 text-gray-800 flex items-center gap-1">
-                                      <Tag className="h-3 w-3" />
-                                      {produtoConcorrencia.objecao}
-                                      <X
-                                        className="h-3 w-3 ml-1 cursor-pointer"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setProdutoConcorrencia((prev) => ({
-                                            ...prev,
-                                            objecao: null,
-                                          }));
-                                        }}
-                                      />
-                                    </Badge>
-                                  ) : (
-                                    <span className="text-gray-500 flex-1">
-                                      Selecione ou digite uma objeção
-                                    </span>
-                                  )}
-                                  <ChevronDown className="h-4 w-4 opacity-50" />
-                                </div>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-[220px] p-0">
-                                <div className="py-2 px-3">
-                                  <div className="space-y-1">
-                                    <p className="text-sm font-medium">
-                                      Selecione uma objeção
-                                    </p>
-                                    <div className="border rounded-md">
-                                      <Input
-                                        placeholder="Buscar objeção..."
-                                        className="h-9"
-                                        onChange={() => {
-                                          // Implementar filtro opcional
-                                        }}
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="max-h-[200px] overflow-auto mt-2">
-                                    {objOptions.map((obj) => (
-                                      <div
-                                        key={obj}
-                                        onClick={() => handleObjecaoSelect(obj)}
-                                        className="text-sm px-2 py-1.5 hover:bg-slate-100 rounded cursor-pointer"
-                                      >
-                                        {obj}
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <div className="border-t p-2 mt-2">
-                                    <Input
-                                      placeholder="Digite uma objeção personalizada"
-                                      value={
-                                        (produtoConcorrencia.objecao as string) ||
-                                        ""
-                                      }
-                                      onChange={(e) =>
-                                        handleCustomObjecaoChange(
-                                          e.target.value
-                                        )
-                                      }
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                          setObjecaoInputOpen(false);
-                                        }
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 flex justify-end">
-                        <motion.div
-                          whileHover={{ scale: 1.01 }}
-                          whileTap={{ scale: 0.99 }}
-                        >
-                          <Button
-                            type="button"
-                            onClick={handleAddProdutoNaoVenda}
-                          >
-                            <Plus className="mr-2 h-4 w-4" />
-                            Adicionar Comparação
-                          </Button>
-                        </motion.div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  {/* Formulário de adição de produto Garden vs Concorrência */}
+                  <ProdutoConcorrenciaForm
+                    currentProduto={currentProduto}
+                    produtoConcorrencia={produtoConcorrencia}
+                    handleChangeProduto={handleChangeProduto}
+                    handleChangeProdutoConcorrencia={
+                      handleChangeProdutoConcorrencia
+                    }
+                    handleAddProdutoNaoVenda={handleAddProdutoNaoVenda}
+                    setShowProdutoNaoCatalogadoDialog={
+                      setShowProdutoNaoCatalogadoDialog
+                    }
+                  />
 
                   {/* Lista de produtos adicionados */}
                   {naoVendaFields.length > 0 ? (
                     <div className="mt-4 space-y-4">
-                      <h4 className="font-medium">
-                        Comparações Adicionadas ({naoVendaFields.length})
-                      </h4>
-                      <AnimatePresence>
-                        {naoVendaFields.map((field, index) => {
-                          // Converter com segurança para o tipo correto
-                          const item =
-                            field as unknown as ProdutoConcorrenciaComId;
-                          const diferenca = calcularDiferencaValor(
-                            item.produtoGarden,
-                            item.valorConcorrencia
-                          );
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-medium">
+                          Comparações Adicionadas ({naoVendaFields.length})
+                        </h4>
+                        {naoVendaFields.length > 4 && (
+                          <div className="relative w-64">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                            <Input
+                              placeholder="Buscar produto adicionado"
+                              className="pl-9"
+                              value={produtoAddedSearchTerm}
+                              onChange={(e) =>
+                                setProdutoAddedSearchTerm(e.target.value)
+                              }
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <ScrollArea
+                        className={
+                          naoVendaFields.length > 4 ? "h-80" : "h-auto"
+                        }
+                      >
+                        <AnimatePresence>
+                          {filteredNaoVendaFields.map((field, index) => {
+                            // Converter com segurança para o tipo correto
+                            const item =
+                              field as unknown as ProdutoConcorrenciaComId;
+                            const realIndex = naoVendaFields.findIndex((f) => {
+                              const p =
+                                f as unknown as ProdutoConcorrenciaComId;
+                              return p.id === item.id;
+                            });
 
-                          return (
-                            <motion.div
-                              key={item.id || index}
-                              initial={{ opacity: 0, y: 15 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -15 }}
-                              transition={{ duration: 0.2 }}
-                            >
-                              <Card>
-                                <CardContent className="p-4">
-                                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4">
-                                    <div className="flex items-center mb-3 sm:mb-0">
-                                      <Package className="h-5 w-5 text-[#00446A] mr-3" />
-                                      <div>
-                                        <p className="font-medium">
-                                          {item.produtoGarden.nome}
-                                        </p>
-                                        <p className="text-sm text-gray-500">
-                                          {item.produtoGarden.quantidade}{" "}
-                                          {item.produtoGarden.medida} -{" "}
-                                          {formatarValorBRL(
-                                            item.produtoGarden.valor
-                                          )}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <motion.div
-                                      whileHover={{ scale: 1.1 }}
-                                      whileTap={{ scale: 0.9 }}
-                                    >
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        type="button"
-                                        onClick={() =>
-                                          handleRemoveProdutoNaoVenda(index)
-                                        }
-                                      >
-                                        <Trash2 className="h-4 w-4 text-red-500" />
-                                      </Button>
-                                    </motion.div>
-                                  </div>
+                            const diferenca = calcularDiferencaValor(
+                              item.produtoGarden,
+                              item.valorConcorrencia,
+                              item.infoNaoDisponivel || false
+                            );
 
-                                  <div className="bg-gray-50 p-3 rounded-lg">
-                                    <div className="flex flex-col sm:flex-row justify-between">
-                                      <div>
-                                        <p className="text-sm font-medium">
-                                          Concorrência: {item.nomeConcorrencia}
-                                        </p>
-                                        <p className="text-sm text-gray-600">
-                                          Valor:{" "}
-                                          {formatarValorBRL(
-                                            item.valorConcorrencia
-                                          )}
-                                        </p>
-                                        {item.icms && (
-                                          <p className="text-sm text-gray-600">
-                                            ICMS: {item.icms}%
+                            return (
+                              <motion.div
+                                key={item.id || index}
+                                initial={{ opacity: 0, y: 15 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -15 }}
+                                transition={{ duration: 0.2 }}
+                                className="mb-3"
+                              >
+                                <Card>
+                                  <div className="p-4">
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4">
+                                      <div className="flex items-center mb-3 sm:mb-0">
+                                        <div>
+                                          <p className="font-medium">
+                                            {item.produtoGarden.nome}
                                           </p>
-                                        )}
+                                          <div className="flex items-center gap-6 text-sm text-gray-500">
+                                            <span>
+                                              {item.produtoGarden.quantidade}{" "}
+                                              {item.produtoGarden.medida}
+                                            </span>
+                                            <span>
+                                              {formatarValorBRL(
+                                                item.produtoGarden.valor *
+                                                  item.produtoGarden.quantidade
+                                              )}
+                                            </span>
+                                            {item.produtoGarden.icms !==
+                                              undefined &&
+                                              item.produtoGarden.icms > 0 && (
+                                                <span>
+                                                  ICMS:{" "}
+                                                  {item.produtoGarden.icms.toFixed(
+                                                    2
+                                                  )}
+                                                  %
+                                                </span>
+                                              )}
+                                            {item.produtoGarden.ipi !==
+                                              undefined &&
+                                              item.produtoGarden.ipi > 0 && (
+                                                <span>
+                                                  IPI:{" "}
+                                                  {item.produtoGarden.ipi.toFixed(
+                                                    2
+                                                  )}
+                                                  %
+                                                </span>
+                                              )}
+                                          </div>
+                                        </div>
                                       </div>
-
-                                      <div className="mt-3 sm:mt-0 text-right">
-                                        <p className="text-sm font-medium">
-                                          Diferença: {diferenca.valor} (
-                                          {diferenca.percentual})
-                                        </p>
-                                        <p
-                                          className={`text-sm ${
-                                            diferenca.maisCaro
-                                              ? "text-red-500"
-                                              : "text-green-500"
-                                          }`}
+                                      <motion.div
+                                        whileHover={{ scale: 1.1 }}
+                                        whileTap={{ scale: 0.9 }}
+                                      >
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          type="button"
+                                          onClick={() =>
+                                            handleRemoveProdutoNaoVenda(
+                                              realIndex
+                                            )
+                                          }
                                         >
-                                          Garden é{" "}
-                                          {diferenca.maisCaro
-                                            ? "mais cara"
-                                            : "mais barata"}
-                                        </p>
-                                      </div>
+                                          <Trash2 className="h-4 w-4 text-red-500" />
+                                        </Button>
+                                      </motion.div>
                                     </div>
 
-                                    {item.objecao && (
-                                      <div className="mt-2 pt-2 border-t border-gray-200">
-                                        <p className="text-sm text-gray-600">
-                                          <span className="font-medium">
-                                            Objeção:
-                                          </span>{" "}
-                                          {item.objecao}
-                                        </p>
+                                    <div className="bg-gray-50 p-3 rounded-lg">
+                                      <div className="flex flex-col sm:flex-row justify-between">
+                                        <div>
+                                          <p className="text-sm font-medium">
+                                            Concorrência:{" "}
+                                            {item.infoNaoDisponivel
+                                              ? "Não disponível"
+                                              : item.nomeConcorrencia}
+                                          </p>
+                                          <p className="text-sm text-gray-600">
+                                            Valor:{" "}
+                                            {item.infoNaoDisponivel
+                                              ? "Não disponível"
+                                              : formatarValorBRL(
+                                                  item.valorConcorrencia
+                                                )}
+                                          </p>
+                                        </div>
+
+                                        {item.icms &&
+                                          !item.infoNaoDisponivel && (
+                                            <p className="text-sm text-gray-600">
+                                              ICMS: {item.icms}%
+                                            </p>
+                                          )}
+
+                                        {item.ipi &&
+                                          !item.infoNaoDisponivel && (
+                                            <p className="text-sm text-gray-600">
+                                              IPI: {item.ipi}%
+                                            </p>
+                                          )}
                                       </div>
-                                    )}
+
+                                      {!item.infoNaoDisponivel && (
+                                        <div className="mt-3 sm:mt-0 text-right">
+                                          <p className="text-sm font-medium">
+                                            Diferença: {diferenca.valor} (
+                                            {diferenca.percentual})
+                                          </p>
+                                          <p
+                                            className={`text-sm ${
+                                              diferenca.maisCaro
+                                                ? "text-red-500"
+                                                : "text-green-500"
+                                            }`}
+                                          >
+                                            Garden é{" "}
+                                            {diferenca.maisCaro
+                                              ? "mais cara"
+                                              : "mais barata"}
+                                          </p>
+                                        </div>
+                                      )}
+
+                                      {item.objecao &&
+                                        !item.infoNaoDisponivel && (
+                                          <div className="mt-2 pt-2 border-t border-gray-200">
+                                            <p className="text-sm text-gray-600">
+                                              <span className="font-medium">
+                                                Objeção:
+                                              </span>{" "}
+                                              {item.objecao}
+                                            </p>
+                                          </div>
+                                        )}
+                                    </div>
                                   </div>
-                                </CardContent>
-                              </Card>
-                            </motion.div>
-                          );
-                        })}
-                      </AnimatePresence>
+                                </Card>
+                              </motion.div>
+                            );
+                          })}
+                        </AnimatePresence>
+                      </ScrollArea>
 
                       <div className="bg-gray-50 p-4 rounded-lg">
                         <p className="text-sm text-gray-600">
@@ -1886,26 +2365,26 @@ export function VendaUnificadaFormTipado({
                     name="condicaoPagamento"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Condição de Pagamento*</FormLabel>
+                        <FormLabel className="flex items-center gap-2">
+                          <CreditCard className="h-4 w-4 text-gray-400" />
+                          Condição de Pagamento*
+                        </FormLabel>
                         <FormControl>
-                          <div className="flex items-center space-x-2">
-                            <CreditCard className="w-4 h-4 text-gray-400" />
-                            <Select
-                              value={field.value}
-                              onValueChange={field.onChange}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecione" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {condicoesPagamentoOptions.map((condicao) => (
-                                  <SelectItem key={condicao} value={condicao}>
-                                    {condicao}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
+                          <Select
+                            value={field.value}
+                            onValueChange={field.onChange}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Selecione uma condição de pagamento" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {condicoesPagamentoOptions.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1923,27 +2402,24 @@ export function VendaUnificadaFormTipado({
                             <span className="absolute left-3 text-gray-500">
                               R$
                             </span>
-                            <Input
+                            <CurrencyInput
                               className="px-8 h-10 rounded-md border border-input bg-background w-full"
-                              value={formatCurrency(field.value.toString())}
-                              onChange={(e) => {
-                                const rawValue = e.target.value.replace(
-                                  /\D/g,
-                                  ""
-                                );
-                                const numValue = rawValue
-                                  ? parseInt(rawValue, 10) / 100
-                                  : 0;
-                                field.onChange(numValue);
-                              }}
+                              value={field.value}
+                              onValueChange={(value) =>
+                                field.onChange(Number(value || 0))
+                              }
+                              decimalsLimit={2}
+                              decimalSeparator=","
+                              groupSeparator="."
+                              allowNegativeValue={false}
                               placeholder="0,00"
                             />
                           </div>
                         </FormControl>
                         <p className="text-xs text-gray-500 mt-1">
                           Valor sugerido:{" "}
-                          {formatarValorBRL(calcularValorSugeridoVenda())} (Soma
-                          de todos os produtos)
+                          {formatarValorBRL(calcularValorSugeridoNaoVenda())}{" "}
+                          (Soma de todos os produtos Garden)
                         </p>
                         <FormMessage />
                       </FormItem>
@@ -1960,51 +2436,12 @@ export function VendaUnificadaFormTipado({
                           Objeção Geral
                         </FormLabel>
                         <FormControl>
-                          <div className="relative">
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <div className="w-full">
-                                  <Textarea
-                                    value={field.value || ""}
-                                    onChange={(e) =>
-                                      field.onChange(e.target.value)
-                                    }
-                                    placeholder="Clique para selecionar ou descreva a objeção geral para a Venda-Perdida"
-                                    rows={4}
-                                  />
-                                </div>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-[300px] p-0">
-                                <div className="py-2 px-3">
-                                  <div className="space-y-1">
-                                    <p className="text-sm font-medium">
-                                      Selecione uma objeção
-                                    </p>
-                                    <div className="border rounded-md">
-                                      <Input
-                                        placeholder="Buscar objeção..."
-                                        className="h-9"
-                                        onChange={() => {
-                                          // Implementar filtro opcional
-                                        }}
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="max-h-[200px] overflow-auto mt-2">
-                                    {objOptions.map((obj) => (
-                                      <div
-                                        key={obj}
-                                        onClick={() => field.onChange(obj)}
-                                        className="text-sm px-2 py-1.5 hover:bg-slate-100 rounded cursor-pointer"
-                                      >
-                                        {obj}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          </div>
+                          <Textarea
+                            value={field.value || ""}
+                            onChange={(e) => field.onChange(e.target.value)}
+                            placeholder="Descreva a objeção geral para a Cotação Cancelada"
+                            rows={4}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -2017,17 +2454,8 @@ export function VendaUnificadaFormTipado({
                   initial={{ opacity: 0, y: 7 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2, duration: 0.2 }}
-                  className="flex justify-end space-x-4 mt-8"
+                  className="flex justify-between space-x-4 mt-8"
                 >
-                  <motion.div
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                  >
-                    <Button variant="outline" type="button">
-                      <X className="mr-2 h-4 w-4" />
-                      Cancelar
-                    </Button>
-                  </motion.div>
                   <motion.div
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.99 }}
@@ -2035,37 +2463,56 @@ export function VendaUnificadaFormTipado({
                     <Button
                       variant="outline"
                       type="button"
-                      onClick={toggleFormMode}
-                      className="text-green-600 border-green-300 hover:bg-green-50"
+                      onClick={handleCancelar}
                     >
-                      <ThumbsUp className="mr-2 h-4 w-4" />
-                      Registrar como Venda
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Voltar
                     </Button>
                   </motion.div>
-                  <motion.div
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                  >
-                    <Button
-                      type="submit"
-                      disabled={loading}
-                      className="bg-red-600 hover:bg-red-700"
+
+                  <div className="flex space-x-4">
+                    {isEditing && statusCotacao !== "finalizada" && (
+                      <motion.div
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                      >
+                        <Button
+                          variant="outline"
+                          type="button"
+                          onClick={() => definirStatusCotacao("finalizada")}
+                          className="text-green-600 border-green-300 hover:bg-green-50"
+                        >
+                          <ThumbsUp className="mr-2 h-4 w-4" />
+                          Registrar como Cotação Finalizada
+                        </Button>
+                      </motion.div>
+                    )}
+
+                    <motion.div
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
                     >
-                      {loading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Processando...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="mr-2 h-4 w-4" />
-                          {isEditing
-                            ? "Atualizar Venda-Perdida"
-                            : "Registrar Venda-Perdida"}
-                        </>
-                      )}
-                    </Button>
-                  </motion.div>
+                      <Button
+                        type="submit"
+                        disabled={loading}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Processando...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="mr-2 h-4 w-4" />
+                            {isEditing
+                              ? "Atualizar Cotação Cancelada"
+                              : "Registrar Cotação Cancelada"}
+                          </>
+                        )}
+                      </Button>
+                    </motion.div>
+                  </div>
                 </motion.div>
               </form>
             </Form>
@@ -2116,6 +2563,462 @@ export function VendaUnificadaFormTipado({
             </Button>
           </DialogFooter>
         </DialogContent>
+      </Dialog>
+
+      {/* Dialog para produto não catalogado */}
+      <Dialog
+        open={showProdutoNaoCatalogadoDialog}
+        onOpenChange={setShowProdutoNaoCatalogadoDialog}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar produto não catalogado</DialogTitle>
+            <DialogDescription>
+              Preencha os dados do produto que não está na lista de produtos
+              catalogados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div>
+              <FormLabel>Nome do Produto*</FormLabel>
+              <Input
+                value={produtoNaoCatalogado.nome}
+                onChange={(e) =>
+                  setProdutoNaoCatalogado((prev) => ({
+                    ...prev,
+                    nome: e.target.value,
+                  }))
+                }
+                placeholder="Nome do produto"
+              />
+            </div>
+            <div>
+              <FormLabel>Medida*</FormLabel>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={produtoNaoCatalogado.medida}
+                onChange={(e) =>
+                  setProdutoNaoCatalogado((prev) => ({
+                    ...prev,
+                    medida: e.target.value,
+                  }))
+                }
+              >
+                {medidasOptions.map((medida) => (
+                  <option key={medida} value={medida}>
+                    {medida}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowProdutoNaoCatalogadoDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleAddProdutoNaoCatalogado}>
+              Adicionar Produto
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para adicionar produto com objeção */}
+      <Dialog
+        open={showObjecaoProdutoDialog}
+        onOpenChange={setShowObjecaoProdutoDialog}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar Produto com Objeção</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-gray-500 mb-4">
+              Digite o nome do produto que terá a objeção Produto que não
+              trabalhamos.
+            </p>
+            <Input
+              value={nomeProdutoObjecao}
+              onChange={(e) => setNomeProdutoObjecao(e.target.value)}
+              placeholder="Nome do produto"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowObjecaoProdutoDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleSalvarObjecaoProduto}>
+              Adicionar Produto com Objeção
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para adicionar objeção individual */}
+      <Dialog open={showObjecaoDialog} onOpenChange={setShowObjecaoDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar objeção ao produto</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-gray-500 mb-4">
+              Selecione ou digite uma objeção para este produto específico.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <FormLabel>Objeção</FormLabel>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={currentObjecao || ""}
+                  onChange={(e) => {
+                    if (e.target.value === "Outro") {
+                      setCurrentObjecao("");
+                    } else {
+                      setCurrentObjecao(e.target.value);
+                    }
+                  }}
+                >
+                  <option value="">Selecione uma objeção</option>
+                  {objOptions.map((obj) => (
+                    <option key={obj} value={obj}>
+                      {obj}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {currentObjecao === "Outro" && (
+                <div>
+                  <FormLabel>Descreva a objeção</FormLabel>
+                  <Input
+                    value={
+                      typeof currentObjecao === "string" ? currentObjecao : ""
+                    }
+                    onChange={(e) => setCurrentObjecao(e.target.value)}
+                    placeholder="Digite a objeção personalizada"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowObjecaoDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveObjecaoIndividual}>
+              Salvar Objeção
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para adicionar informações de concorrência a produto migrado */}
+      <Dialog
+        open={showConcorrenciaDialog}
+        onOpenChange={setShowConcorrenciaDialog}
+      >
+        <FormProvider {...concorrenciaForm}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Adicionar Informações de Concorrência</DialogTitle>
+              <DialogDescription>
+                Adicione as informações da concorrência para o produto:{" "}
+                {produtoAtual?.nome}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-4 space-y-6">
+              {/* Informações do produto original (somente leitura) */}
+              <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                <h4 className="font-medium mb-2">Produto Original (Garden)</h4>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <p>
+                    <span className="font-medium">Nome:</span>{" "}
+                    {produtoAtual?.nome}
+                  </p>
+                  <p>
+                    <span className="font-medium">Medida:</span>{" "}
+                    {produtoAtual?.medida}
+                  </p>
+                  <p>
+                    <span className="font-medium">Quantidade:</span>{" "}
+                    {produtoAtual?.quantidade}
+                  </p>
+                  <p>
+                    <span className="font-medium">Valor unitário:</span>{" "}
+                    {produtoAtual
+                      ? formatarValorBRL(produtoAtual.valor)
+                      : "N/A"}
+                  </p>
+                  <p>
+                    <span className="font-medium">Valor total:</span>{" "}
+                    {produtoAtual
+                      ? formatarValorBRL(
+                          produtoAtual.valor * produtoAtual.quantidade
+                        )
+                      : "N/A"}
+                  </p>
+                  {produtoAtual?.icms !== undefined &&
+                    produtoAtual.icms > 0 && (
+                      <p>
+                        <span className="font-medium">ICMS:</span>{" "}
+                        {produtoAtual.icms}%
+                      </p>
+                    )}
+                  {produtoAtual?.ipi !== undefined && produtoAtual.ipi > 0 && (
+                    <p>
+                      <span className="font-medium">IPI:</span>{" "}
+                      {produtoAtual.ipi}%
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Informações não disponíveis toggle */}
+              <div className="mb-4">
+                <FormField
+                  control={concorrenciaForm.control}
+                  name="infoNaoDisponivel"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) => {
+                            field.onChange(checked === true);
+                            handleChangeConcorrencia(
+                              "infoNaoDisponivel",
+                              checked === true
+                            );
+                          }}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>
+                          Informações da concorrência não disponíveis
+                        </FormLabel>
+                        <p className="text-xs text-gray-500">
+                          Marque esta opção caso não tenha dados específicos da
+                          concorrência
+                        </p>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Dados da concorrência */}
+              <div
+                className={`space-y-4 ${
+                  currentConcorrencia.infoNaoDisponivel
+                    ? "opacity-50 pointer-events-none"
+                    : ""
+                }`}
+              >
+                <FormField
+                  control={concorrenciaForm.control}
+                  name="nomeConcorrencia"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nome da Concorrência*</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          value={field.value || ""}
+                          onChange={(e) => {
+                            field.onChange(e.target.value);
+                            handleChangeConcorrencia(
+                              "nomeConcorrencia",
+                              e.target.value
+                            );
+                          }}
+                          placeholder="Nome da empresa concorrente"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={concorrenciaForm.control}
+                  name="valorConcorrencia"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Valor da Concorrência*</FormLabel>
+                      <FormControl>
+                        <div className="relative flex items-center">
+                          <span className="absolute left-3 text-gray-500">
+                            R$
+                          </span>
+                          <Input
+                            className="px-8 h-10 rounded-md border border-input bg-background w-full"
+                            value={formatCurrency(field.value.toString())}
+                            onChange={(e) => {
+                              const rawValue = e.target.value.replace(
+                                /\D/g,
+                                ""
+                              );
+                              const numValue = rawValue
+                                ? parseInt(rawValue, 10) / 100
+                                : 0;
+                              field.onChange(numValue);
+                              handleChangeConcorrencia(
+                                "valorConcorrencia",
+                                numValue
+                              );
+                            }}
+                            placeholder="0,00"
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={concorrenciaForm.control}
+                    name="icms"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ICMS (%)</FormLabel>
+                        <FormControl>
+                          <div className="relative flex items-center">
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={field.value || ""}
+                              onChange={(e) => {
+                                const value =
+                                  e.target.value === ""
+                                    ? 0
+                                    : Number(e.target.value);
+                                field.onChange(value);
+                                handleChangeConcorrencia("icms", value);
+                              }}
+                              className="pr-8"
+                              placeholder="0.00"
+                            />
+                            <span className="absolute right-3 text-gray-500">
+                              %
+                            </span>
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={concorrenciaForm.control}
+                    name="ipi"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>IPI (%)</FormLabel>
+                        <FormControl>
+                          <div className="relative flex items-center">
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={field.value || ""}
+                              onChange={(e) => {
+                                const value =
+                                  e.target.value === ""
+                                    ? 0
+                                    : Number(e.target.value);
+                                field.onChange(value);
+                                handleChangeConcorrencia("ipi", value);
+                              }}
+                              className="pr-8"
+                              placeholder="0.00"
+                            />
+                            <span className="absolute right-3 text-gray-500">
+                              %
+                            </span>
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={concorrenciaForm.control}
+                  name="objecao"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Objeção</FormLabel>
+                      <FormControl>
+                        <select
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                          value={(field.value as string) || ""}
+                          onChange={(e) => {
+                            const valor = e.target.value || null;
+                            field.onChange(valor);
+                            handleChangeConcorrencia("objecao", valor);
+                          }}
+                        >
+                          <option value="">
+                            Selecione uma objeção (opcional)
+                          </option>
+                          {objOptions.map((obj) => (
+                            <option key={obj} value={obj}>
+                              {obj}
+                            </option>
+                          ))}
+                        </select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {currentConcorrencia.objecao === "Outro" && (
+                  <div>
+                    <FormLabel>Descreva a objeção</FormLabel>
+                    <Input
+                      value={(currentConcorrencia.objecao as string) || ""}
+                      onChange={(e) => {
+                        const valor = e.target.value;
+                        handleChangeConcorrencia("objecao", valor);
+                        concorrenciaForm.setValue("objecao", valor);
+                      }}
+                      placeholder="Digite a objeção personalizada"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowConcorrenciaDialog(false)}
+              >
+                Cancelar
+              </Button>
+              <Button onClick={handleSalvarConcorrencia}>
+                Salvar Informações de Concorrência
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </FormProvider>
       </Dialog>
     </>
   );

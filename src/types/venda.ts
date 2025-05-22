@@ -5,7 +5,9 @@ export type Produto = {
   medida: string;
   quantidade: number;
   valor: number;
-  recorrencia?: string;
+  comissao?: number;
+  icms?: number;
+  ipi?: number;
 };
 
 export type Cliente = {
@@ -38,5 +40,5 @@ export type VendaFormData = {
   valorTotal: number;
   condicaoPagamento: string;
   vendaRecorrente: boolean;
-  nomeRecorrencia?: string; // Adicionado este campo que estava faltando
+  nomeRecorrencia?: string;
 };

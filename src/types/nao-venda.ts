@@ -5,8 +5,10 @@ export type ProdutoConcorrencia = {
   produtoGarden: Produto;
   valorConcorrencia: number;
   nomeConcorrencia: string;
-  icms?: number | null; // Alterado para aceitar null ou undefined
-  objecao?: string | null; // Alterado para aceitar null ou undefined
+  icms?: number | null;
+  ipi?: number | null;
+  objecao?: string | null;
+  infoNaoDisponivel?: boolean;
 };
 
 export type NaoVenda = {
@@ -16,7 +18,7 @@ export type NaoVenda = {
   produtosConcorrencia: ProdutoConcorrencia[];
   valorTotal: number;
   condicaoPagamento: string;
-  objecaoGeral?: string | null; // Alterado para aceitar null ou undefined
+  objecaoGeral?: string | null;
   vendedorId: string;
   vendedorNome: string;
   createdAt: Date;
@@ -29,5 +31,5 @@ export type NaoVendaFormData = {
   produtosConcorrencia: ProdutoConcorrencia[];
   valorTotal: number;
   condicaoPagamento: string;
-  objecaoGeral?: string | null; // Alterado para aceitar null ou undefined
+  objecaoGeral?: string | null;
 };

@@ -178,7 +178,7 @@ export function VendasTable({
     
     setVendas(sortedVendas);
     
-    // Ordenar Venda perdidas por data
+    // Ordenar Cotações canceladas por data
     const sortedNaoVendas = [...naoVendas].sort((a, b) => {
       const dateA = new Date(a.createdAt).getTime();
       const dateB = new Date(b.createdAt).getTime();
@@ -207,7 +207,7 @@ export function VendasTable({
     
     setVendas(filteredVendas);
     
-    // Filtrar Venda perdidas
+    // Filtrar Cotações canceladas
     const filteredNaoVendas = initialNaoVendas.filter(naoVenda => 
       naoVenda.cliente.nome.toLowerCase().includes(term) || 
       naoVenda.codigoVenda.toLowerCase().includes(term)
@@ -258,7 +258,7 @@ export function VendasTable({
         setVendas(resultadoVendas.vendas);
       }
       
-      // Aplicar filtros às Venda perdidas
+      // Aplicar filtros às Cotações canceladas
       const resultadoNaoVendas = await getNaoVendas(filtrosConvertidos);
       
       if (resultadoNaoVendas.success) {
@@ -339,15 +339,15 @@ export function VendasTable({
         resultado = await excluirNaoVenda(vendaSelecionada.id as string);
         
         if (resultado.success) {
-          toast.success('Venda perdida excluída com sucesso');
+          toast.success('Cotação cancelada excluída com sucesso');
           setNaoVendas(naoVendas.filter(v => v.id !== vendaSelecionada.id));
         } else {
-          toast.error(resultado.error || 'Erro ao excluir Venda perdida');
+          toast.error(resultado.error || 'Erro ao excluir Cotação cancelada');
         }
       }
     } catch (error) {
       console.error('Erro ao excluir item:', error);
-      toast.error(`Erro ao excluir ${itemTipo === 'venda' ? 'venda' : 'Venda perdida'}`);
+      toast.error(`Erro ao excluir ${itemTipo === 'venda' ? 'venda' : 'Cotação cancelada'}`);
     } finally {
       setConfirmacaoExclusao(false);
       setVendaSelecionada(null);
@@ -472,7 +472,7 @@ export function VendasTable({
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-gray-500">Venda perdidas (Recusados)</p>
+                <p className="text-sm text-gray-500">Cotações canceladas (Recusados)</p>
                 <h3 className="text-3xl font-bold mt-1">{estatisticas.totalNaoVendas || 0}</h3>
               </div>
               <div className="bg-red-100 p-2 rounded-full">
@@ -502,7 +502,7 @@ export function VendasTable({
         <TabsList className="bg-gray-100 p-1">
           <TabsTrigger value="painel">Painel de Vendas</TabsTrigger>
           <TabsTrigger value="vendas">Vendas</TabsTrigger>
-          <TabsTrigger value="naovendas">Venda perdidas</TabsTrigger>
+          <TabsTrigger value="naovendas">Cotações canceladas</TabsTrigger>
         </TabsList>
         
         {/* Conteúdo da Tab Painel */}
@@ -651,7 +651,7 @@ export function VendasTable({
           </div>
         </TabsContent>
         
-        {/* Conteúdo da Tab Venda perdidas */}
+        {/* Conteúdo da Tab Cotações canceladas */}
         <TabsContent value="naovendas">
           <div className="bg-white rounded-lg border shadow-sm">
             <Table>
@@ -970,7 +970,7 @@ export function VendasTable({
           <DialogContent className="max-w-3xl">
             <DialogHeader>
               <DialogTitle>
-                {itemTipo === 'venda' ? 'Detalhes da Venda' : 'Detalhes da Venda perdida'}
+                {itemTipo === 'venda' ? 'Detalhes da Venda' : 'Detalhes da Cotação cancelada'}
               </DialogTitle>
             </DialogHeader>
             
@@ -1054,7 +1054,7 @@ export function VendasTable({
                   ))}
                 </div>
               ) : (
-                // Produtos para Venda perdida (comparação com concorrência)
+                // Produtos para Cotação cancelada (comparação com concorrência)
                 <div className="space-y-3">
                   {(vendaSelecionada as NaoVenda).produtosConcorrencia.map((item, index) => (
                     <div key={index} className="bg-gray-50 p-3 rounded-lg">
@@ -1123,7 +1123,7 @@ export function VendasTable({
           <DialogHeader>
             <DialogTitle>Confirmar Exclusão</DialogTitle>
             <DialogDescription>
-              Tem certeza que deseja excluir {itemTipo === 'venda' ? 'esta venda' : 'esta Venda perdida'}?
+              Tem certeza que deseja excluir {itemTipo === 'venda' ? 'esta venda' : 'esta Cotação cancelada'}?
               Esta ação não pode ser desfeita.
             </DialogDescription>
           </DialogHeader>

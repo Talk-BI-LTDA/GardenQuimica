@@ -1,9 +1,12 @@
-// src/components/dashboard/vendas-table-ajustada.tsx
+// src/components/vendas-table-ajustada.tsx
+
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
+import { useEffect } from "react";
+
 import { ptBR } from "date-fns/locale";
 import {
   Eye,
@@ -21,9 +24,9 @@ import {
   MoreVertical,
   CheckCircle,
   XCircle,
-  DollarSign,
   FileText,
   ThumbsUp,
+  Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -62,7 +65,9 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
+import { getCotacoes, excluirCotacao } from "@/actions/cotacao-actions";
+import { Cotacao, ProdutoCotacao, StatusCotacao } from "@/types/cotacao-tipos";
+import { Cliente } from "@/types/usuario-tipos";
 import { formatarValorBRL } from "@/lib/utils";
 import { getVendas, excluirVenda } from "@/actions/venda-actions";
 import { getNaoVendas, excluirNaoVenda } from "@/actions/nao-venda-actions";
@@ -74,8 +79,10 @@ interface Estatisticas {
   totalOrcamentos?: number;
   totalVendas?: number;
   totalNaoVendas?: number;
+  totalCotacoesPendentes?: number;
   valorTotalVendas?: number;
   valorTotalNaoVendas?: number;
+  valorTotalCotacoesPendentes?: number;
 }
 
 // Tipo para os vendedores
@@ -111,24 +118,28 @@ type VendasTableProps = {
   initialVendas?: Venda[];
   initialNaoVendas?: NaoVenda[];
   initialEstatisticas?: Estatisticas;
+  initialCotacoes?: Cotacao[];
   isAdmin?: boolean;
+  vendedores?: Vendedor[];
 };
 
 export function VendasTableAjustada({
   initialVendas = [],
   initialNaoVendas = [],
+  initialCotacoes = [],
   initialEstatisticas = {},
   isAdmin = false,
 }: VendasTableProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("painel");
   const [filtroAberto, setFiltroAberto] = useState(false);
   const [detalhesAbertos, setDetalhesAbertos] = useState(false);
   const [vendaSelecionada, setVendaSelecionada] = useState<
     Venda | NaoVenda | null
   >(null);
   const [confirmacaoExclusao, setConfirmacaoExclusao] = useState(false);
-  const [itemTipo, setItemTipo] = useState<"venda" | "naoVenda">("venda");
+  const [itemTipo, setItemTipo] = useState<"venda" | "naoVenda" | "cotacao">(
+    "venda"
+  );
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -154,8 +165,8 @@ export function VendasTableAjustada({
   const [naoVendas, setNaoVendas] = useState<NaoVenda[]>(initialNaoVendas);
   const [estatisticas] = useState<Estatisticas>(initialEstatisticas);
   const [loading, setLoading] = useState(false);
-
-  // Opções para selects
+  const [cotacoes, setCotacoes] = useState<Cotacao[]>(initialCotacoes);
+  const [activeTab, setActiveTab] = useState("painel");
   const [vendedores] = useState<Vendedor[]>([
     { id: "1", nome: "João Silva" },
     { id: "2", nome: "Maria Oliveira" },
@@ -172,6 +183,10 @@ export function VendasTableAjustada({
     { id: "2", nome: "Produto B" },
   ]);
 
+  // Calcular totais dinâmicos
+  const totalCotacoes = vendas.length + naoVendas.length + cotacoes.length;
+  const valorTotalCotacoesPendentes = cotacoes.reduce((total, cotacao) => total + cotacao.valorTotal, 0);
+
   // Ordenar dados
   const toggleSortDirection = () => {
     const newDirection = sortDirection === "asc" ? "desc" : "asc";
@@ -186,7 +201,7 @@ export function VendasTableAjustada({
 
     setVendas(sortedVendas);
 
-    // Ordenar Venda perdidas por data
+    // Ordenar Cotações canceladas por data
     const sortedNaoVendas = [...naoVendas].sort((a, b) => {
       const dateA = new Date(a.createdAt).getTime();
       const dateB = new Date(b.createdAt).getTime();
@@ -194,6 +209,15 @@ export function VendasTableAjustada({
     });
 
     setNaoVendas(sortedNaoVendas);
+
+    // Ordenar cotações pendentes por data
+    const sortedCotacoes = [...cotacoes].sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return newDirection === "asc" ? dateA - dateB : dateB - dateA;
+    });
+
+    setCotacoes(sortedCotacoes);
   };
 
   // Pesquisar dados
@@ -216,7 +240,7 @@ export function VendasTableAjustada({
 
     setVendas(filteredVendas);
 
-    // Filtrar Venda perdidas
+    // Filtrar Cotações canceladas
     const filteredNaoVendas = initialNaoVendas.filter(
       (naoVenda) =>
         naoVenda.cliente.nome.toLowerCase().includes(term) ||
@@ -224,7 +248,63 @@ export function VendasTableAjustada({
     );
 
     setNaoVendas(filteredNaoVendas);
+
+    // Filtrar cotações pendentes
+    const filteredCotacoes = initialCotacoes.filter(
+      (cotacao) =>
+        cotacao.cliente.nome.toLowerCase().includes(term) ||
+        cotacao.codigoCotacao.toLowerCase().includes(term)
+    );
+
+    setCotacoes(filteredCotacoes);
   };
+
+  const loadCotacoes = useCallback(async () => {
+    if (cotacoes.length === 0) {
+      try {
+        setLoading(true);
+        const response = await getCotacoes();
+        if (response.success) {
+          // Mapear os dados retornados para garantir que tenham todas as propriedades necessárias
+          const cotacoesFormatadas: Cotacao[] = response.cotacoes.map(
+            (cotacao: unknown) => {
+              const c = cotacao as Record<string, unknown>;
+              return {
+                id: c.id as string,
+                codigoCotacao: c.codigoCotacao as string,
+                cliente: c.cliente as Cliente,
+                produtos: (c.produtos || []) as ProdutoCotacao[],
+                valorTotal: c.valorTotal as number,
+                condicaoPagamento: c.condicaoPagamento as string,
+                vendaRecorrente: c.vendaRecorrente as boolean,
+                nomeRecorrencia: c.nomeRecorrencia as string | undefined,
+                status: c.status as StatusCotacao,
+                vendedorId: c.vendedorId as string,
+                vendedorNome:
+                  (c.vendedorNome as string) ||
+                  ((c.vendedor as Record<string, unknown> | undefined)
+                    ?.nome as string) ||
+                  "Não informado",
+                createdAt: new Date(c.createdAt as string),
+                updatedAt: new Date(c.updatedAt as string),
+                editedById: c.editedById as string | undefined,
+              };
+            }
+          );
+          setCotacoes(cotacoesFormatadas);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar cotações:", error);
+        toast.error("Erro ao carregar cotações");
+      } finally {
+        setLoading(false);
+      }
+    }
+  }, [cotacoes.length]);
+
+  useEffect(() => {
+    loadCotacoes();
+  }, [loadCotacoes]);
 
   // Filtrar dados por data
   const handleFilterByDate = (start: Date, end: Date) => {
@@ -241,6 +321,13 @@ export function VendasTableAjustada({
     });
 
     setNaoVendas(filteredNaoVendas);
+
+    const filteredCotacoes = initialCotacoes.filter((cotacao) => {
+      const cotacaoDate = new Date(cotacao.createdAt);
+      return cotacaoDate >= start && cotacaoDate <= end;
+    });
+
+    setCotacoes(filteredCotacoes);
   };
 
   // Filtrar dados
@@ -275,7 +362,7 @@ export function VendasTableAjustada({
         setVendas(resultadoVendas.vendas);
       }
 
-      // Aplicar filtros às Venda perdidas
+      // Aplicar filtros às Cotações canceladas
       const resultadoNaoVendas = await getNaoVendas(filtrosConvertidos);
 
       if (resultadoNaoVendas.success) {
@@ -312,27 +399,56 @@ export function VendasTableAjustada({
   };
 
   // Ver detalhes
-  const verDetalhes = (item: Venda | NaoVenda, tipo: "venda" | "naoVenda") => {
-    setVendaSelecionada(item);
-    setItemTipo(tipo);
+  const verDetalhes = (
+    item: Venda | NaoVenda | Cotacao,
+    tipo: "venda" | "naoVenda" | "cotacao"
+  ) => {
+    if (tipo === "cotacao") {
+      const cotacaoAdaptada = {
+        ...item,
+        codigoVenda: (item as Cotacao).codigoCotacao,
+      } as unknown as Venda | NaoVenda;
+
+      setVendaSelecionada(cotacaoAdaptada);
+    } else {
+      setVendaSelecionada(item as Venda | NaoVenda);
+    }
+
+    setItemTipo(tipo as "venda" | "naoVenda" | "cotacao");
     setDetalhesAbertos(true);
   };
 
   // Editar item
-  const editarItem = (item: Venda | NaoVenda, tipo: "venda" | "naoVenda") => {
+  const editarItem = (
+    item: Venda | NaoVenda | Cotacao,
+    tipo: "venda" | "naoVenda" | "cotacao"
+  ) => {
     if (tipo === "venda") {
-      router.push(`/vendas/${item.id}/editar`);
+      router.push(`/vendas/${item.id}/editar?modo=finalizada`);
+    } else if (tipo === "naoVenda") {
+      router.push(`/vendas/${item.id}/editar?modo=cancelada`);
     } else {
-      router.push(`/vendas/${item.id}/editar`);
+      router.push(`/vendas/${item.id}/editar?modo=pendente`);
     }
   };
 
   // Excluir item
   const confirmarExclusao = (
-    item: Venda | NaoVenda,
-    tipo: "venda" | "naoVenda"
+    item: Venda | NaoVenda | Cotacao,
+    tipo: "venda" | "naoVenda" | "cotacao"
   ) => {
-    setVendaSelecionada(item);
+    if (tipo === "cotacao") {
+      // Adaptar cotação para o formato esperado
+      const cotacaoAdaptada = {
+        ...item,
+        codigoVenda: (item as Cotacao).codigoCotacao,
+      } as unknown as Venda | NaoVenda;
+
+      setVendaSelecionada(cotacaoAdaptada);
+    } else {
+      setVendaSelecionada(item as Venda | NaoVenda);
+    }
+
     setItemTipo(tipo);
     setConfirmacaoExclusao(true);
   };
@@ -349,26 +465,41 @@ export function VendasTableAjustada({
         resultado = await excluirVenda(vendaSelecionada.id as string);
 
         if (resultado.success) {
-          toast.success("Venda excluída com sucesso");
+          toast.success("Cotação finalizada excluída com sucesso");
           setVendas(vendas.filter((v) => v.id !== vendaSelecionada.id));
         } else {
-          toast.error(resultado.error || "Erro ao excluir venda");
+          toast.error(resultado.error || "Erro ao excluir cotação finalizada");
         }
-      } else {
+      } else if (itemTipo === "naoVenda") {
         resultado = await excluirNaoVenda(vendaSelecionada.id as string);
 
         if (resultado.success) {
-          toast.success("Venda perdida excluída com sucesso");
+          toast.success("Cotação cancelada excluída com sucesso");
           setNaoVendas(naoVendas.filter((v) => v.id !== vendaSelecionada.id));
         } else {
-          toast.error(resultado.error || "Erro ao excluir Venda perdida");
+          toast.error(resultado.error || "Erro ao excluir cotação cancelada");
+        }
+      } else if (itemTipo === "cotacao") {
+        // Nova lógica para excluir cotações pendentes
+        resultado = await excluirCotacao(vendaSelecionada.id as string);
+
+        if (resultado.success) {
+          toast.success("Cotação pendente excluída com sucesso");
+          setCotacoes(cotacoes.filter((c) => c.id !== vendaSelecionada.id));
+        } else {
+          toast.error(resultado.error || "Erro ao excluir cotação pendente");
         }
       }
     } catch (error) {
       console.error("Erro ao excluir item:", error);
-      toast.error(
-        `Erro ao excluir ${itemTipo === "venda" ? "venda" : "Venda perdida"}`
-      );
+      const tipoMensagem =
+        itemTipo === "venda"
+          ? "cotação finalizada"
+          : itemTipo === "naoVenda"
+          ? "cotação cancelada"
+          : "cotação pendente";
+
+      toast.error(`Erro ao excluir ${tipoMensagem}`);
     } finally {
       setConfirmacaoExclusao(false);
       setVendaSelecionada(null);
@@ -403,11 +534,54 @@ export function VendasTableAjustada({
     toast.success("Filtrado por período: Mês atual");
   };
 
+  // Função para combinar e ordenar todos os itens para a tab "Todas as Cotações"
+  const getAllItems = () => {
+    const allItems: Array<{
+      item: Venda | NaoVenda | Cotacao;
+      tipo: "venda" | "naoVenda" | "cotacao";
+      data: Date;
+    }> = [];
+
+    // Adicionar vendas
+    vendas.forEach((venda) => {
+      allItems.push({
+        item: venda,
+        tipo: "venda",
+        data: new Date(venda.createdAt),
+      });
+    });
+
+    // Adicionar não vendas
+    naoVendas.forEach((naoVenda) => {
+      allItems.push({
+        item: naoVenda,
+        tipo: "naoVenda",
+        data: new Date(naoVenda.createdAt),
+      });
+    });
+
+    // Adicionar cotações pendentes
+    cotacoes.forEach((cotacao) => {
+      allItems.push({
+        item: cotacao,
+        tipo: "cotacao",
+        data: new Date(cotacao.createdAt),
+      });
+    });
+
+    // Ordenar por data
+    return allItems.sort((a, b) => {
+      return sortDirection === "asc" 
+        ? a.data.getTime() - b.data.getTime()
+        : b.data.getTime() - a.data.getTime();
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Cabeçalho e filtros */}
       <div className="flex justify-between">
-        <h2 className="text-2xl font-semibold">Painel de Vendas</h2>
+        <h2 className="text-2xl font-semibold">Painel de Cotações</h2>
         <div className="flex items-center gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
@@ -458,7 +632,6 @@ export function VendasTableAjustada({
         </div>
       </div>
 
-      {/* Nova UI de Botões de Ação */}
       {/* Estatísticas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-white">
@@ -469,11 +642,39 @@ export function VendasTableAjustada({
                   <div className="bg-blue-100 p-2 rounded-full">
                     <FileText className="h-6 w-6 text-blue-600" />
                   </div>
-                  <p className="text-sm text-gray-500">Total de Orçamentos</p>
+                  <p className="text-sm text-gray-500">Total de Cotações</p>
                 </div>
                 <h3 className="text-2xl pl-12 font-bold mt-1">
-                  {estatisticas.totalOrcamentos || 0}
+                  {totalCotacoes}
                 </h3>
+                <p className="text-xs text-gray-400 pl-12 mt-1">
+                  {formatarValorBRL(
+                    (estatisticas.valorTotalVendas || 0) + 
+                    (estatisticas.valorTotalNaoVendas || 0) + 
+                    valorTotalCotacoesPendentes
+                  )}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white">
+          <CardContent>
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="bg-orange-100 p-2 rounded-full">
+                    <Clock className="h-6 w-6 text-orange-600" />
+                  </div>
+                  <p className="text-sm text-gray-500">Cotações Pendentes</p>
+                </div>
+                <h3 className="text-2xl pl-12 font-bold mt-1">
+                  {cotacoes.length}
+                </h3>
+                <p className="text-xs text-gray-400 pl-12 mt-1">
+                  {formatarValorBRL(valorTotalCotacoesPendentes)}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -487,11 +688,14 @@ export function VendasTableAjustada({
                   <div className="bg-green-100 p-2 rounded-full">
                     <CheckCircle className="h-6 w-6 text-green-600" />
                   </div>
-                  <p className="text-sm text-gray-500">Vendas (Aprovados)</p>
+                  <p className="text-sm text-gray-500">Cotações Finalizadas</p>
                 </div>
                 <h3 className="text-2xl pl-12 font-bold mt-1">
                   {estatisticas.totalVendas || 0}
                 </h3>
+                <p className="text-xs text-gray-400 pl-12 mt-1">
+                  {formatarValorBRL(estatisticas.valorTotalVendas || 0)}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -505,51 +709,36 @@ export function VendasTableAjustada({
                   <div className="bg-red-100 p-2 rounded-full">
                     <XCircle className="h-6 w-6 text-red-600" />
                   </div>
-                  <p className="text-sm text-gray-500">
-                    Venda perdidas (Recusados)
-                  </p>
+                  <p className="text-sm text-gray-500">Cotações Canceladas</p>
                 </div>
                 <h3 className="text-2xl pl-12 font-bold mt-1">
                   {estatisticas.totalNaoVendas || 0}
                 </h3>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white">
-          <CardContent>
-            <div className="flex items-start justify-between">
-              <div>
-              <div className="flex items-center gap-2">
-                  <div className="bg-purple-100 p-2 rounded-full">
-                    <DollarSign className="h-6 w-6 text-purple-600" />
-                  </div>
-                  <p className="text-sm text-gray-500">Valor Total de Vendas</p>
-                </div>
-                <h3 className="text-[20px] pl-12 font-bold mt-1">
-                  {formatarValorBRL(estatisticas.valorTotalVendas || 0)}
-                </h3>
+                <p className="text-xs text-gray-400 pl-12 mt-1">
+                  {formatarValorBRL(estatisticas.valorTotalNaoVendas || 0)}
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
+
       <div className="flex items-center justify-center gap-4 bg-slate-50 py-6 px-8 rounded-lg">
         <div className="flex-1 text-center">
           <h3 className="text-lg font-semibold text-[#001f31] mb-4">
-            Registrar Nova Transação
+            Registrar Nova Cotação
           </h3>
           <div className="flex gap-3 justify-center">
             <Link href="/vendas/nova">
-              <Button className="bg-green-600 !px-8 hover:bg-green-700">
-                <ThumbsUp className="mr-1 h-6 w-8" />
-                Nova Venda
+              <Button className="bg-green-600 !px-10 h-12 text-md hover:bg-green-700">
+                <ThumbsUp className="h-10 w-10" />
+                Nova Cotação
               </Button>
             </Link>
           </div>
           <p className="text-sm text-gray-500 mt-3">
-            Registre vendas fechadas ou não consumadas para análise comparativa
+            Registre cotações finalizadas ou cotações canceladas para análise
+            comparativa
           </p>
         </div>
       </div>
@@ -561,12 +750,13 @@ export function VendasTableAjustada({
         className="space-y-4"
       >
         <TabsList className="bg-gray-100 p-1">
-          <TabsTrigger value="painel">Painel de Vendas</TabsTrigger>
-          <TabsTrigger value="vendas">Vendas</TabsTrigger>
-          <TabsTrigger value="naovendas">Venda perdidas</TabsTrigger>
+          <TabsTrigger value="painel">Todas as Cotações</TabsTrigger>
+          <TabsTrigger value="cotacoes">Cotações Pendentes</TabsTrigger>
+          <TabsTrigger value="vendas">Cotações Finalizadas</TabsTrigger>
+          <TabsTrigger value="naovendas">Cotações Canceladas</TabsTrigger>
         </TabsList>
 
-        {/* Conteúdo da Tab Painel */}
+        {/* Conteúdo da Tab Painel - TODAS AS COTAÇÕES */}
         <TabsContent value="painel">
           <div className="bg-white rounded-lg border shadow-sm">
             <Table>
@@ -584,29 +774,43 @@ export function VendasTableAjustada({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {vendas.length > 0 ? (
-                  vendas.map((venda) => (
-                    <TableRow key={venda.id}>
+                {getAllItems().length > 0 ? (
+                  getAllItems().map(({ item, tipo }, index) => (
+                    <TableRow key={`${tipo}-${item.id}-${index}`}>
                       <TableCell className="font-medium">
-                        {venda.codigoVenda}
+                        {tipo === "cotacao" 
+                          ? (item as Cotacao).codigoCotacao 
+                          : (item as Venda | NaoVenda).codigoVenda
+                        }
                       </TableCell>
-                      <TableCell>{venda.vendedorNome}</TableCell>
-                      <TableCell>{venda.cliente.nome}</TableCell>
-                      <TableCell>{venda.cliente.cnpj}</TableCell>
+                      <TableCell>{item.vendedorNome}</TableCell>
+                      <TableCell>{item.cliente.nome}</TableCell>
+                      <TableCell>{item.cliente.cnpj}</TableCell>
                       <TableCell>-</TableCell>
                       <TableCell>
-                        {formatarValorBRL(venda.valorTotal)}
+                        {formatarValorBRL(item.valorTotal)}
                       </TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className="bg-green-100 text-green-800"
+                          className={
+                            tipo === "venda"
+                              ? "bg-green-100 text-green-800"
+                              : tipo === "naoVenda"
+                              ? "bg-red-100 text-red-800"
+                              : "bg-orange-100 text-orange-800"
+                          }
                         >
-                          Aprovada
+                          {tipo === "venda" 
+                            ? "Finalizada" 
+                            : tipo === "naoVenda" 
+                            ? "Cancelada" 
+                            : "Pendente"
+                          }
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {format(new Date(venda.createdAt), "dd/MM/yyyy", {
+                        {format(new Date(item.createdAt), "dd/MM/yyyy", {
                           locale: ptBR,
                         })}
                       </TableCell>
@@ -619,22 +823,20 @@ export function VendasTableAjustada({
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
-                              onClick={() => verDetalhes(venda, "venda")}
+                              onClick={() => verDetalhes(item, tipo)}
                             >
                               <Eye className="mr-2 h-4 w-4" />
                               Ver Detalhes
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => editarItem(venda, "venda")}
+                              onClick={() => editarItem(item, tipo)}
                             >
                               <Edit className="mr-2 h-4 w-4" />
                               Editar
                             </DropdownMenuItem>
                             {isAdmin && (
                               <DropdownMenuItem
-                                onClick={() =>
-                                  confirmarExclusao(venda, "venda")
-                                }
+                                onClick={() => confirmarExclusao(item, tipo)}
                                 className="text-red-600"
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
@@ -652,7 +854,7 @@ export function VendasTableAjustada({
                       colSpan={9}
                       className="text-center h-32 text-gray-500"
                     >
-                      Nenhuma venda encontrada
+                      Nenhuma cotação encontrada
                     </TableCell>
                   </TableRow>
                 )}
@@ -738,7 +940,7 @@ export function VendasTableAjustada({
                       colSpan={8}
                       className="text-center h-32 text-gray-500"
                     >
-                      Nenhuma venda encontrada
+                      Nenhuma cotação finalizada encontrada
                     </TableCell>
                   </TableRow>
                 )}
@@ -747,7 +949,7 @@ export function VendasTableAjustada({
           </div>
         </TabsContent>
 
-        {/* Conteúdo da Tab Venda perdidas */}
+        {/* Conteúdo da Tab Cotações canceladas */}
         <TabsContent value="naovendas">
           <div className="bg-white rounded-lg border shadow-sm">
             <Table>
@@ -830,7 +1032,100 @@ export function VendasTableAjustada({
                       colSpan={9}
                       className="text-center h-32 text-gray-500"
                     >
-                      Nenhuma Venda-Perdida encontrada
+                      Nenhuma cotação cancelada encontrada
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+
+        {/* Conteúdo da Tab Cotações Pendentes */}
+        <TabsContent value="cotacoes">
+          <div className="bg-white rounded-lg border shadow-sm">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Vendedor</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>CNPJ</TableHead>
+                  <TableHead>Valor Total</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cotacoes.length > 0 ? (
+                  cotacoes.map((cotacao) => (
+                    <TableRow key={cotacao.id}>
+                      <TableCell className="font-medium">
+                        {cotacao.codigoCotacao}
+                      </TableCell>
+                      <TableCell>{cotacao.vendedorNome}</TableCell>
+                      <TableCell>{cotacao.cliente.nome}</TableCell>
+                      <TableCell>{cotacao.cliente.cnpj}</TableCell>
+                      <TableCell>
+                        {formatarValorBRL(cotacao.valorTotal)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className="bg-orange-100 text-orange-800"
+                        >
+                          Pendente
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {format(new Date(cotacao.createdAt), "dd/MM/yyyy", {
+                          locale: ptBR,
+                        })}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => verDetalhes(cotacao, "cotacao")}
+                            >
+                              <Eye className="mr-2 h-4 w-4" />
+                              Ver Detalhes
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => editarItem(cotacao, "cotacao")}
+                            >
+                              <Edit className="mr-2 h-4 w-4" />
+                              Editar
+                            </DropdownMenuItem>
+                            {isAdmin && (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  confirmarExclusao(cotacao, "cotacao")
+                                }
+                                className="text-red-600"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Excluir
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={8}
+                      className="text-center h-32 text-gray-500"
+                    >
+                      Nenhuma cotação pendente encontrada
                     </TableCell>
                   </TableRow>
                 )}
@@ -844,7 +1139,7 @@ export function VendasTableAjustada({
       <Dialog open={filtroAberto} onOpenChange={setFiltroAberto}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Filtrar Vendas</DialogTitle>
+            <DialogTitle>Filtrar Cotações</DialogTitle>
           </DialogHeader>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
@@ -1138,8 +1433,10 @@ export function VendasTableAjustada({
             <DialogHeader>
               <DialogTitle>
                 {itemTipo === "venda"
-                  ? "Detalhes da Venda"
-                  : "Detalhes da Venda perdida"}
+                  ? "Detalhes da Cotação Finalizada"
+                  : itemTipo === "naoVenda"
+                  ? "Detalhes da Cotação Cancelada"
+                  : "Detalhes da Cotação Pendente"}
               </DialogTitle>
             </DialogHeader>
 
@@ -1177,14 +1474,16 @@ export function VendasTableAjustada({
                       {formatarValorBRL(vendaSelecionada.valorTotal)}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">
-                      Condição de Pagamento:
-                    </span>
-                    <span className="font-medium">
-                      {vendaSelecionada.condicaoPagamento}
-                    </span>
-                  </div>
+                  {itemTipo !== "cotacao" && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">
+                        Condição de Pagamento:
+                      </span>
+                      <span className="font-medium">
+                        {vendaSelecionada.condicaoPagamento}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1227,13 +1526,15 @@ export function VendasTableAjustada({
               <h4 className="font-medium text-gray-700 mb-2">
                 {itemTipo === "venda"
                   ? "Produtos"
-                  : "Produtos Garden vs Concorrência"}
+                  : itemTipo === "naoVenda"
+                  ? "Produtos Garden vs Concorrência"
+                  : "Produtos"}
               </h4>
 
               {itemTipo === "venda" ? (
                 // Produtos para venda
                 <div className="space-y-2">
-                  {(vendaSelecionada as Venda).produtos.map(
+                  {(vendaSelecionada as Venda).produtos?.map(
                     (produto, index) => (
                       <div
                         key={index}
@@ -1251,12 +1552,12 @@ export function VendasTableAjustada({
                         </p>
                       </div>
                     )
-                  )}
+                  ) || <p>Nenhum produto encontrado</p>}
                 </div>
-              ) : (
-                // Produtos para Venda perdida (comparação com concorrência)
+              ) : itemTipo === "naoVenda" ? (
+                // Produtos para Cotação cancelada (comparação com concorrência)
                 <div className="space-y-3">
-                  {(vendaSelecionada as NaoVenda).produtosConcorrencia.map(
+                  {(vendaSelecionada as NaoVenda).produtosConcorrencia?.map(
                     (item, index) => (
                       <div key={index} className="bg-gray-50 p-3 rounded-lg">
                         <div className="flex justify-between items-center mb-2">
@@ -1282,22 +1583,27 @@ export function VendasTableAjustada({
                           <div className="flex justify-between items-center">
                             <div>
                               <p className="text-sm font-medium">
-                                Concorrência: {item.nomeConcorrencia}
+                                Concorrência:{" "}
+                                {item.infoNaoDisponivel
+                                  ? "Não disponível"
+                                  : item.nomeConcorrencia}
                               </p>
                               <p className="text-sm text-gray-600">
                                 Valor:{" "}
-                                {formatarValorBRL(item.valorConcorrencia)}
+                                {item.infoNaoDisponivel
+                                  ? "Não disponível"
+                                  : formatarValorBRL(item.valorConcorrencia)}
                               </p>
                             </div>
 
-                            {item.icms && (
+                            {!item.infoNaoDisponivel && item.icms && (
                               <p className="text-sm text-gray-600">
                                 ICMS: {item.icms}%
                               </p>
                             )}
                           </div>
 
-                          {item.objecao && (
+                          {!item.infoNaoDisponivel && item.objecao && (
                             <p className="text-sm text-gray-600 mt-1">
                               <span className="font-medium">Objeção:</span>{" "}
                               {item.objecao}
@@ -1306,12 +1612,35 @@ export function VendasTableAjustada({
                         </div>
                       </div>
                     )
-                  )}
+                  ) || <p>Nenhuma informação de concorrência encontrada</p>}
+                </div>
+              ) : (
+                // Produtos para cotação pendente
+                <div className="space-y-2">
+                  {(vendaSelecionada as unknown as Cotacao).produtos?.map(
+                    (produto, index) => (
+                      <div
+                        key={index}
+                        className="bg-gray-50 p-3 rounded-lg flex justify-between items-center"
+                      >
+                        <div>
+                          <p className="font-medium">{produto.nome}</p>
+                          <p className="text-sm text-gray-500">
+                            {produto.quantidade} {produto.medida} x{" "}
+                            {formatarValorBRL(produto.valor)}
+                          </p>
+                        </div>
+                        <p className="font-medium">
+                          {formatarValorBRL(produto.quantidade * produto.valor)}
+                        </p>
+                      </div>
+                    )
+                  ) || <p>Nenhum produto encontrado</p>}
                 </div>
               )}
             </div>
 
-            {/* Exibir objeção geral se for Venda-Perdida */}
+            {/* Exibir objeção geral se for Cotação Cancelada */}
             {itemTipo === "naoVenda" &&
               (vendaSelecionada as NaoVenda).objecaoGeral && (
                 <div className="mt-4">
@@ -1349,8 +1678,12 @@ export function VendasTableAjustada({
             <DialogTitle>Confirmar Exclusão</DialogTitle>
             <DialogDescription>
               Tem certeza que deseja excluir{" "}
-              {itemTipo === "venda" ? "esta venda" : "esta Venda perdida"}? Esta
-              ação não pode ser desfeita.
+              {itemTipo === "venda"
+                ? "esta cotação finalizada"
+                : itemTipo === "naoVenda"
+                ? "esta cotação cancelada"
+                : "esta cotação pendente"}
+              ? Esta ação não pode ser desfeita.
             </DialogDescription>
           </DialogHeader>
 

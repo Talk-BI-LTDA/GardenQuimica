@@ -1,52 +1,48 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 model User {
-  id        String     @id @default(uuid())
-  name      String
-  email     String     @unique
-  password  String
-  cpf       String     @unique
-  role      Role       @default(VENDEDOR)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  regiao    String?
-  vendas    Venda[]
-  naoVendas NaoVenda[]
-
-  // Relações de criação e edição de usuários
-  createdByMe User[]  @relation("UserCreatedBy")
-  createdBy   User?   @relation("UserCreatedBy", fields: [createdById], references: [id])
-  createdById String?
-
-  editedByMe User[]  @relation("UserEditedBy")
-  editedBy   User?   @relation("UserEditedBy", fields: [editedById], references: [id])
-  editedById String?
-
-  // Relações com outras entidades
-  clientesCreated      Cliente[]             @relation("ClienteCreatedBy")
-  clientesEdited       Cliente[]             @relation("ClienteEditedBy")
-  segmentosCreated     Segmento[]
-  medidasCreated       Medida[]
-  condicoesCreated     CondicaoPagamento[]
-  recorrenciasCreated  Recorrencia[]
-  produtosCreated      Produto[]
-  vendasEditadas       Venda[]               @relation("VendaEditedBy")
-  naoVendasEditadas    NaoVenda[]            @relation("NaoVendaEditedBy")
-  catalogoProdutos     CatalogoProduto[]
+  id                   String                @id @default(uuid())
+  name                 String
+  email                String                @unique
+  password             String
+  cpf                  String                @unique
+  role                 Role                  @default(VENDEDOR)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  createdById          String?
+  editedById           String?
+  regiao               String?
   catalogoMedidas      CatalogoMedida[]
+  catalogoObjecoes     CatalogoObjecao[]
+  catalogoPagamentos   CatalogoPagamento[]
+  catalogoProdutos     CatalogoProduto[]
   catalogoRecorrencias CatalogoRecorrencia[]
   catalogoSegmentos    CatalogoSegmento[]
-  catalogoPagamentos   CatalogoPagamento[]
-  catalogoObjecoes     CatalogoObjecao[]
+  clientesCreated      Cliente[]             @relation("ClienteCreatedBy")
+  clientesEdited       Cliente[]             @relation("ClienteEditedBy")
+  condicoesCreated     CondicaoPagamento[]
+  medidasCreated       Medida[]
+  naoVendasEditadas    NaoVenda[]            @relation("NaoVendaEditedBy")
+  naoVendas            NaoVenda[]
+  produtosCreated      Produto[]
+  recorrenciasCreated  Recorrencia[]
+  segmentosCreated     Segmento[]
+  createdBy            User?                 @relation("UserCreatedBy", fields: [createdById], references: [id])
+  createdByMe          User[]                @relation("UserCreatedBy")
+  editedBy             User?                 @relation("UserEditedBy", fields: [editedById], references: [id])
+  editedByMe           User[]                @relation("UserEditedBy")
+  vendasEditadas       Venda[]               @relation("VendaEditedBy")
+  vendas               Venda[]
+    cotacoesEditadas     Cotacao[]     @relation("CotacaoEditedBy")
+  cotacoes             Cotacao[]
 }
 
 model PasswordReset {
@@ -57,216 +53,246 @@ model PasswordReset {
   expiresAt DateTime
 }
 
+model Cliente {
+  id          String     @id @default(uuid())
+  nome        String
+  segmento    String
+  cnpj        String
+  razaoSocial String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  createdById String
+  editedById  String?
+  createdBy   User       @relation("ClienteCreatedBy", fields: [createdById], references: [id])
+  editedBy    User?      @relation("ClienteEditedBy", fields: [editedById], references: [id])
+  naoVendas   NaoVenda[]
+  vendas      Venda[]
+
+  Cotacao Cotacao[]
+}
+
+model Produto {
+  id               String            @id @default(uuid())
+  nome             String
+  medida           String
+  quantidade       Int
+  valor            Float
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  createdById      String
+  comissao         Float?            @default(0)
+  icms             Float?            @default(0)
+  ipi              Float?            @default(0)
+  naoVendaProdutos NaoVendaProduto[]
+  createdBy        User              @relation(fields: [createdById], references: [id])
+  vendaProdutos    VendaProduto[]
+
+  CotacaoProduto CotacaoProduto[]
+}
+
+model VendaProduto {
+  id         String  @id @default(uuid())
+  vendaId    String
+  produtoId  String
+  quantidade Int
+  valor      Float
+  medida     String
+  comissao   Float?  @default(0)
+  icms       Float?  @default(0)
+  ipi        Float?  @default(0)
+  produto    Produto @relation(fields: [produtoId], references: [id])
+  venda      Venda   @relation(fields: [vendaId], references: [id], onDelete: Cascade)
+
+  @@index([vendaId])
+}
+
+model NaoVendaProduto {
+  id                String   @id @default(uuid())
+  naoVendaId        String
+  produtoId         String
+  quantidade        Int
+  valor             Float
+  medida            String
+  valorConcorrencia Float?
+  nomeConcorrencia  String?
+  icms              Float?
+  objecao           String?
+  infoNaoDisponivel Boolean? @default(false)
+  ipi               Float?
+  naoVenda          NaoVenda @relation(fields: [naoVendaId], references: [id], onDelete: Cascade)
+  produto           Produto  @relation(fields: [produtoId], references: [id])
+}
+
+model Venda {
+  id                String         @id @default(uuid())
+  codigoVenda       String         @unique
+  clienteId         String
+  valorTotal        Float
+  condicaoPagamento String
+  vendaRecorrente   Boolean        @default(false)
+  nomeRecorrencia   String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  vendedorId        String
+  editedById        String?
+  cliente           Cliente        @relation(fields: [clienteId], references: [id])
+  editedBy          User?          @relation("VendaEditedBy", fields: [editedById], references: [id])
+  vendedor          User           @relation(fields: [vendedorId], references: [id])
+  produtos          VendaProduto[]
+
+  @@index([createdAt])
+  @@index([vendedorId])
+}
+
+model NaoVenda {
+  id                String            @id @default(uuid())
+  codigoVenda       String            @unique
+  clienteId         String
+  valorTotal        Float
+  condicaoPagamento String
+  objecaoGeral      String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  vendedorId        String
+  editedById        String?
+  cliente           Cliente           @relation(fields: [clienteId], references: [id])
+  editedBy          User?             @relation("NaoVendaEditedBy", fields: [editedById], references: [id])
+  vendedor          User              @relation(fields: [vendedorId], references: [id])
+  produtos          NaoVendaProduto[]
+
+  @@index([createdAt])
+  @@index([vendedorId])
+}
+
+model Segmento {
+  id          String   @id @default(uuid())
+  nome        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+}
+
+model Medida {
+  id          String   @id @default(uuid())
+  nome        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+}
+
+model CondicaoPagamento {
+  id          String   @id @default(uuid())
+  nome        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+}
+
+model Recorrencia {
+  id          String   @id @default(uuid())
+  nome        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+}
+
+model CatalogoProduto {
+  id          String   @id @default(uuid())
+  nome        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+}
+
+model CatalogoMedida {
+  id          String   @id @default(uuid())
+  nome        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+}
+
+model CatalogoRecorrencia {
+  id          String   @id @default(uuid())
+  nome        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+}
+
+model CatalogoSegmento {
+  id          String   @id @default(uuid())
+  nome        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+}
+
+model CatalogoPagamento {
+  id          String   @id @default(uuid())
+  nome        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+}
+
+model CatalogoObjecao {
+  id          String   @id @default(uuid())
+  nome        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+}
+
 enum Role {
   ADMIN
   VENDEDOR
 }
 
-model Cliente {
-  id          String   @id @default(uuid())
-  nome        String
-  segmento    String
-  cnpj        String
-  razaoSocial String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  vendas    Venda[]
-  naoVendas NaoVenda[]
-
-  createdBy   User   @relation("ClienteCreatedBy", fields: [createdById], references: [id])
-  createdById String
-
-  editedBy   User?   @relation("ClienteEditedBy", fields: [editedById], references: [id])
-  editedById String?
-}
-
-model Produto {
-  id          String   @id @default(uuid())
-  nome        String
-  medida      String
-  quantidade  Int
-  valor       Float
-  recorrencia String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  vendaProdutos    VendaProduto[]
-  naoVendaProdutos NaoVendaProduto[]
-
-  createdBy   User   @relation(fields: [createdById], references: [id])
-  createdById String
-}
-
-model VendaProduto {
-  id          String  @id @default(uuid())
-  vendaId     String
-  produtoId   String
-  quantidade  Int
-  valor       Float
-  medida      String
-  recorrencia String?
-
-  venda   Venda   @relation(fields: [vendaId], references: [id], onDelete: Cascade)
-  produto Produto @relation(fields: [produtoId], references: [id])
-}
-
-model NaoVendaProduto {
-  id          String  @id @default(uuid())
-  naoVendaId  String
-  produtoId   String
-  quantidade  Int
-  valor       Float
-  medida      String
-  recorrencia String?
-
-  // Campos específicos para Venda perdida
-  valorConcorrencia Float?
-  nomeConcorrencia  String?
-  icms              Float?
-  objecao           String?
-
-  naoVenda NaoVenda @relation(fields: [naoVendaId], references: [id], onDelete: Cascade)
-  produto  Produto  @relation(fields: [produtoId], references: [id])
-}
-
-model Venda {
-  id                String   @id @default(uuid())
-  codigoVenda       String   @unique
+model Cotacao {
+  id                String          @id @default(uuid())
+  codigoCotacao     String          @unique
   clienteId         String
   valorTotal        Float
   condicaoPagamento String
-  vendaRecorrente   Boolean  @default(false)
+  vendaRecorrente   Boolean         @default(false)
   nomeRecorrencia   String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  status            String          @default("pendente") 
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  vendedorId        String
+  editedById        String?
+  cliente           Cliente         @relation(fields: [clienteId], references: [id])
+  editedBy          User?           @relation("CotacaoEditedBy", fields: [editedById], references: [id])
+  vendedor          User            @relation(fields: [vendedorId], references: [id])
+  produtos          CotacaoProduto[]
 
-  cliente    Cliente @relation(fields: [clienteId], references: [id])
-  vendedor   User    @relation(fields: [vendedorId], references: [id])
-  vendedorId String
-
-  produtos VendaProduto[]
-
-  editedBy   User?   @relation("VendaEditedBy", fields: [editedById], references: [id])
-  editedById String?
+  @@index([createdAt])
+  @@index([vendedorId])
 }
 
-model NaoVenda {
-  id                String   @id @default(uuid())
-  codigoVenda       String   @unique
-  clienteId         String
-  valorTotal        Float
-  condicaoPagamento String
-  objecaoGeral      String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+model CotacaoProduto {
+  id         String   @id @default(uuid())
+  cotacaoId  String
+  produtoId  String
+  quantidade Int
+  valor      Float
+  medida     String
+  comissao   Float?   @default(0)
+  icms       Float?   @default(0)
+  ipi        Float?   @default(0)
+  produto    Produto  @relation(fields: [produtoId], references: [id])
+  cotacao    Cotacao  @relation(fields: [cotacaoId], references: [id], onDelete: Cascade)
 
-  cliente    Cliente @relation(fields: [clienteId], references: [id])
-  vendedor   User    @relation(fields: [vendedorId], references: [id])
-  vendedorId String
-
-  produtos NaoVendaProduto[]
-
-  editedBy   User?   @relation("NaoVendaEditedBy", fields: [editedById], references: [id])
-  editedById String?
-}
-
-model Segmento {
-  id        String   @id @default(uuid())
-  nome      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  createdBy   User   @relation(fields: [createdById], references: [id])
-  createdById String
-}
-
-model Medida {
-  id        String   @id @default(uuid())
-  nome      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  createdBy   User   @relation(fields: [createdById], references: [id])
-  createdById String
-}
-
-model CondicaoPagamento {
-  id        String   @id @default(uuid())
-  nome      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  createdBy   User   @relation(fields: [createdById], references: [id])
-  createdById String
-}
-
-model Recorrencia {
-  id        String   @id @default(uuid())
-  nome      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  createdBy   User   @relation(fields: [createdById], references: [id])
-  createdById String
-}
-
-model CatalogoProduto {
-  id        String   @id @default(uuid())
-  nome      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  createdBy   User   @relation(fields: [createdById], references: [id])
-  createdById String
-}
-
-model CatalogoMedida {
-  id        String   @id @default(uuid())
-  nome      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  createdBy   User   @relation(fields: [createdById], references: [id])
-  createdById String
-}
-
-model CatalogoRecorrencia {
-  id        String   @id @default(uuid())
-  nome      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  createdBy   User   @relation(fields: [createdById], references: [id])
-  createdById String
-}
-
-model CatalogoSegmento {
-  id        String   @id @default(uuid())
-  nome      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  createdBy   User   @relation(fields: [createdById], references: [id])
-  createdById String
-}
-
-model CatalogoPagamento {
-  id        String   @id @default(uuid())
-  nome      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  createdBy   User   @relation(fields: [createdById], references: [id])
-  createdById String
-}
-
-model CatalogoObjecao {
-  id        String   @id @default(uuid())
-  nome      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  createdBy   User   @relation(fields: [createdById], references: [id])
-  createdById String
+  @@index([cotacaoId])
 }

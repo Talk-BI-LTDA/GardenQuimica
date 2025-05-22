@@ -797,7 +797,7 @@ const EnhancedDashboard: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Venda perdidas (Recusados) */}
+        {/* Cotações canceladas (Recusados) */}
         <Card className="w-[33%] !py-3">
           <CardContent >
             <div className="flex items-start justify-between">
@@ -898,15 +898,15 @@ const EnhancedDashboard: React.FC = () => {
                     </TabsTrigger>
                     <TabsTrigger
                       value="vendas"
-                      className="rounded data-[state=active]:shadow"
+                      className="data-[state=active]:shadow"
                     >
                       Vendas
                     </TabsTrigger>
                     <TabsTrigger
                       value="naoVendas"
-                      className="text-xs px-3 py-1 rounded data-[state=active]:shadow"
+                      className="rounded data-[state=active]:shadow"
                     >
-                      Venda perdidas
+                      Cotações canceladas
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
@@ -954,7 +954,7 @@ const EnhancedDashboard: React.FC = () => {
                       stackId="1"
                       stroke="#f43f5e"
                       fill="#f43f5e"
-                      name="Venda perdidas"
+                      name="Cotações canceladas"
                     />
                   )}
                 </AreaChart>
@@ -1459,7 +1459,7 @@ const EnhancedDashboard: React.FC = () => {
                                   <TableHead>Vendedor</TableHead>
                                   <TableHead>Email</TableHead>
                                   <TableHead>Vendas</TableHead>
-                                  <TableHead>Venda perdidas</TableHead>
+                                  <TableHead>Cotações canceladas</TableHead>
                                   <TableHead>Valor Total</TableHead>
                                   <TableHead>Taxa de Sucesso</TableHead>
                                   <TableHead>Última Venda</TableHead>
@@ -1611,7 +1611,7 @@ const EnhancedDashboard: React.FC = () => {
                                         </div>
                                         <div>
                                           <p className="text-xs text-gray-500">
-                                            Venda perdidas
+                                            Cotações canceladas
                                           </p>
                                           <p className="font-medium">
                                             {vendedor.quantidadeNaoVendas}

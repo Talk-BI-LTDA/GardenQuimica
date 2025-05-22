@@ -84,7 +84,10 @@ export async function criarVenda(data: VendaFormData) {
             quantidade: produto.quantidade,
             valor: produto.valor,
             medida: produto.medida,
-            recorrencia: produto.recorrencia,
+            // Novos campos
+            comissao: produto.comissao || 0,
+            icms: produto.icms || 0,
+            ipi: produto.ipi || 0,
             produto: {
               connectOrCreate: {
                 where: { id: produto.id || '' },
@@ -93,7 +96,10 @@ export async function criarVenda(data: VendaFormData) {
                   medida: produto.medida,
                   quantidade: produto.quantidade,
                   valor: produto.valor,
-                  recorrencia: produto.recorrencia,
+                  // Novos campos
+                  comissao: produto.comissao || 0,
+                  icms: produto.icms || 0,
+                  ipi: produto.ipi || 0,
                   createdById: session.user.id,
                 }
               }
@@ -246,7 +252,9 @@ export async function getVendas(filtros?: FiltrosVenda) {
         medida: p.produto.medida,
         quantidade: p.quantidade,
         valor: p.valor,
-        recorrencia: p.recorrencia || undefined
+        comissao: p.comissao || 0,
+        icms: p.icms || 0,
+        ipi: p.ipi || 0
       })),
       valorTotal: venda.valorTotal,
       condicaoPagamento: venda.condicaoPagamento,
@@ -408,7 +416,10 @@ export async function atualizarVenda(id: string, data: VendaFormData) {
             quantidade: produto.quantidade,
             valor: produto.valor,
             medida: produto.medida,
-            recorrencia: produto.recorrencia,
+            // Novos campos
+            comissao: produto.comissao || 0,
+            icms: produto.icms || 0,
+            ipi: produto.ipi || 0,
             produto: {
               connectOrCreate: {
                 where: { id: produto.id || '' },
@@ -417,7 +428,10 @@ export async function atualizarVenda(id: string, data: VendaFormData) {
                   medida: produto.medida,
                   quantidade: produto.quantidade,
                   valor: produto.valor,
-                  recorrencia: produto.recorrencia,
+                  // Novos campos
+                  comissao: produto.comissao || 0,
+                  icms: produto.icms || 0,
+                  ipi: produto.ipi || 0,
                   createdById: session.user.id,
                 }
               }
