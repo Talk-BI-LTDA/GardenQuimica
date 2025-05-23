@@ -17,6 +17,7 @@ export type Cliente = {
   cnpj: string;
   razaoSocial?: string;
   whatsapp?: string;
+  recorrente?: boolean; 
 };
 
 export type Venda = {

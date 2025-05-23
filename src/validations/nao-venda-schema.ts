@@ -35,6 +35,7 @@ const clienteSchema = z.object({
   cnpj: z.string().min(14, 'CNPJ inválido'),
   razaoSocial: z.string().optional(),
   whatsapp: z.string().optional(),
+  recorrente: z.boolean().optional(),
 });
 
 // Schema principal para não venda (cotação cancelada)

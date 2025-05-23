@@ -20,6 +20,7 @@ export const clienteSchema = z.object({
   cnpj: z.string().min(14, "CNPJ inválido"),
   razaoSocial: z.string().optional(),
   whatsapp: z.string().optional(),
+  recorrente: z.boolean().optional(),
 });
 
 export const vendaSchema = z.object({
@@ -29,6 +30,7 @@ export const vendaSchema = z.object({
   condicaoPagamento: z.string().min(1, "Condição de pagamento é obrigatória"),
   vendaRecorrente: z.boolean().default(false),
   nomeRecorrencia: z.string().optional(),
+  
 });
 
 export type ProdutoSchema = z.infer<typeof produtoSchema>;

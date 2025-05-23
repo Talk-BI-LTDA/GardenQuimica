@@ -66,8 +66,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getCotacoes, excluirCotacao } from "@/actions/cotacao-actions";
-import { Cotacao, ProdutoCotacao, StatusCotacao } from "@/types/cotacao-tipos";
-import { Cliente } from "@/types/usuario-tipos";
+import { Cotacao, } from "@/types/cotacao-tipos";
 import { formatarValorBRL } from "@/lib/utils";
 import { getVendas, excluirVenda } from "@/actions/venda-actions";
 import { getNaoVendas, excluirNaoVenda } from "@/actions/nao-venda-actions";
@@ -270,27 +269,23 @@ export function VendasTableAjustada({
         if (response.success) {
           // Mapear os dados retornados para garantir que tenham todas as propriedades necessárias
           const cotacoesFormatadas: Cotacao[] = response.cotacoes.map(
-            (cotacao: unknown) => {
-              const c = cotacao as Record<string, unknown>;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (cotacao: any) => {
               return {
-                id: c.id as string,
-                codigoCotacao: c.codigoCotacao as string,
-                cliente: c.cliente as Cliente,
-                produtos: (c.produtos || []) as ProdutoCotacao[],
-                valorTotal: c.valorTotal as number,
-                condicaoPagamento: c.condicaoPagamento as string,
-                vendaRecorrente: c.vendaRecorrente as boolean,
-                nomeRecorrencia: c.nomeRecorrencia as string | undefined,
-                status: c.status as StatusCotacao,
-                vendedorId: c.vendedorId as string,
-                vendedorNome:
-                  (c.vendedorNome as string) ||
-                  ((c.vendedor as Record<string, unknown> | undefined)
-                    ?.nome as string) ||
-                  "Não informado",
-                createdAt: new Date(c.createdAt as string),
-                updatedAt: new Date(c.updatedAt as string),
-                editedById: c.editedById as string | undefined,
+                id: cotacao.id,
+                codigoCotacao: cotacao.codigoCotacao,
+                cliente: cotacao.cliente,
+                produtos: cotacao.produtos || [],
+                valorTotal: cotacao.valorTotal,
+                condicaoPagamento: cotacao.condicaoPagamento,
+                vendaRecorrente: cotacao.vendaRecorrente,
+                nomeRecorrencia: cotacao.nomeRecorrencia,
+                status: cotacao.status,
+                vendedorId: cotacao.vendedorId,
+                vendedorNome: cotacao.vendedor?.name || "Sem vendedor",
+                createdAt: new Date(cotacao.createdAt),
+                updatedAt: new Date(cotacao.updatedAt),
+                editedById: cotacao.editedById,
               };
             }
           );

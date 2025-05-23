@@ -20,6 +20,7 @@ export type CotacaoFormData = {
     segmento: string;
     cnpj: string;
     razaoSocial?: string;
+    recorrente?: boolean;
   };
   produtos: {
     id?: string;
@@ -55,6 +56,9 @@ export async function criarCotacao(data: CotacaoFormData) {
       },
     });
 
+    // ✅ CORREÇÃO: Determinar se o cliente é recorrente baseado na cotação
+    const isRecorrente = data.vendaRecorrente && data.nomeRecorrencia;
+
     // Se não existir, criar novo cliente
     if (!cliente) {
       cliente = await prisma.cliente.create({
@@ -62,11 +66,23 @@ export async function criarCotacao(data: CotacaoFormData) {
           nome: data.cliente.nome,
           segmento: data.cliente.segmento,
           cnpj: data.cliente.cnpj,
-          razaoSocial: data.cliente.razaoSocial,
-          whatsapp: data.cliente.whatsapp,
+          razaoSocial: data.cliente.razaoSocial || null,
+          whatsapp: data.cliente.whatsapp || null, 
+          recorrente: isRecorrente ? true : false, 
           createdById: vendedorId,
         },
       });
+    } else {
+      // ✅ Se cliente já existe, atualizar recorrência se necessário
+      if (isRecorrente && !cliente.recorrente) {
+        await prisma.cliente.update({
+          where: { id: cliente.id },
+          data: { 
+            recorrente: true,
+            whatsapp: data.cliente.whatsapp || cliente.whatsapp, 
+          },
+        });
+      }
     }
 
     // Gerar código único para a cotação
@@ -157,11 +173,12 @@ export async function atualizarCotacao(id: string, data: CotacaoFormData) {
     }
 
     // Verificar se cliente já existe pelo CNPJ
-    let cliente = await prisma.cliente.findFirst({
+    let   cliente = await prisma.cliente.findFirst({
       where: {
         cnpj: data.cliente.cnpj,
       },
     });
+    const isRecorrente = data.vendaRecorrente && data.nomeRecorrencia;
 
     // Se não existir, criar novo cliente
     if (!cliente) {
@@ -173,6 +190,7 @@ export async function atualizarCotacao(id: string, data: CotacaoFormData) {
           razaoSocial: data.cliente.razaoSocial,
           createdById: vendedorId,
           whatsapp: data.cliente.whatsapp,
+          recorrente: isRecorrente ? true : false,
         },
       });
     }
@@ -284,6 +302,7 @@ export async function getCotacao(id: string) {
         cnpj: cotacao.cliente.cnpj,
         razaoSocial: cotacao.cliente.razaoSocial || "",
         whatsapp: cotacao.cliente.whatsapp || "",
+        recorrente: cotacao.cliente.recorrente || false,
       },
       produtos: cotacao.produtos.map((prod) => ({
         id: prod.produtoId,
@@ -460,7 +479,7 @@ export async function excluirCotacao(id: string) {
     id: string,
     novoStatus: StatusCotacao,
     data: VendaFormData | NaoVendaFormData
-  ) {
+  ): Promise<{ success?: boolean; error?: string; id?: string }> {
     try {
       const session = await auth();
       if (!session || !session.user) {

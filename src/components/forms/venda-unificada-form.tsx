@@ -431,6 +431,9 @@ export function VendaUnificadaFormTipado({
           condicaoPagamento: naoVendaData.condicaoPagamento,
           objecaoGeral: naoVendaData.objecaoGeral || "",
         });
+        console.log("Initial data cliente:", initialData?.cliente);
+
+
       } else {
         // Se tem status e é pendente, é uma cotação
         if (hasStatus && (initialData as Cotacao).status === "pendente") {
@@ -489,6 +492,7 @@ export function VendaUnificadaFormTipado({
                     razaoSocial: cliente.razaoSocial || "",
                     whatsapp: cliente.whatsapp || "",
                   });
+                  
                 }
               });
             }
@@ -1228,8 +1232,9 @@ export function VendaUnificadaFormTipado({
         cnpj: clienteSelecionado.cnpj,
         razaoSocial: clienteSelecionado.razaoSocial || "",
         whatsapp: clienteSelecionado.whatsapp || "", 
+        recorrente: true,
       };
-  
+      console.log("Dados do cliente:", dadosCliente);
       if (formMode === "venda") {
         vendaForm.setValue("cliente", dadosCliente);
         vendaForm.setValue("vendaRecorrente", true);

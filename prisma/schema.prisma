@@ -41,7 +41,7 @@ model User {
   editedByMe           User[]                @relation("UserEditedBy")
   vendasEditadas       Venda[]               @relation("VendaEditedBy")
   vendas               Venda[]
-    cotacoesEditadas     Cotacao[]     @relation("CotacaoEditedBy")
+  cotacoesEditadas     Cotacao[]             @relation("CotacaoEditedBy")
   cotacoes             Cotacao[]
 }
 
@@ -67,8 +67,9 @@ model Cliente {
   editedBy    User?      @relation("ClienteEditedBy", fields: [editedById], references: [id])
   naoVendas   NaoVenda[]
   vendas      Venda[]
-whatsapp    String? 
-  Cotacao Cotacao[]
+  whatsapp    String?
+  recorrente  Boolean    @default(false)  
+  Cotacao     Cotacao[]
 }
 
 model Produto {
@@ -83,6 +84,7 @@ model Produto {
   comissao         Float?            @default(0)
   icms             Float?            @default(0)
   ipi              Float?            @default(0)
+  recorrente       Boolean           @default(false)
   naoVendaProdutos NaoVendaProduto[]
   createdBy        User              @relation(fields: [createdById], references: [id])
   vendaProdutos    VendaProduto[]
@@ -260,21 +262,21 @@ enum Role {
 }
 
 model Cotacao {
-  id                String          @id @default(uuid())
-  codigoCotacao     String          @unique
+  id                String           @id @default(uuid())
+  codigoCotacao     String           @unique
   clienteId         String
   valorTotal        Float
   condicaoPagamento String
-  vendaRecorrente   Boolean         @default(false)
+  vendaRecorrente   Boolean          @default(false)
   nomeRecorrencia   String?
-  status            String          @default("pendente") 
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  status            String           @default("pendente")
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
   vendedorId        String
   editedById        String?
-  cliente           Cliente         @relation(fields: [clienteId], references: [id])
-  editedBy          User?           @relation("CotacaoEditedBy", fields: [editedById], references: [id])
-  vendedor          User            @relation(fields: [vendedorId], references: [id])
+  cliente           Cliente          @relation(fields: [clienteId], references: [id])
+  editedBy          User?            @relation("CotacaoEditedBy", fields: [editedById], references: [id])
+  vendedor          User             @relation(fields: [vendedorId], references: [id])
   produtos          CotacaoProduto[]
 
   @@index([createdAt])
@@ -282,17 +284,17 @@ model Cotacao {
 }
 
 model CotacaoProduto {
-  id         String   @id @default(uuid())
+  id         String  @id @default(uuid())
   cotacaoId  String
   produtoId  String
   quantidade Int
   valor      Float
   medida     String
-  comissao   Float?   @default(0)
-  icms       Float?   @default(0)
-  ipi        Float?   @default(0)
-  produto    Produto  @relation(fields: [produtoId], references: [id])
-  cotacao    Cotacao  @relation(fields: [cotacaoId], references: [id], onDelete: Cascade)
+  comissao   Float?  @default(0)
+  icms       Float?  @default(0)
+  ipi        Float?  @default(0)
+  produto    Produto @relation(fields: [produtoId], references: [id])
+  cotacao    Cotacao @relation(fields: [cotacaoId], references: [id], onDelete: Cascade)
 
   @@index([cotacaoId])
 }

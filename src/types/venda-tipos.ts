@@ -24,6 +24,7 @@ export type Cliente = {
   cnpj: string;
   razaoSocial?: string;
   whatsapp?: string;
+  recorrente?: boolean; 
 };
 
 // Tipo para formulário de venda
@@ -75,14 +76,15 @@ export type NaoVendaFormData = {
   objecaoGeral?: string;
 };
 
-// Tipo para cliente recorrente - Modificado para garantir que id é obrigatório
+// Tipo para cliente recorrente 
 export type ClienteRecorrente = {
-  id: string; // Agora é explicitamente obrigatório
+  id: string; 
   nome: string;
   cnpj: string;
   segmento: string;
   razaoSocial?: string;
   whatsapp?: string;
+  recorrente?: boolean; 
 };
 
 // Modo do formulário

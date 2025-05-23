@@ -61,7 +61,9 @@ export async function getVendedores(params?: VendedorParams) {
         nome: true,
         cnpj: true,
         segmento: true,
-        razaoSocial: true
+        razaoSocial: true,
+        whatsapp: true,
+        recorrente: true,
       }
     });
 
@@ -80,6 +82,7 @@ export async function getVendedores(params?: VendedorParams) {
         cnpj: cliente.cnpj,
         segmento: cliente.segmento,
         razaoSocial: cliente.razaoSocial || "",
+        whatsapp: cliente.whatsapp || "",
         recorrente: true
       }))
     }));

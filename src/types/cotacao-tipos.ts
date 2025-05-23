@@ -19,6 +19,7 @@ export interface CotacaoFormData {
     segmento: string;
     cnpj: string;
     razaoSocial?: string;
+    recorrente?: boolean;
   };
   produtos: {
     nome: string;

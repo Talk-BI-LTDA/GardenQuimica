@@ -1000,26 +1000,60 @@ export async function getClientesRecorrentes() {
   }
 
   try {
-    // Buscar clientes marcados como recorrentes (em vendas recorrentes)
-    const clientesRecorrentes = await prisma.cliente.findMany({
-      where: {
-        vendas: {
-          some: {
-            vendaRecorrente: true
+    console.log("🔍 Iniciando busca de clientes recorrentes...");
+    
+    // ✅ CORREÇÃO: Buscar clientes marcados diretamente como recorrentes OU que têm vendas recorrentes
+    const [clientesRecorrentesCampo, clientesRecorrentesVendas] = await Promise.all([
+      // Clientes marcados como recorrentes
+      prisma.cliente.findMany({
+        where: {
+          recorrente: true
+        },
+        select: {
+          id: true,
+          nome: true,
+          cnpj: true,
+          segmento: true,
+          razaoSocial: true,
+          whatsapp: true,
+          recorrente: true,
+        },
+      }),
+      
+      // Clientes que têm vendas recorrentes (fallback)
+      prisma.cliente.findMany({
+        where: {
+          vendas: {
+            some: {
+              vendaRecorrente: true
+            }
           }
-        }
-      },
-      select: {
-        id: true,
-        nome: true,
-        cnpj: true,
-        segmento: true,
-        razaoSocial: true,
-        whatsapp: true,
-      },
-      orderBy: {
-        nome: 'asc',
-      },
+        },
+        select: {
+          id: true,
+          nome: true,
+          cnpj: true,
+          segmento: true,
+          razaoSocial: true,
+          whatsapp: true,
+          recorrente: true,
+        },
+      })
+    ]);
+
+    // ✅ Combinar resultados e remover duplicatas
+    const clientesUnicos = new Map();
+    
+    [...clientesRecorrentesCampo, ...clientesRecorrentesVendas].forEach(cliente => {
+      clientesUnicos.set(cliente.id, cliente);
+    });
+    
+    const clientesRecorrentes = Array.from(clientesUnicos.values());
+    
+    console.log("📊 Clientes recorrentes encontrados:", {
+      porCampo: clientesRecorrentesCampo.length,
+      porVendas: clientesRecorrentesVendas.length,
+      total: clientesRecorrentes.length
     });
 
     // Mapear para o tipo ClienteRecorrente
@@ -1029,12 +1063,15 @@ export async function getClientesRecorrentes() {
       cnpj: cliente.cnpj,
       segmento: cliente.segmento,
       razaoSocial: cliente.razaoSocial || "",
-      whatsapp: cliente.whatsapp || ""
+      whatsapp: cliente.whatsapp || "",
+      recorrente: cliente.recorrente,
     }));
+
+    console.log("✅ Clientes mapeados:", clientesMapeados);
 
     return { success: true, clientes: clientesMapeados };
   } catch (error) {
-    console.error('Erro ao buscar clientes recorrentes:', error);
+    console.error('💥 Erro ao buscar clientes recorrentes:', error);
     return { error: 'Ocorreu um erro ao buscar os clientes recorrentes', clientes: [] };
   }
 }
