@@ -7,6 +7,59 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { differenceInDays } from 'date-fns'
 import { Cliente, ClienteParams, ClienteFiltros } from '@/types/cliente'
+interface VendaPrisma {
+  id: string;
+  valorTotal: number;
+  createdAt: Date;
+  vendaRecorrente: boolean;
+  produtos: {
+    produto: {
+      id: string;
+      nome: string;
+    };
+    quantidade: number;
+  }[];
+}
+
+interface CotacaoPrisma {
+  id: string;
+  valorTotal: number;
+  createdAt: Date;
+  vendaRecorrente: boolean;
+  status: string;
+  produtos: {
+    produto: {
+      id: string;
+      nome: string;
+    };
+    quantidade: number;
+  }[];
+}
+
+interface NaoVendaPrisma {
+  id: string;
+  valorTotal: number;
+  createdAt: Date;
+  produtos: {
+    produto: {
+      id: string;
+      nome: string;
+    };
+    quantidade: number;
+  }[];
+}
+
+interface ClientePrisma {
+  id: string;
+  nome: string;
+  segmento: string;
+  cnpj: string;
+  razaoSocial: string | null;
+  createdAt: Date;
+  vendas: VendaPrisma[];
+  Cotacao: CotacaoPrisma[];
+  naoVendas: NaoVendaPrisma[];
+}
 /**
  * Busca todos os clientes com opções de filtro
  */
@@ -99,7 +152,7 @@ export async function getClientes(filtros?: ClienteFiltros) {
       // Contagem total para paginação
       prisma.cliente.count({ where }),
       
-      // Busca principal de clientes com suas vendas
+      // Busca principal de clientes com suas vendas, cotações e não-vendas
       prisma.cliente.findMany({
         where,
         orderBy: buildOrderBy(filtros),
@@ -127,7 +180,48 @@ export async function getClientes(filtros?: ClienteFiltros) {
                       id: true,
                       nome: true
                     }
-                  }
+                  },
+                  quantidade: true
+                }
+              }
+            }
+          },
+          // Adicionar cotações
+          Cotacao: {
+            select: {
+              id: true,
+              valorTotal: true,
+              createdAt: true,
+              vendaRecorrente: true,
+              status: true,
+              produtos: {
+                select: {
+                  produto: {
+                    select: {
+                      id: true,
+                      nome: true
+                    }
+                  },
+                  quantidade: true
+                }
+              }
+            }
+          },
+          // Adicionar não-vendas
+          naoVendas: {
+            select: {
+              id: true,
+              valorTotal: true,
+              createdAt: true,
+              produtos: {
+                select: {
+                  produto: {
+                    select: {
+                      id: true,
+                      nome: true
+                    }
+                  },
+                  quantidade: true
                 }
               }
             }
@@ -141,30 +235,63 @@ export async function getClientes(filtros?: ClienteFiltros) {
       : 1
     
     // Calcular dados adicionais para cada cliente - otimizado para reduzir cálculos repetidos
-    const clientes = clientesDB.map(cliente => {
+    const clientes = clientesDB.map((cliente: ClientePrisma) => {
       // Calcular valor total e médio em uma única passagem
       const vendas = cliente.vendas || [];
+      const cotacoes = cliente.Cotacao || []; 
+      const naoVendas = cliente.naoVendas || []; 
+      
       let valorTotal = 0;
       let maiorValor = 0;
-      let ultimaCompraTimestamp = 0;
+      let ultimaInteracaoTimestamp = 0;
       const produtosContagem: Record<string, number> = {};
       
+      // Processar vendas
       vendas.forEach(venda => {
         // Valor total e maior valor
         valorTotal += venda.valorTotal;
         maiorValor = Math.max(maiorValor, venda.valorTotal);
         
-        // Última compra
-        ultimaCompraTimestamp = Math.max(ultimaCompraTimestamp, venda.createdAt.getTime());
+        // Última interação
+        ultimaInteracaoTimestamp = Math.max(ultimaInteracaoTimestamp, venda.createdAt.getTime());
         
         // Produtos
         venda.produtos.forEach(p => {
           const nomeProduto = p.produto.nome;
-          produtosContagem[nomeProduto] = (produtosContagem[nomeProduto] || 0) + 1;
+          produtosContagem[nomeProduto] = (produtosContagem[nomeProduto] || 0) + (p.quantidade || 1);
         });
       });
       
-      const valorMedio = vendas.length > 0 ? valorTotal / vendas.length : 0;
+      // Processar cotações (considerar apenas finalizadas para valores)
+      cotacoes.forEach((cotacao: CotacaoPrisma) => {
+        // Última interação (todas as cotações contam como interação)
+        ultimaInteracaoTimestamp = Math.max(ultimaInteracaoTimestamp, cotacao.createdAt.getTime());
+        
+        // Para cotações finalizadas, considerar valores
+        if (cotacao.status === 'finalizada') {
+          valorTotal += cotacao.valorTotal;
+          maiorValor = Math.max(maiorValor, cotacao.valorTotal);
+          
+          cotacao.produtos.forEach(p => {
+            const nomeProduto = p.produto.nome;
+            produtosContagem[nomeProduto] = (produtosContagem[nomeProduto] || 0) + (p.quantidade || 1);
+          });
+        }
+      });
+      
+      // Processar não-vendas (considerar apenas para interações)
+      naoVendas.forEach((naoVenda: NaoVendaPrisma) => {
+        // Última interação
+        ultimaInteracaoTimestamp = Math.max(ultimaInteracaoTimestamp, naoVenda.createdAt.getTime());
+      });
+      
+      // Total de todas as interações (vendas + cotações + não-vendas)
+      const totalInteracoes = vendas.length + cotacoes.length + naoVendas.length;
+      
+      // Valor médio (apenas de vendas e cotações finalizadas)
+      const cotacoesFinalizadas = cotacoes.filter((c: CotacaoPrisma) => c.status === 'finalizada');
+      const totalTransacoes = vendas.length + cotacoesFinalizadas.length;
+      const valorMedio = totalTransacoes > 0 ? valorTotal / totalTransacoes : 0;
       
       // Produto mais comprado
       let produtoMaisComprado: string | undefined = undefined;
@@ -177,27 +304,31 @@ export async function getClientes(filtros?: ClienteFiltros) {
         }
       });
       
-      // Última compra
-      const ultimaCompra = ultimaCompraTimestamp > 0 
-        ? new Date(ultimaCompraTimestamp)
+      // Última interação
+      const ultimaInteracao = ultimaInteracaoTimestamp > 0 
+        ? new Date(ultimaInteracaoTimestamp)
         : null;
       
-      // Calcular recorrência
-      const recorrente = vendas.some(v => v.vendaRecorrente);
+      // Calcular recorrência (das vendas e cotações)
+      const recorrente = vendas.some(v => v.vendaRecorrente) || cotacoes.some((c: CotacaoPrisma) => c.vendaRecorrente);
       
-      // Calcular dias desde última compra
-      const diasDesdeUltimaCompra = ultimaCompra 
-        ? differenceInDays(new Date(), ultimaCompra) 
+      // Calcular dias desde última interação
+      const diasDesdeUltimaInteracao = ultimaInteracao 
+        ? differenceInDays(new Date(), ultimaInteracao) 
         : 999;
       
-      // Calcular frequência média de compra
+      // Calcular frequência média de interação
       let freqCompra: number | undefined = undefined;
-      if (vendas.length > 1) {
-        // Ordenar datas de compra
-        const datasCompra = vendas.map(v => v.createdAt);
-        const datasOrdenadas = [...datasCompra].sort((a, b) => a.getTime() - b.getTime());
+      if (totalInteracoes > 1) {
+        // Ordenar datas de interação
+        const datasInteracao = [
+          ...vendas.map(v => v.createdAt),
+          ...cotacoes.map((c: CotacaoPrisma) => c.createdAt),
+          ...naoVendas.map((nv: NaoVendaPrisma) => nv.createdAt)
+        ];
+        const datasOrdenadas = [...datasInteracao].sort((a, b) => a.getTime() - b.getTime());
         
-        // Calcular diferenças entre compras consecutivas
+        // Calcular diferenças entre interações consecutivas
         let somaIntervalo = 0;
         for (let i = 1; i < datasOrdenadas.length; i++) {
           somaIntervalo += differenceInDays(datasOrdenadas[i], datasOrdenadas[i-1]);
@@ -210,14 +341,14 @@ export async function getClientes(filtros?: ClienteFiltros) {
       let score = 0;
       
       // Componente de recência (30% do score)
-      if (diasDesdeUltimaCompra <= 30) score += 30;
-      else if (diasDesdeUltimaCompra <= 90) score += 20;
-      else if (diasDesdeUltimaCompra <= 180) score += 10;
+      if (diasDesdeUltimaInteracao <= 30) score += 30;
+      else if (diasDesdeUltimaInteracao <= 90) score += 20;
+      else if (diasDesdeUltimaInteracao <= 180) score += 10;
       
       // Componente de frequência (30% do score)
-      if (vendas.length >= 10) score += 30;
-      else if (vendas.length >= 5) score += 20;
-      else if (vendas.length >= 2) score += 10;
+      if (totalInteracoes >= 10) score += 30;
+      else if (totalInteracoes >= 5) score += 20;
+      else if (totalInteracoes >= 2) score += 10;
       
       // Componente de valor (40% do score)
       if (valorTotal >= 50000) score += 40;
@@ -234,14 +365,14 @@ export async function getClientes(filtros?: ClienteFiltros) {
         razaoSocial: cliente.razaoSocial || undefined,
         valorTotal,
         valorMedio,
-        ultimaCompra,
-        quantidadeVendas: vendas.length,
+        ultimaCompra: ultimaInteracao,
+        quantidadeVendas: totalInteracoes,
         recorrente,
         produtoMaisComprado,
         dataCadastro: cliente.createdAt,
         freqCompra,
         maiorValor,
-        diasDesdeUltimaCompra,
+        diasDesdeUltimaCompra: diasDesdeUltimaInteracao,
         score
       };
       
@@ -348,6 +479,46 @@ export async function getClienteById(id: string) {
               }
             }
           }
+        },
+        // Incluir cotações para considerar nos cálculos
+        Cotacao: {
+          select: {
+            id: true,
+            valorTotal: true,
+            createdAt: true,
+            vendaRecorrente: true,
+            status: true,
+            produtos: {
+              select: {
+                produto: {
+                  select: {
+                    id: true,
+                    nome: true
+                  }
+                },
+                quantidade: true
+              }
+            }
+          }
+        },
+        // Incluir não-vendas para considerar nos cálculos
+        naoVendas: {
+          select: {
+            id: true,
+            valorTotal: true,
+            createdAt: true,
+            produtos: {
+              select: {
+                produto: {
+                  select: {
+                    id: true,
+                    nome: true
+                  }
+                },
+                quantidade: true
+              }
+            }
+          }
         }
       }
     });
@@ -361,9 +532,14 @@ export async function getClienteById(id: string) {
     let maiorValor = 0;
     let ultimaCompraTimestamp = 0;
     const produtosContagem: Record<string, number> = {};
+    
+    // Considerar vendas normais
     const vendas = cliente.vendas || [];
+    const cotacoes = cliente.Cotacao || [];
+    const naoVendas = cliente.naoVendas || [];
     const datasCompra: Date[] = [];
     
+    // Processar vendas
     vendas.forEach(venda => {
       valorTotal += venda.valorTotal;
       maiorValor = Math.max(maiorValor, venda.valorTotal);
@@ -376,7 +552,44 @@ export async function getClienteById(id: string) {
       });
     });
     
-    const valorMedio = vendas.length > 0 ? valorTotal / vendas.length : 0;
+    // Processar cotações (considerar apenas as finalizadas para cálculos de valor)
+    cotacoes.forEach((cotacao: CotacaoPrisma) => {
+      // Adicionar à lista de interações para considerar nas datas
+      datasCompra.push(cotacao.createdAt);
+      ultimaCompraTimestamp = Math.max(ultimaCompraTimestamp, cotacao.createdAt.getTime());
+      
+      // Considerar cotações finalizadas no valor total
+      if (cotacao.status === 'finalizada') {
+        valorTotal += cotacao.valorTotal;
+        maiorValor = Math.max(maiorValor, cotacao.valorTotal);
+        
+        cotacao.produtos.forEach(p => {
+          const nomeProduto = p.produto.nome;
+          produtosContagem[nomeProduto] = (produtosContagem[nomeProduto] || 0) + p.quantidade;
+        });
+      }
+    });
+    
+    // Processar não-vendas (considerar para interações, não para valores)
+    naoVendas.forEach((naoVenda: NaoVendaPrisma) => {
+      // Adicionar à lista de interações para datas
+      datasCompra.push(naoVenda.createdAt);
+      ultimaCompraTimestamp = Math.max(ultimaCompraTimestamp, naoVenda.createdAt.getTime());
+      
+      // Contar produtos para estatísticas
+      naoVenda.produtos.forEach(p => {
+        const nomeProduto = p.produto.nome;
+        produtosContagem[nomeProduto] = (produtosContagem[nomeProduto] || 0) + p.quantidade;
+      });
+    });
+    
+    // Total de todas as interações (vendas + cotações + não-vendas)
+    const totalInteracoes = vendas.length + cotacoes.length + naoVendas.length;
+    
+    // Calcular valor médio considerando apenas vendas e cotações finalizadas
+    const cotacoesFinalizadas = cotacoes.filter(c => c.status === 'finalizada');
+    const totalTransacoes = vendas.length + cotacoesFinalizadas.length;
+    const valorMedio = totalTransacoes > 0 ? valorTotal / totalTransacoes : 0;
     
     // Produto mais comprado
     let produtoMaisComprado: string | undefined = undefined;
@@ -389,17 +602,17 @@ export async function getClienteById(id: string) {
       }
     });
     
-    // Última compra
-    const ultimaCompra = ultimaCompraTimestamp > 0 
+    // Última interação (compra, cotação ou não-venda)
+    const ultimaInteracao = ultimaCompraTimestamp > 0 
       ? new Date(ultimaCompraTimestamp)
       : null;
     
     // Calcular recorrência
-    const recorrente = vendas.some(v => v.vendaRecorrente);
+    const recorrente = vendas.some(v => v.vendaRecorrente) || cotacoes.some(c => c.vendaRecorrente);
     
-    // Calcular dias desde última compra
-    const diasDesdeUltimaCompra = ultimaCompra 
-      ? differenceInDays(new Date(), ultimaCompra) 
+    // Calcular dias desde última interação
+    const diasDesdeUltimaInteracao = ultimaInteracao 
+      ? differenceInDays(new Date(), ultimaInteracao) 
       : 999;
     
     // Calcular frequência média de compra
@@ -421,14 +634,14 @@ export async function getClienteById(id: string) {
     let score = 0;
     
     // Componente de recência (30% do score)
-    if (diasDesdeUltimaCompra <= 30) score += 30;
-    else if (diasDesdeUltimaCompra <= 90) score += 20;
-    else if (diasDesdeUltimaCompra <= 180) score += 10;
+    if (diasDesdeUltimaInteracao <= 30) score += 30;
+    else if (diasDesdeUltimaInteracao <= 90) score += 20;
+    else if (diasDesdeUltimaInteracao <= 180) score += 10;
     
-    // Componente de frequência (30% do score)
-    if (vendas.length >= 10) score += 30;
-    else if (vendas.length >= 5) score += 20;
-    else if (vendas.length >= 2) score += 10;
+    // Componente de frequência (30% do score) - considerando todas as interações
+    if (totalInteracoes >= 10) score += 30;
+    else if (totalInteracoes >= 5) score += 20;
+    else if (totalInteracoes >= 2) score += 10;
     
     // Componente de valor (40% do score)
     if (valorTotal >= 50000) score += 40;
@@ -445,14 +658,14 @@ export async function getClienteById(id: string) {
       razaoSocial: cliente.razaoSocial || undefined,
       valorTotal,
       valorMedio,
-      ultimaCompra,
-      quantidadeVendas: vendas.length,
+      ultimaCompra: ultimaInteracao,
+      quantidadeVendas: totalInteracoes, 
       recorrente,
       produtoMaisComprado,
       dataCadastro: cliente.createdAt,
       freqCompra,
       maiorValor,
-      diasDesdeUltimaCompra,
+      diasDesdeUltimaCompra: diasDesdeUltimaInteracao, 
       score
     };
 
@@ -860,7 +1073,7 @@ export async function excluirCliente(id: string) {
   }
 
   try {
-    // Verificar se o cliente existe e se tem vendas/Venda-Perdidas associadas
+    // Verificar se o cliente existe e se tem vendas/Venda-Perdidas/cotações associadas
     const clienteExistente = await prisma.cliente.findUnique({
       where: { id },
       select: {
@@ -868,7 +1081,8 @@ export async function excluirCliente(id: string) {
         _count: {
           select: {
             vendas: true,
-            naoVendas: true
+            naoVendas: true,
+            Cotacao: true // Verificar cotações também
           }
         }
       }
@@ -878,9 +1092,17 @@ export async function excluirCliente(id: string) {
       return { success: false, error: 'Cliente não encontrado' };
     }
 
-    // Verificar se há vendas associadas
-    if (clienteExistente._count.vendas > 0 || clienteExistente._count.naoVendas > 0) {
-      return { success: false, error: 'Não é possível excluir um cliente com vendas ou Venda-Perdidas associadas' };
+    // Verificar se há registros associados
+    const totalAssociacoes = 
+      clienteExistente._count.vendas + 
+      clienteExistente._count.naoVendas + 
+      clienteExistente._count.Cotacao;
+      
+    if (totalAssociacoes > 0) {
+      return { 
+        success: false, 
+        error: `Não é possível excluir um cliente com ${totalAssociacoes} registros associados (vendas, cotações ou vendas-perdidas)` 
+      };
     }
 
     // Excluir cliente

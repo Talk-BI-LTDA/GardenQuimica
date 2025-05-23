@@ -40,6 +40,7 @@ import {
   Eye,
   ShoppingCart,
   Loader2,
+  Trash,
   CalendarIcon,
 } from "lucide-react";
 import { format, subDays, differenceInDays } from "date-fns";
@@ -115,6 +116,7 @@ import {
   getEstatisticasClientes,
   getVendasCliente,
   getSegmentos,
+  excluirCliente,
   // getDadosMensaisComparacao,
 } from "@/actions/clientes-actions";
 
@@ -233,7 +235,6 @@ const DonutChart: React.FC<DonutChartProps> = ({ data, title, height = 320 }) =>
 };
 
 // Componente principal da página de clientes
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const ClientesComponent: React.FC<{ session: SessionProps }> = ({ session }) => {
   const router = useRouter();
 
@@ -1326,7 +1327,7 @@ const ClientesComponent: React.FC<{ session: SessionProps }> = ({ session }) => 
                                   <Edit className="mr-2 h-4 w-4" />
                                   Editar cliente
                                 </DropdownMenuItem>
-                                {/* {session.user.role === "ADMIN" && (
+                                {session.user.role === "ADMIN" && (
                                   <DropdownMenuItem
                                     onClick={() => {
                                       setClienteSelecionado(cliente);
@@ -1337,7 +1338,7 @@ const ClientesComponent: React.FC<{ session: SessionProps }> = ({ session }) => 
                                     <Trash className="mr-2 h-4 w-4" />
                                     Excluir cliente
                                   </DropdownMenuItem>
-                                )} */}
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
@@ -2347,61 +2348,76 @@ const ClientesComponent: React.FC<{ session: SessionProps }> = ({ session }) => 
 
       {/* Modal de Confirmar Exclusão */}
       <Dialog
-        open={excluirClienteModalAberto}
-        onOpenChange={setExcluirClienteModalAberto}
+  open={excluirClienteModalAberto}
+  onOpenChange={setExcluirClienteModalAberto}
+>
+  <DialogContent className="max-w-md">
+    <DialogHeader>
+      <DialogTitle>Excluir Cliente</DialogTitle>
+      <DialogDescription>
+        Esta ação não pode ser desfeita. O cliente será permanentemente
+        excluído.
+      </DialogDescription>
+    </DialogHeader>
+
+    {clienteSelecionado && (
+      <div className="py-4">
+        <p className="text-center">
+          Tem certeza que deseja excluir o cliente{" "}
+          <span className="font-bold">{clienteSelecionado.nome}</span>?
+        </p>
+        {clienteSelecionado.quantidadeVendas > 0 && (
+          <p className="text-red-500 text-center mt-2">
+            Este cliente possui {clienteSelecionado.quantidadeVendas}{" "}
+            registros associados (vendas, cotações ou vendas perdidas). A exclusão só é possível para clientes sem registros associados.
+          </p>
+        )}
+      </div>
+    )}
+
+    <DialogFooter>
+      <Button
+        variant="outline"
+        onClick={() => setExcluirClienteModalAberto(false)}
       >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Excluir Cliente</DialogTitle>
-            <DialogDescription>
-              Esta ação não pode ser desfeita. O cliente será permanentemente
-              excluído.
-            </DialogDescription>
-          </DialogHeader>
-
-          {clienteSelecionado && (
-            <div className="py-4">
-              <p className="text-center">
-                Tem certeza que deseja excluir o cliente{" "}
-                <span className="font-bold">{clienteSelecionado.nome}</span>?
-              </p>
-              {clienteSelecionado.quantidadeVendas > 0 && (
-                <p className="text-red-500 text-center mt-2">
-                  Este cliente possui {clienteSelecionado.quantidadeVendas}{" "}
-                  vendas associadas. A exclusão só é possível para clientes sem
-                  vendas.
-                </p>
-              )}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setExcluirClienteModalAberto(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={
-                loading || (clienteSelecionado?.quantidadeVendas ?? 0) > 0
-              }
-              onClick={() => {
-                // Aqui deve submeter o formulário
-                toast.success("Cliente excluído com sucesso");
-                setExcluirClienteModalAberto(false);
-                carregarDados();
-              }}
-            >
-              {loading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
-              Excluir Cliente
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        Cancelar
+      </Button>
+      <Button
+        variant="destructive"
+        disabled={
+          loading || (clienteSelecionado?.quantidadeVendas ?? 0) > 0
+        }
+        onClick={async () => {
+          if (!clienteSelecionado) return;
+          
+          setLoading(true);
+          try {
+            // Chamar a API para excluir o cliente
+            const resultado = await excluirCliente(clienteSelecionado.id);
+            
+            if (resultado.success) {
+              toast.success("Cliente excluído com sucesso");
+              setExcluirClienteModalAberto(false);
+              carregarDados();
+            } else {
+              toast.error(resultado.error || "Erro ao excluir cliente");
+            }
+          } catch (error) {
+            console.error("Erro ao excluir cliente:", error);
+            toast.error("Ocorreu um erro ao excluir o cliente");
+          } finally {
+            setLoading(false);
+          }
+        }}
+      >
+        {loading ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : null}
+        Excluir Cliente
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
     </div>
   );
 };
