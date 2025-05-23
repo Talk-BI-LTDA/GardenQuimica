@@ -1,9 +1,9 @@
-// components/forms/cotacao/ProdutoVendaForm.tsx
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Plus, Info } from "lucide-react";
+import { getCatalogoItens } from "@/actions/catalogo-actions";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,10 +28,10 @@ import { formatCurrency } from "@/lib/utils";
 import type { Produto } from "@/types/venda-tipos";
 import type { StatusCotacao } from "@/types/cotacao-tipos";
 
-// Lista de medidas
+// Lista de medidas (base fixa)
 const medidasOptions = ["Litro", "Kg"];
 
-// Lista de produtos para seleção
+// Lista de produtos para seleção (base fixa)
 const productOptions = [
   "Ácido Esteárico Dupla Pressão Vegetal (Garden AE D - Vegetal)",
   "Ácido Esteárico Dupla Pressão Animal (Garden AE T)",
@@ -64,7 +64,6 @@ const productOptions = [
   "Lauril Éter Sulfato de Sódio 70% (Garden Pon LESS 70)",
   "Lauril Éter Sulfossuccinato de Sódio (Garden Pon SGC)",
   "Massa de Vela (Garden MV)",
-  "Adicionar Produto não catalogado...",
   "Óleo Mineral",
   "MYRJ",
   "Poliquaternium 7",
@@ -74,7 +73,6 @@ const productOptions = [
   "Renex"
 ];
 
-
 interface ProdutoVendaFormProps {
   currentProduto: Produto;
   handleChangeProduto: (field: keyof Produto, value: string | number) => void;
@@ -82,7 +80,7 @@ interface ProdutoVendaFormProps {
   statusCotacao: StatusCotacao;
   temObjecao: boolean;
   setTemObjecao: (value: boolean) => void;
-  setShowProdutoNaoCatalogadoDialog: (value: boolean) => void;
+  // REMOVIDO: setShowProdutoNaoCatalogadoDialog não é mais necessário
 }
 
 export function ProdutoVendaForm({
@@ -91,21 +89,52 @@ export function ProdutoVendaForm({
   handleAddProdutoVenda,
   temObjecao,
   setTemObjecao,
-  setShowProdutoNaoCatalogadoDialog,
-}: ProdutoVendaFormProps) {
+}: // REMOVIDO: setShowProdutoNaoCatalogadoDialog
+ProdutoVendaFormProps) {
   const [produtoSearchTerm, setProdutoSearchTerm] = useState<string>("");
   const selectProdutoRef = useRef<HTMLInputElement>(null);
 
+  // Estado para os produtos e medidas do catálogo
+  const [catalogoProdutos, setCatalogoProdutos] = useState<string[]>(productOptions);
+  const [catalogoMedidas, setCatalogoMedidas] = useState<string[]>(medidasOptions);
+
+  // Carregar produtos e medidas do catálogo quando o componente montar
+  useEffect(() => {
+    const carregarCatalogos = async () => {
+      try {
+        // Carregar produtos do catálogo
+        const resultadoProdutos = await getCatalogoItens("produto");
+        if (resultadoProdutos.success && resultadoProdutos.itens) {
+          const produtosDoSistema = resultadoProdutos.itens.map(item => item.nome);
+          // Combinar com os produtos padrão, remover duplicatas
+          const todosProdutos = [...new Set([...productOptions, ...produtosDoSistema])];
+          setCatalogoProdutos(todosProdutos);
+        }
+
+        // Carregar medidas do catálogo
+        const resultadoMedidas = await getCatalogoItens("medida");
+        if (resultadoMedidas.success && resultadoMedidas.itens) {
+          const medidasDoSistema = resultadoMedidas.itens.map(item => item.nome);
+          // Combinar com as medidas padrão, remover duplicatas
+          const todasMedidas = [...new Set([...medidasOptions, ...medidasDoSistema])];
+          setCatalogoMedidas(todasMedidas);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar catálogos:", error);
+        // Manter as opções padrão em caso de erro
+      }
+    };
+
+    carregarCatalogos();
+  }, []);
+
   // Filtrar produtos baseado na busca
-  const filteredProducts = productOptions.filter((product) =>
+  const filteredProducts = catalogoProdutos.filter((product) =>
     product.toLowerCase().includes(produtoSearchTerm.toLowerCase())
   );
 
+  // REMOVIDO: A função handleProductSelect foi simplificada
   const handleProductSelect = (value: string) => {
-    if (value === "Adicionar Produto não catalogado...") {
-      setShowProdutoNaoCatalogadoDialog(true);
-      return;
-    }
     handleChangeProduto("nome", value);
   };
 
@@ -118,7 +147,7 @@ export function ProdutoVendaForm({
               <FormLabel className="mb-1">Nome*</FormLabel>
               <Select
                 value={currentProduto.nome}
-                onValueChange={handleProductSelect}
+                onValueChange={handleProductSelect} // Simplificado
               >
                 <SelectTrigger className="">
                   <SelectValue placeholder="Produto" />
@@ -152,7 +181,7 @@ export function ProdutoVendaForm({
                   <SelectValue placeholder="Medida" />
                 </SelectTrigger>
                 <SelectContent>
-                  {medidasOptions.map((medida) => (
+                  {catalogoMedidas.map((medida) => (
                     <SelectItem key={medida} value={medida}>
                       {medida}
                     </SelectItem>
@@ -194,7 +223,6 @@ export function ProdutoVendaForm({
                   onChange={(e) => {
                     const rawValue = e.target.value.replace(/\D/g, "");
 
-                    // Trata explicitamente o zero
                     if (rawValue === "" || rawValue === "0") {
                       handleChangeProduto("valor", 0);
                       return;
@@ -268,8 +296,7 @@ export function ProdutoVendaForm({
             </div>
           </div>
 
-          {/* Opção para adicionar objeção individual ao produto */}
-          <div className="flex items-center mt-2">
+          <div className=" hidden items-center mt-2">
             <Checkbox
               id="tem-objecao"
               className="mr-2"

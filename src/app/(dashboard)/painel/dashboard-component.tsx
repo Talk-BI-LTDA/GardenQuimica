@@ -662,7 +662,7 @@ const EnhancedDashboard: React.FC = () => {
     <div className="space-y-6">
       {/* Cabeçalho */}
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-        <h2 className="text-2xl font-bold">Painel de Vendas</h2>
+        <h2 className="text-2xl font-bold">Painel de cotações</h2>
 
         <div className="flex flex-wrap gap-3 items-center">
           <Button variant="outline" onClick={toggleSortDirection}>
@@ -823,7 +823,7 @@ const EnhancedDashboard: React.FC = () => {
             <div className="flex items-start justify-between">
               <div>
                 <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
-                  Valor Total de Vendas{" "}
+                  Valor Total de Cotações finalizadas{" "}
                   <div className="bg-purple-100 w-fit p-2 rounded-full">
                     <DollarSign className="h-6 w-6 text-purple-600" />
                   </div>
@@ -842,7 +842,7 @@ const EnhancedDashboard: React.FC = () => {
             <div className="flex items-start justify-between">
               <div>
                 <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
-                  Vendas Perdidas{" "}
+                  Cotações canceladas{" "}
                   <div className="bg-orange-100 w-fit p-2 rounded-full">
                     <TrendingDown className="h-6 w-6 text-orange-600" />
                   </div>
@@ -881,7 +881,7 @@ const EnhancedDashboard: React.FC = () => {
         <Card className="md:col-span-2">
           <CardContent className="p-4">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium">Desempenho de Vendas</h3>
+              <h3 className="text-lg font-medium">Desempenho de cotações</h3>
               <div className="flex p-1 rounded-md">
                 <Tabs
                   value={chartTab}
@@ -900,7 +900,7 @@ const EnhancedDashboard: React.FC = () => {
                       value="vendas"
                       className="data-[state=active]:shadow"
                     >
-                      Vendas
+                      Cotações finalizadas
                     </TabsTrigger>
                     <TabsTrigger
                       value="naoVendas"
@@ -944,7 +944,7 @@ const EnhancedDashboard: React.FC = () => {
                       stackId="1"
                       stroke="#00446A"
                       fill="#00446A"
-                      name="Vendas"
+                      name="Cotações finalizadas"
                     />
                   )}
                   {(chartTab === "geral" || chartTab === "naoVendas") && (
@@ -1603,7 +1603,7 @@ const EnhancedDashboard: React.FC = () => {
                                       <div className="grid grid-cols-4 gap-4 mt-3">
                                         <div>
                                           <p className="text-xs text-gray-500">
-                                            Vendas
+                                            Cotações finalizadas
                                           </p>
                                           <p className="font-medium">
                                             {vendedor.quantidadeVendas}

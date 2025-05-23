@@ -1,9 +1,9 @@
-// components/forms/cotacao/ProdutoConcorrenciaForm.tsx
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Plus, ChevronDown, X, Tag } from "lucide-react";
+import { getCatalogoItens } from "@/actions/catalogo-actions";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,10 +28,10 @@ import { formatCurrency } from "@/lib/utils";
 import type { Produto } from "@/types/venda-tipos";
 import type { ProdutoConcorrenciaTemp } from "@/types/venda-tipos";
 
-// Lista de medidas
+// Lista de medidas (base fixa)
 const medidasOptions = ["Litro", "Kg"];
 
-// Lista de produtos para seleção
+// Lista de produtos para seleção (base fixa) - Item removido
 const productOptions = [
   "Ácido Esteárico Dupla Pressão Vegetal (Garden AE D - Vegetal)",
   "Ácido Esteárico Dupla Pressão Animal (Garden AE T)",
@@ -64,7 +64,6 @@ const productOptions = [
   "Lauril Éter Sulfato de Sódio 70% (Garden Pon LESS 70)",
   "Lauril Éter Sulfossuccinato de Sódio (Garden Pon SGC)",
   "Massa de Vela (Garden MV)",
-  "Adicionar Produto não catalogado...",
   "Óleo Mineral",
   "MYRJ",
   "Poliquaternium 7",
@@ -74,8 +73,7 @@ const productOptions = [
   "Renex"
 ];
 
-
-// Lista de objeções
+// Lista de objeções (base fixa)
 const objOptions = [
   "Falta de produto em estoque",
   "Prazo de entrega",
@@ -95,7 +93,7 @@ interface ProdutoConcorrenciaFormProps {
     value: string | number | boolean | null
   ) => void;
   handleAddProdutoNaoVenda: () => void;
-  setShowProdutoNaoCatalogadoDialog: (value: boolean) => void;
+  // REMOVIDO: setShowProdutoNaoCatalogadoDialog não é mais necessário
 }
 
 export function ProdutoConcorrenciaForm({
@@ -104,22 +102,65 @@ export function ProdutoConcorrenciaForm({
   handleChangeProduto,
   handleChangeProdutoConcorrencia,
   handleAddProdutoNaoVenda,
-  setShowProdutoNaoCatalogadoDialog,
-}: ProdutoConcorrenciaFormProps) {
+}: // REMOVIDO: setShowProdutoNaoCatalogadoDialog
+ProdutoConcorrenciaFormProps) {
   const [produtoSearchTerm, setProdutoSearchTerm] = useState<string>("");
   const [objecaoInputOpen, setObjecaoInputOpen] = useState<boolean>(false);
   const selectProdutoRef = useRef<HTMLInputElement>(null);
 
+  // Estado para os catálogos
+  const [catalogoProdutos, setCatalogoProdutos] = useState<string[]>(productOptions);
+  const [catalogoMedidas, setCatalogoMedidas] = useState<string[]>(medidasOptions);
+  const [catalogoObjecoes, setCatalogoObjecoes] = useState<string[]>(objOptions);
+
+  // Carregar dados de catálogo
+  useEffect(() => {
+    const carregarCatalogos = async () => {
+      try {
+        // Carregar produtos do catálogo
+        const resultadoProdutos = await getCatalogoItens("produto");
+        if (resultadoProdutos.success && resultadoProdutos.itens) {
+          const produtosDoSistema = resultadoProdutos.itens.map(item => item.nome);
+          // Combinar com os produtos padrão, remover duplicatas
+          const todosProdutos = [...new Set([...productOptions, ...produtosDoSistema])];
+          setCatalogoProdutos(todosProdutos);
+        }
+
+        // Carregar medidas do catálogo
+        const resultadoMedidas = await getCatalogoItens("medida");
+        if (resultadoMedidas.success && resultadoMedidas.itens) {
+          const medidasDoSistema = resultadoMedidas.itens.map(item => item.nome);
+          // Combinar com as medidas padrão, remover duplicatas
+          const todasMedidas = [...new Set([...medidasOptions, ...medidasDoSistema])];
+          setCatalogoMedidas(todasMedidas);
+        }
+
+        // Carregar objeções do catálogo
+        const resultadoObjecoes = await getCatalogoItens("objecao");
+        if (resultadoObjecoes.success && resultadoObjecoes.itens) {
+          const objecoesDoSistema = resultadoObjecoes.itens.map(item => item.nome);
+          // Garantir que "Outro" sempre esteja presente e no final da lista
+          const objetoesBase = objOptions.filter(obj => obj !== "Outro");
+          // Combinar com as objeções padrão, remover duplicatas e adicionar "Outro" no final
+          const todasObjecoes = [...new Set([...objetoesBase, ...objecoesDoSistema]), "Outro"];
+          setCatalogoObjecoes(todasObjecoes);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar catálogos:", error);
+        // Manter as opções padrão em caso de erro
+      }
+    };
+
+    carregarCatalogos();
+  }, []);
+
   // Filtrar produtos baseado na busca
-  const filteredProducts = productOptions.filter((product) =>
+  const filteredProducts = catalogoProdutos.filter((product) =>
     product.toLowerCase().includes(produtoSearchTerm.toLowerCase())
   );
-
+  
+  // REMOVIDO: A função handleProductSelect foi simplificada
   const handleProductSelect = (value: string) => {
-    if (value === "Adicionar Produto não catalogado...") {
-      setShowProdutoNaoCatalogadoDialog(true);
-      return;
-    }
     handleChangeProduto("nome", value);
   };
 
@@ -150,7 +191,7 @@ export function ProdutoConcorrenciaForm({
                 <FormLabel>Nome*</FormLabel>
                 <Select
                   value={currentProduto.nome}
-                  onValueChange={handleProductSelect}
+                  onValueChange={handleProductSelect} // Simplificado
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Produto" />
@@ -186,7 +227,7 @@ export function ProdutoConcorrenciaForm({
                     <SelectValue placeholder="Medida" />
                   </SelectTrigger>
                   <SelectContent>
-                    {medidasOptions.map((medida) => (
+                    {catalogoMedidas.map((medida) => (
                       <SelectItem key={medida} value={medida}>
                         {medida}
                       </SelectItem>
@@ -228,7 +269,6 @@ export function ProdutoConcorrenciaForm({
                     onChange={(e) => {
                       const rawValue = e.target.value.replace(/\D/g, "");
 
-                      // Trata explicitamente o zero
                       let numValue = 0;
                       if (rawValue !== "" && rawValue !== "0") {
                         numValue = parseInt(rawValue, 10) / 100;
@@ -364,7 +404,6 @@ export function ProdutoConcorrenciaForm({
                   onChange={(e) => {
                     const rawValue = e.target.value.replace(/\D/g, "");
 
-                    // Trata explicitamente o zero
                     let numValue = 0;
                     if (rawValue !== "" && rawValue !== "0") {
                       numValue = parseInt(rawValue, 10) / 100;
@@ -470,7 +509,7 @@ export function ProdutoConcorrenciaForm({
                         </div>
                       </div>
                       <div className="max-h-[200px] overflow-auto mt-2">
-                        {objOptions.map((obj) => (
+                        {catalogoObjecoes.map((obj) => (
                           <div
                             key={obj}
                             onClick={() => handleObjecaoSelect(obj)}

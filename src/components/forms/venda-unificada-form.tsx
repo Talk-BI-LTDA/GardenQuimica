@@ -2,14 +2,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useForm, useFieldArray, } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { atualizarVenda, criarVenda } from "@/actions/venda-actions";
-
+import { getCatalogoItens } from "@/actions/catalogo-actions";
 import { atualizarNaoVenda } from "@/actions/nao-venda-actions";
 import {
   Save,
@@ -228,7 +228,8 @@ export function VendaUnificadaFormTipado({
 
   // NOVOS ESTADOS PARA CONTROLE DE FORMULÁRIO
   const [canSubmitForm, setCanSubmitForm] = useState<boolean>(true);
-  const [hasPendingMigratedProducts, setHasPendingMigratedProducts] = useState<boolean>(false);
+  const [hasPendingMigratedProducts, setHasPendingMigratedProducts] =
+    useState<boolean>(false);
 
   // Estados para diálogo de recorrência (vendas)
   const [showRecorrenciaDialog, setShowRecorrenciaDialog] =
@@ -378,9 +379,11 @@ export function VendaUnificadaFormTipado({
 
   // NOVO EFEITO PARA VERIFICAR PRODUTOS MIGRADOS PENDENTES
   useEffect(() => {
-    const produtosPendentes = produtosMigrados.filter(p => !p.concorrenciaAdicionada);
+    const produtosPendentes = produtosMigrados.filter(
+      (p) => !p.concorrenciaAdicionada
+    );
     setHasPendingMigratedProducts(produtosPendentes.length > 0);
-    
+
     // Se há produtos pendentes, não permitir submissão automática
     if (produtosPendentes.length > 0) {
       setCanSubmitForm(false);
@@ -393,7 +396,9 @@ export function VendaUnificadaFormTipado({
   const ProdutosPendentesWarning = () => {
     if (!hasPendingMigratedProducts) return null;
 
-    const produtosPendentes = produtosMigrados.filter(p => !p.concorrenciaAdicionada);
+    const produtosPendentes = produtosMigrados.filter(
+      (p) => !p.concorrenciaAdicionada
+    );
 
     return (
       <div className=" border border-orange-400 text-orange-800 p-4 rounded-lg mb-4">
@@ -402,8 +407,9 @@ export function VendaUnificadaFormTipado({
           <div>
             <p className="font-medium">Produtos pendentes</p>
             <p className="text-sm">
-              Você ainda precisa adicionar informações de concorrência para {produtosPendentes.length} produto(s).
-              Complete essas informações antes de salvar a cotação.
+              Você ainda precisa adicionar informações de concorrência para{" "}
+              {produtosPendentes.length} produto(s). Complete essas informações
+              antes de salvar a cotação.
             </p>
           </div>
         </div>
@@ -432,8 +438,6 @@ export function VendaUnificadaFormTipado({
           objecaoGeral: naoVendaData.objecaoGeral || "",
         });
         console.log("Initial data cliente:", initialData?.cliente);
-
-
       } else {
         // Se tem status e é pendente, é uma cotação
         if (hasStatus && (initialData as Cotacao).status === "pendente") {
@@ -492,7 +496,6 @@ export function VendaUnificadaFormTipado({
                     razaoSocial: cliente.razaoSocial || "",
                     whatsapp: cliente.whatsapp || "",
                   });
-                  
                 }
               });
             }
@@ -602,7 +605,7 @@ export function VendaUnificadaFormTipado({
       if (clienteData.nome || clienteData.cnpj) {
         vendaForm.setValue("cliente", {
           ...clienteData,
-          whatsapp: clienteData.whatsapp || ""
+          whatsapp: clienteData.whatsapp || "",
         });
       }
     } else {
@@ -610,10 +613,10 @@ export function VendaUnificadaFormTipado({
       if (clienteData.nome || clienteData.cnpj) {
         naoVendaForm.setValue("cliente", {
           ...clienteData,
-          whatsapp: clienteData.whatsapp || ""
+          whatsapp: clienteData.whatsapp || "",
         });
       }
-      
+
       // Também sincronizar condição de pagamento
       const condicaoVenda = vendaForm.getValues("condicaoPagamento");
       if (condicaoVenda) {
@@ -871,7 +874,8 @@ export function VendaUnificadaFormTipado({
 
     // Atualizar o produto migrado para indicar que a concorrência foi adicionada
     const novosProdutosMigrados = [...produtosMigrados];
-    novosProdutosMigrados[currentProdutoMigradoIndice].concorrenciaAdicionada = true;
+    novosProdutosMigrados[currentProdutoMigradoIndice].concorrenciaAdicionada =
+      true;
     setProdutosMigrados(novosProdutosMigrados);
 
     // Atualizar valor total do formulário
@@ -1224,14 +1228,14 @@ export function VendaUnificadaFormTipado({
     const clienteSelecionado = clientesRecorrentes.find(
       (cliente) => cliente.id === idCliente
     );
-  
+
     if (clienteSelecionado) {
       const dadosCliente = {
         nome: clienteSelecionado.nome,
         segmento: clienteSelecionado.segmento,
         cnpj: clienteSelecionado.cnpj,
         razaoSocial: clienteSelecionado.razaoSocial || "",
-        whatsapp: clienteSelecionado.whatsapp || "", 
+        whatsapp: clienteSelecionado.whatsapp || "",
         recorrente: true,
       };
       console.log("Dados do cliente:", dadosCliente);
@@ -1242,13 +1246,14 @@ export function VendaUnificadaFormTipado({
       } else {
         naoVendaForm.setValue("cliente", dadosCliente);
       }
-  
-      toast.success(`Cliente ${clienteSelecionado.nome} carregado com sucesso!`);
+
+      toast.success(
+        `Cliente ${clienteSelecionado.nome} carregado com sucesso!`
+      );
     } else {
       toast.error("Cliente não encontrado");
     }
   };
-  
 
   // Manipular envio do formulário de venda
   const onSubmitVenda = async (data: VendaSchemaType) => {
@@ -1342,7 +1347,9 @@ export function VendaUnificadaFormTipado({
   const onSubmitNaoVenda = async (data: NaoVendaSchemaType) => {
     // NOVA VALIDAÇÃO: Verificar se há produtos migrados pendentes
     if (hasPendingMigratedProducts) {
-      toast.error("Adicione as informações de concorrência para todos os produtos antes de continuar");
+      toast.error(
+        "Adicione as informações de concorrência para todos os produtos antes de continuar"
+      );
       return;
     }
 
@@ -1398,7 +1405,7 @@ export function VendaUnificadaFormTipado({
       if (statusCotacao === "pendente") {
         // Se for uma cotação pendente, criar como cotação
         const cotacaoData: CotacaoFormData = {
-            cliente: { ...formData.cliente, whatsapp: '' },
+          cliente: { ...formData.cliente, whatsapp: "" },
           produtos: formData.produtosConcorrencia.map((item) => ({
             nome: item.produtoGarden.nome,
             medida: item.produtoGarden.medida,
@@ -1563,6 +1570,31 @@ export function VendaUnificadaFormTipado({
       setIsLoadingClientes(false);
     }
   }, [clientesRecorrentes.length, isLoadingClientes]);
+
+  const [catalogoCondicoesPagamento, setCatalogoCondicoesPagamento] = useState<
+    string[]
+  >(condicoesPagamentoOptions);
+  useEffect(() => {
+    const carregarCondicoesPagamento = async () => {
+      try {
+        const resultado = await getCatalogoItens("pagamento");
+        if (resultado.success && resultado.itens) {
+          const condicoesDoSistema = resultado.itens.map((item) => item.nome);
+          // Combinar com as condições padrão, remover duplicatas
+          const todasCondicoes = [
+            ...new Set([...condicoesPagamentoOptions, ...condicoesDoSistema]),
+          ];
+          setCatalogoCondicoesPagamento(todasCondicoes);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar condições de pagamento:", error);
+        // Manter as opções padrão em caso de erro
+      }
+    };
+
+    carregarCondicoesPagamento();
+  }, []);
+
   return (
     <>
       <div className="flex justify-between items-center mb-6">
@@ -1726,9 +1758,6 @@ export function VendaUnificadaFormTipado({
                       handleChangeProduto={handleChangeProduto}
                       handleAddProdutoVenda={handleAddProdutoVenda}
                       statusCotacao={statusCotacao}
-                      setShowProdutoNaoCatalogadoDialog={
-                        setShowProdutoNaoCatalogadoDialog
-                      }
                       temObjecao={false}
                       setTemObjecao={function (): void {
                         throw new Error("Function not implemented.");
@@ -1920,7 +1949,7 @@ export function VendaUnificadaFormTipado({
                               <SelectValue placeholder="Selecione uma condição de pagamento" />
                             </SelectTrigger>
                             <SelectContent>
-                              {condicoesPagamentoOptions.map((option) => (
+                              {catalogoCondicoesPagamento.map((option) => (
                                 <SelectItem key={option} value={option}>
                                   {option}
                                 </SelectItem>
@@ -2236,10 +2265,6 @@ export function VendaUnificadaFormTipado({
                       handleChangeProdutoConcorrencia
                     }
                     handleAddProdutoNaoVenda={handleAddProdutoNaoVenda}
-                    setShowProdutoNaoCatalogadoDialog={
-                      setShowProdutoNaoCatalogadoDialog
-                    }
-                    
                   />
 
                   {/* Lista de produtos adicionados */}
@@ -2607,7 +2632,9 @@ export function VendaUnificadaFormTipado({
                         type="submit"
                         disabled={loading || hasPendingMigratedProducts}
                         className={`bg-red-600 hover:bg-red-700 ${
-                          hasPendingMigratedProducts ? "opacity-50 cursor-not-allowed" : ""
+                          hasPendingMigratedProducts
+                            ? "opacity-50 cursor-not-allowed"
+                            : ""
                         }`}
                       >
                         {loading ? (
@@ -2836,278 +2863,257 @@ export function VendaUnificadaFormTipado({
 
       {/* Dialog para adicionar informações de concorrência a produto migrado */}
       <Dialog
-  open={showConcorrenciaDialog}
-  onOpenChange={setShowConcorrenciaDialog}
->
-  <DialogContent className="max-w-2xl">
-    <DialogHeader>
-      <DialogTitle>Adicionar Informações de Concorrência</DialogTitle>
-      <DialogDescription>
-        Adicione as informações da concorrência para o produto:{" "}
-        {produtoAtual?.nome}
-      </DialogDescription>
-    </DialogHeader>
-
-    <div className="py-4 space-y-6">
-      {/* Informações do produto original (somente leitura) */}
-      <div className="bg-gray-50 p-4 rounded-lg mb-4">
-        <h4 className="font-medium mb-2">Produto Original (Garden)</h4>
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <p>
-            <span className="font-medium">Nome:</span>{" "}
-            {produtoAtual?.nome}
-          </p>
-          <p>
-            <span className="font-medium">Medida:</span>{" "}
-            {produtoAtual?.medida}
-          </p>
-          <p>
-            <span className="font-medium">Quantidade:</span>{" "}
-            {produtoAtual?.quantidade}
-          </p>
-          <p>
-            <span className="font-medium">Valor unitário:</span>{" "}
-            {produtoAtual
-              ? formatarValorBRL(produtoAtual.valor)
-              : "N/A"}
-          </p>
-          <p>
-            <span className="font-medium">Valor total:</span>{" "}
-            {produtoAtual
-              ? formatarValorBRL(
-                  produtoAtual.valor * produtoAtual.quantidade
-                )
-              : "N/A"}
-          </p>
-          {produtoAtual?.icms !== undefined &&
-            produtoAtual.icms > 0 && (
-              <p>
-                <span className="font-medium">ICMS:</span>{" "}
-                {produtoAtual.icms}%
-              </p>
-            )}
-          {produtoAtual?.ipi !== undefined && produtoAtual.ipi > 0 && (
-            <p>
-              <span className="font-medium">IPI:</span>{" "}
-              {produtoAtual.ipi}%
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Informações não disponíveis toggle */}
-      <div className="mb-4">
-        <div className="flex flex-row items-center space-x-3 space-y-0">
-          <Checkbox
-            checked={currentConcorrencia.infoNaoDisponivel}
-            onCheckedChange={(checked) => {
-              handleChangeConcorrencia(
-                "infoNaoDisponivel",
-                checked === true
-              );
-            }}
-          />
-          <div className="space-y-1 leading-none">
-            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-              Informações da concorrência não disponíveis
-            </label>
-            <p className="text-xs text-gray-500">
-              Marque esta opção caso não tenha dados específicos da
-              concorrência
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Dados da concorrência */}
-      <div
-        className={`space-y-4 ${
-          currentConcorrencia.infoNaoDisponivel
-            ? "opacity-50 pointer-events-none"
-            : ""
-        }`}
+        open={showConcorrenciaDialog}
+        onOpenChange={setShowConcorrenciaDialog}
       >
-        <div>
-          <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-            Nome da Concorrência*
-          </label>
-          <Input
-            value={currentConcorrencia.nomeConcorrencia || ""}
-            onChange={(e) => {
-              handleChangeConcorrencia(
-                "nomeConcorrencia",
-                e.target.value
-              );
-            }}
-            placeholder="Nome da empresa concorrente"
-            className="mt-1"
-          />
-        </div>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Adicionar Informações de Concorrência</DialogTitle>
+            <DialogDescription>
+              Adicione as informações da concorrência para o produto:{" "}
+              {produtoAtual?.nome}
+            </DialogDescription>
+          </DialogHeader>
 
-        <div>
-          <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-            Valor da Concorrência*
-          </label>
-          <div className="relative flex items-center mt-1">
-            <span className="absolute left-3 text-gray-500">
-              R$
-            </span>
-            <Input
-              className="px-8 h-10 rounded-md border border-input bg-background w-full"
-              value={
-                currentConcorrencia.valorConcorrencia === 0
-                  ? "0,00"
-                  : formatCurrency(
-                      Math.round(
-                        (currentConcorrencia.valorConcorrencia || 0) * 100
-                      ).toString()
-                    )
-              }
-              onChange={(e) => {
-                const rawValue = e.target.value.replace(
-                  /\D/g,
-                  ""
-                );
+          <div className="py-4 space-y-6">
+            {/* Informações do produto original (somente leitura) */}
+            <div className="bg-gray-50 p-4 rounded-lg mb-4">
+              <h4 className="font-medium mb-2">Produto Original (Garden)</h4>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <p>
+                  <span className="font-medium">Nome:</span>{" "}
+                  {produtoAtual?.nome}
+                </p>
+                <p>
+                  <span className="font-medium">Medida:</span>{" "}
+                  {produtoAtual?.medida}
+                </p>
+                <p>
+                  <span className="font-medium">Quantidade:</span>{" "}
+                  {produtoAtual?.quantidade}
+                </p>
+                <p>
+                  <span className="font-medium">Valor unitário:</span>{" "}
+                  {produtoAtual ? formatarValorBRL(produtoAtual.valor) : "N/A"}
+                </p>
+                <p>
+                  <span className="font-medium">Valor total:</span>{" "}
+                  {produtoAtual
+                    ? formatarValorBRL(
+                        produtoAtual.valor * produtoAtual.quantidade
+                      )
+                    : "N/A"}
+                </p>
+                {produtoAtual?.icms !== undefined && produtoAtual.icms > 0 && (
+                  <p>
+                    <span className="font-medium">ICMS:</span>{" "}
+                    {produtoAtual.icms}%
+                  </p>
+                )}
+                {produtoAtual?.ipi !== undefined && produtoAtual.ipi > 0 && (
+                  <p>
+                    <span className="font-medium">IPI:</span> {produtoAtual.ipi}
+                    %
+                  </p>
+                )}
+              </div>
+            </div>
 
-                // Trata explicitamente o zero
-                let numValue = 0;
-                if (rawValue !== "" && rawValue !== "0") {
-                  numValue = parseInt(rawValue, 10) / 100;
-                }
+            {/* Informações não disponíveis toggle */}
+            <div className="mb-4">
+              <div className="flex flex-row items-center space-x-3 space-y-0">
+                <Checkbox
+                  checked={currentConcorrencia.infoNaoDisponivel}
+                  onCheckedChange={(checked) => {
+                    handleChangeConcorrencia(
+                      "infoNaoDisponivel",
+                      checked === true
+                    );
+                  }}
+                />
+                <div className="space-y-1 leading-none">
+                  <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    Informações da concorrência não disponíveis
+                  </label>
+                  <p className="text-xs text-gray-500">
+                    Marque esta opção caso não tenha dados específicos da
+                    concorrência
+                  </p>
+                </div>
+              </div>
+            </div>
 
-                handleChangeConcorrencia(
-                  "valorConcorrencia",
-                  numValue
-                );
-              }}
-              placeholder="0,00"
-            />
-          </div>
-        </div>
+            {/* Dados da concorrência */}
+            <div
+              className={`space-y-4 ${
+                currentConcorrencia.infoNaoDisponivel
+                  ? "opacity-50 pointer-events-none"
+                  : ""
+              }`}
+            >
+              <div>
+                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  Nome da Concorrência*
+                </label>
+                <Input
+                  value={currentConcorrencia.nomeConcorrencia || ""}
+                  onChange={(e) => {
+                    handleChangeConcorrencia(
+                      "nomeConcorrencia",
+                      e.target.value
+                    );
+                  }}
+                  placeholder="Nome da empresa concorrente"
+                  className="mt-1"
+                />
+              </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-              ICMS (%)
-            </label>
-            <div className="relative flex items-center mt-1">
-              <Input
-                type="number"
-                min="0"
-                max="100"
-                step="0.01"
-                value={currentConcorrencia.icms || ""}
-                onChange={(e) => {
-                  const value =
-                    e.target.value === ""
-                      ? 0
-                      : Number(e.target.value);
-                  handleChangeConcorrencia("icms", value);
-                }}
-                className="pr-8"
-                placeholder="0.00"
-              />
-              <span className="absolute right-3 text-gray-500">
-                %
-              </span>
+              <div>
+                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  Valor da Concorrência*
+                </label>
+                <div className="relative flex items-center mt-1">
+                  <span className="absolute left-3 text-gray-500">R$</span>
+                  <Input
+                    className="px-8 h-10 rounded-md border border-input bg-background w-full"
+                    value={
+                      currentConcorrencia.valorConcorrencia === 0
+                        ? "0,00"
+                        : formatCurrency(
+                            Math.round(
+                              (currentConcorrencia.valorConcorrencia || 0) * 100
+                            ).toString()
+                          )
+                    }
+                    onChange={(e) => {
+                      const rawValue = e.target.value.replace(/\D/g, "");
+
+                      // Trata explicitamente o zero
+                      let numValue = 0;
+                      if (rawValue !== "" && rawValue !== "0") {
+                        numValue = parseInt(rawValue, 10) / 100;
+                      }
+
+                      handleChangeConcorrencia("valorConcorrencia", numValue);
+                    }}
+                    placeholder="0,00"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    ICMS (%)
+                  </label>
+                  <div className="relative flex items-center mt-1">
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={currentConcorrencia.icms || ""}
+                      onChange={(e) => {
+                        const value =
+                          e.target.value === "" ? 0 : Number(e.target.value);
+                        handleChangeConcorrencia("icms", value);
+                      }}
+                      className="pr-8"
+                      placeholder="0.00"
+                    />
+                    <span className="absolute right-3 text-gray-500">%</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    IPI (%)
+                  </label>
+                  <div className="relative flex items-center mt-1">
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={currentConcorrencia.ipi || ""}
+                      onChange={(e) => {
+                        const value =
+                          e.target.value === "" ? 0 : Number(e.target.value);
+                        handleChangeConcorrencia("ipi", value);
+                      }}
+                      className="pr-8"
+                      placeholder="0.00"
+                    />
+                    <span className="absolute right-3 text-gray-500">%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  Objeção
+                </label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 mt-1"
+                  value={(currentConcorrencia.objecao as string) || ""}
+                  onChange={(e) => {
+                    const valor = e.target.value || null;
+                    handleChangeConcorrencia("objecao", valor);
+                  }}
+                >
+                  <option value="">Selecione uma objeção (opcional)</option>
+                  {objOptions.map((obj) => (
+                    <option key={obj} value={obj}>
+                      {obj}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {currentConcorrencia.objecao === "Outro" && (
+                <div>
+                  <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    Descreva a objeção
+                  </label>
+                  <Input
+                    value={(currentConcorrencia.objecao as string) || ""}
+                    onChange={(e) => {
+                      const valor = e.target.value;
+                      handleChangeConcorrencia("objecao", valor);
+                    }}
+                    placeholder="Digite a objeção personalizada"
+                    className="mt-1"
+                  />
+                </div>
+              )}
             </div>
           </div>
 
-          <div>
-            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-              IPI (%)
-            </label>
-            <div className="relative flex items-center mt-1">
-              <Input
-                type="number"
-                min="0"
-                max="100"
-                step="0.01"
-                value={currentConcorrencia.ipi || ""}
-                onChange={(e) => {
-                  const value =
-                    e.target.value === ""
-                      ? 0
-                      : Number(e.target.value);
-                  handleChangeConcorrencia("ipi", value);
-                }}
-                className="pr-8"
-                placeholder="0.00"
-              />
-              <span className="absolute right-3 text-gray-500">
-                %
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-            Objeção
-          </label>
-          <select
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 mt-1"
-            value={(currentConcorrencia.objecao as string) || ""}
-            onChange={(e) => {
-              const valor = e.target.value || null;
-              handleChangeConcorrencia("objecao", valor);
-            }}
-          >
-            <option value="">
-              Selecione uma objeção (opcional)
-            </option>
-            {objOptions.map((obj) => (
-              <option key={obj} value={obj}>
-                {obj}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {currentConcorrencia.objecao === "Outro" && (
-          <div>
-            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-              Descreva a objeção
-            </label>
-            <Input
-              value={(currentConcorrencia.objecao as string) || ""}
-              onChange={(e) => {
-                const valor = e.target.value;
-                handleChangeConcorrencia("objecao", valor);
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowConcorrenciaDialog(false);
               }}
-              placeholder="Digite a objeção personalizada"
-              className="mt-1"
-            />
-          </div>
-        )}
-      </div>
-    </div>
-
-    <DialogFooter>
-      <Button
-        type="button"
-        variant="outline"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setShowConcorrenciaDialog(false);
-        }}
-      >
-        Cancelar
-      </Button>
-      <Button 
-        type="button"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          handleSalvarConcorrencia();
-        }}
-      >
-        Salvar Informações de Concorrência
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleSalvarConcorrencia();
+              }}
+            >
+              Salvar Informações de Concorrência
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

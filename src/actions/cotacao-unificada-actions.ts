@@ -97,6 +97,7 @@ async function buscarVenda(id: string) {
         segmento: venda.cliente.segmento,
         cnpj: venda.cliente.cnpj,
         razaoSocial: venda.cliente.razaoSocial || "",
+        whatsapp: venda.cliente.whatsapp || "",
       },
       produtos: venda.produtos.map((prod) => ({
         id: prod.produtoId,
@@ -154,6 +155,7 @@ async function buscarNaoVenda(id: string) {
         segmento: naoVenda.cliente.segmento,
         cnpj: naoVenda.cliente.cnpj,
         razaoSocial: naoVenda.cliente.razaoSocial || "",
+        whatsapp: naoVenda.cliente.whatsapp || "",
       },
       produtosConcorrencia: naoVenda.produtos.map((prod) => ({
         produtoGarden: {

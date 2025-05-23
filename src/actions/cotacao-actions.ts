@@ -302,7 +302,7 @@ export async function getCotacao(id: string) {
         cnpj: cotacao.cliente.cnpj,
         razaoSocial: cotacao.cliente.razaoSocial || "",
         whatsapp: cotacao.cliente.whatsapp || "",
-        recorrente: cotacao.cliente.recorrente || false,
+        recorrente: cotacao.cliente.recorrente || false, 
       },
       produtos: cotacao.produtos.map((prod) => ({
         id: prod.produtoId,

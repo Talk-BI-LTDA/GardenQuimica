@@ -1,10 +1,11 @@
 // components/forms/cotacao/ClienteForm.tsx
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {  UseFormReturn, FieldValues, Path } from "react-hook-form";
 import { motion } from "framer-motion";
 import { User, Building, Phone } from "lucide-react";
+import { getCatalogoItens } from "@/actions/catalogo-actions";
 
 import { Input } from "@/components/ui/input";
 import {
@@ -104,6 +105,27 @@ export function ClienteForm({
   const filteredClientes = clientesRecorrentes.filter(cliente => 
     cliente.nome.toLowerCase().includes(clienteSearchTerm.toLowerCase())
   );
+  const [catalogoSegmentos, setCatalogoSegmentos] = useState<string[]>(segmentoOptions);
+
+  // Carregar segmentos do catálogo quando o componente montar
+  useEffect(() => {
+    const carregarSegmentos = async () => {
+      try {
+        const resultado = await getCatalogoItens("segmento");
+        if (resultado.success && resultado.itens) {
+          const segmentosDoSistema = resultado.itens.map(item => item.nome);
+          // Combinar com os segmentos padrão, remover duplicatas
+          const todosSegmentos = [...new Set([...segmentoOptions, ...segmentosDoSistema])];
+          setCatalogoSegmentos(todosSegmentos);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar segmentos:", error);
+        // Manter as opções padrão em caso de erro
+      }
+    };
+    
+    carregarSegmentos();
+  }, []);
   const handleSelectOpen = () => {
     carregarClientesRecorrentes();
   };
@@ -149,29 +171,29 @@ export function ClienteForm({
       name={fieldName}
       render={({ field }) => (
         <FormItem>
-          <FormLabel>Segmento da Empresa*</FormLabel>
-          <FormControl>
-            <div className="flex items-center space-x-2">
-              <Building className="w-4 h-4 text-gray-400" />
-              <Select
-                value={field.value}
-                onValueChange={field.onChange}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o segmento" />
-                </SelectTrigger>
-                <SelectContent>
-                  {segmentoOptions.map((segmento) => (
-                    <SelectItem key={segmento} value={segmento}>
-                      {segmento}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </FormControl>
-          <FormMessage />
-        </FormItem>
+        <FormLabel>Segmento da Empresa*</FormLabel>
+        <FormControl>
+          <div className="flex items-center space-x-2">
+            <Building className="w-4 h-4 text-gray-400" />
+            <Select
+              value={field.value}
+              onValueChange={field.onChange}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o segmento" />
+              </SelectTrigger>
+              <SelectContent>
+                {catalogoSegmentos.map((segmento) => (
+                  <SelectItem key={segmento} value={segmento}>
+                    {segmento}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </FormControl>
+        <FormMessage />
+      </FormItem>
       )}
     />
   );

@@ -56,7 +56,6 @@ export async function getProdutos(params?: ProdutoParams) {
       medida: produto.medida,
       quantidade: produto.quantidade,
       valor: produto.valor,
-      recorrencia: produto.recorrencia || undefined,
     }));
 
     return { 
@@ -94,7 +93,6 @@ export async function getProduto(id: string) {
       medida: produto.medida,
       quantidade: produto.quantidade,
       valor: produto.valor,
-      recorrencia: produto.recorrencia || undefined,
     };
 
     return { success: true, produto: produtoMapeado };
@@ -132,7 +130,6 @@ export async function criarProduto(data: Omit<Produto, 'id'>) {
         medida: data.medida,
         quantidade: data.quantidade,
         valor: data.valor,
-        recorrencia: data.recorrencia,
         createdById: session.user.id,
       },
     });
