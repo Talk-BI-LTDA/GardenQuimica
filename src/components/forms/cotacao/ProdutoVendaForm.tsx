@@ -309,7 +309,7 @@ ProdutoVendaFormProps) {
               htmlFor="tem-objecao"
               className="text-sm cursor-pointer flex items-center"
             >
-              <span>Produto com objeção</span>
+              <span>Produto com objeção.</span>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
