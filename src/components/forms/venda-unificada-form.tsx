@@ -1262,7 +1262,17 @@ export function VendaUnificadaFormTipado({
       toast.error("Adicione pelo menos um produto");
       return;
     }
-
+  
+    // Validar código manual se estiver no modo de cotação pendente
+    if (statusCotacao === "pendente" && codigoManual.trim() === "") {
+      toast.error("O código da cotação é obrigatório");
+      return;
+    }
+    
+    if (codigoManual && !validarCodigoManual(codigoManual)) {
+      return;
+    }
+  
     // Verificar recorrência
     if (
       data.vendaRecorrente &&
@@ -1277,20 +1287,21 @@ export function VendaUnificadaFormTipado({
       setShowRecorrenciaDialog(true);
       return;
     }
-
+  
     setLoading(true);
     setFormErros(null);
-
+  
     try {
-      // Preparar dados do formulário
+      // Preparar dados do formulário com o código manual
       const formData = {
         ...data,
         valorTotal: Number(data.valorTotal.toFixed(2)),
         nomeRecorrencia: data.vendaRecorrente ? nomeRecorrencia : undefined,
+        codigoManual: statusCotacao === "pendente" ? codigoManual : undefined,
       };
-
+  
       let result: { error?: string; success?: boolean; id?: string } = {};
-
+  
       if (isEditing && initialData && "id" in initialData) {
         // Usar a função de conversão
         result = await converterCotacao(
@@ -1309,7 +1320,7 @@ export function VendaUnificadaFormTipado({
           result = await criarVenda(formData as VendaFormData);
         }
       }
-
+  
       if (result.error) {
         toast.error(result.error);
         setFormErros(result.error);
@@ -1319,16 +1330,17 @@ export function VendaUnificadaFormTipado({
             ? "Cotação finalizada atualizada com sucesso!"
             : "Cotação atualizada com sucesso!"
           : "Cotação registrada com sucesso!";
-
+  
         toast.success(mensagem);
-
+  
         // Resetar formulários apenas se não estiver editando
         if (!isEditing) {
           vendaForm.reset(defaultVendaValues);
           setCurrentProduto(resetProduto() as ProdutoEstendido);
           setObjecoesIndividuais([]);
+          setCodigoManual("");
         }
-
+  
         // Navegar de volta à página de vendas após sucesso
         router.push("/vendas");
       }
@@ -1343,33 +1355,43 @@ export function VendaUnificadaFormTipado({
     }
   };
 
-  // FUNÇÃO CORRIGIDA - Manipular envio do formulário de Cotação Cancelada
+  //Manipular envio do formulário de Cotação Cancelada
   const onSubmitNaoVenda = async (data: NaoVendaSchemaType) => {
-    // NOVA VALIDAÇÃO: Verificar se há produtos migrados pendentes
+    // Verificar se há produtos migrados pendentes
     if (hasPendingMigratedProducts) {
       toast.error(
         "Adicione as informações de concorrência para todos os produtos antes de continuar"
       );
       return;
     }
-
+  
     // Verificar se há ao menos um produto
     if (data.produtosConcorrencia.length === 0) {
       toast.error("Adicione pelo menos um produto");
       return;
     }
-
-    // NOVA VALIDAÇÃO: Verificar se o formulário pode ser submetido
+  
+    // Validar código manual se estiver no modo de cotação pendente
+    if (statusCotacao === "pendente" && codigoManual.trim() === "") {
+      toast.error("O código da cotação é obrigatório");
+      return;
+    }
+    
+    if (codigoManual && !validarCodigoManual(codigoManual)) {
+      return;
+    }
+  
+    // Verificar se o formulário pode ser submetido
     if (!canSubmitForm) {
       toast.error("Finalize a adição de produtos antes de salvar");
       return;
     }
-
+  
     setLoading(true);
     setFormErros(null);
-
+  
     try {
-      // Preparar os dados para envio
+      // Preparar os dados para envio com o código manual
       const formData: NaoVendaFormData = {
         cliente: data.cliente,
         produtosConcorrencia: data.produtosConcorrencia.map((item) => ({
@@ -1398,10 +1420,11 @@ export function VendaUnificadaFormTipado({
         valorTotal: Number(data.valorTotal.toFixed(2)),
         condicaoPagamento: data.condicaoPagamento,
         objecaoGeral: data.objecaoGeral || "",
+        codigoManual: statusCotacao === "pendente" ? codigoManual : undefined,
       };
-
+  
       let result: { error?: string; success?: boolean; id?: string } = {};
-
+  
       if (statusCotacao === "pendente") {
         // Se for uma cotação pendente, criar como cotação
         const cotacaoData: CotacaoFormData = {
@@ -1419,8 +1442,9 @@ export function VendaUnificadaFormTipado({
           condicaoPagamento: formData.condicaoPagamento,
           vendaRecorrente: false,
           status: statusCotacao,
+          codigoManual: formData.codigoManual,
         };
-
+  
         if (isEditing && initialData && "id" in initialData) {
           result = await atualizarCotacao(
             initialData.id as string,
@@ -1447,7 +1471,7 @@ export function VendaUnificadaFormTipado({
           result = await criarNaoVenda(formData);
         }
       }
-
+  
       if (result.error) {
         toast.error(result.error);
         setFormErros(result.error);
@@ -1457,17 +1481,18 @@ export function VendaUnificadaFormTipado({
             ? "Cotação cancelada atualizada com sucesso!"
             : "Cotação atualizada com sucesso!"
           : "Cotação registrada com sucesso!";
-
+  
         toast.success(mensagem);
-
+  
         // Resetar formulários apenas se não estiver editando
         if (!isEditing) {
           naoVendaForm.reset(defaultNaoVendaValues);
           setCurrentProduto(resetProduto() as ProdutoEstendido);
           setProdutoConcorrencia(resetProdutoConcorrencia());
           setProdutosMigrados([]);
+          setCodigoManual("");
         }
-
+  
         // Navegar de volta à página de vendas após sucesso
         router.push("/vendas");
       }
@@ -1481,6 +1506,8 @@ export function VendaUnificadaFormTipado({
       setLoading(false);
     }
   };
+
+
   const toggleFormMode = (): void => {
     // Transferir dados do cliente entre formulários
     if (formMode === "venda") {
@@ -1594,7 +1621,31 @@ export function VendaUnificadaFormTipado({
 
     carregarCondicoesPagamento();
   }, []);
+  const [codigoError, setCodigoError] = useState<string | null>(null);
 
+  const [codigoManual, setCodigoManual] = useState<string>(
+    isEditing && initialData && "codigoVenda" in initialData
+      ? (initialData as unknown as { codigoVenda: string }).codigoVenda || ""
+      : isEditing && initialData && "codigoCotacao" in initialData
+      ? (initialData as unknown as { codigoCotacao: string }).codigoCotacao || ""
+      : ""
+  );
+  const validarCodigoManual = (codigo: string): boolean => {
+    if (codigo.length > 22) {
+      setCodigoError("O código não pode ter mais de 22 caracteres");
+      return false;
+    }
+    
+    setCodigoError(null);
+    return true;
+  };
+  
+  // Modificar o manipulador de mudança do código
+  const handleCodigoManualChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+    setCodigoManual(valor);
+    validarCodigoManual(valor);
+  };
   return (
     <>
       <div className="flex justify-between items-center mb-6">
@@ -1711,6 +1762,36 @@ export function VendaUnificadaFormTipado({
             exit={{ opacity: 0, y: -15 }}
             transition={{ duration: 0.5 }}
           >
+            {statusCotacao === "pendente" && (
+  <motion.div
+    initial={{ opacity: 0, y: 7 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ delay: 0.4, duration: 0.2 }}
+    className="mt-6"
+  >
+    <div className="flex flex-col space-y-2 mb-4">
+      <label className="font-medium flex items-center">
+        <AlertCircle className="w-4 h-4 mr-2 text-blue-500" />
+        Código da Cotação*
+      </label>
+      <div className="flex items-center">
+        <Input
+          value={codigoManual}
+          onChange={handleCodigoManualChange}
+          placeholder="Digite um código para esta cotação (máx. 22 caracteres)"
+          className={`w-full max-w-md ${codigoError ? 'border-red-500' : ''}`}
+          maxLength={22}
+        />
+      </div>
+      {codigoError && (
+        <p className="text-red-500 text-sm mt-1">{codigoError}</p>
+      )}
+      <p className="text-xs text-gray-500">
+        Digite um código personalizado para identificar esta cotação. Máximo de 22 caracteres.
+      </p>
+    </div>
+  </motion.div>
+)}
             <Form {...vendaForm}>
               <form
                 onSubmit={vendaForm.handleSubmit(
@@ -2057,6 +2138,7 @@ export function VendaUnificadaFormTipado({
                   </motion.div>
 
                   <div className="flex space-x-4">
+                  
                     {isEditing && statusCotacao !== "cancelada" && (
                       <motion.div
                         whileHover={{ scale: 1.01 }}

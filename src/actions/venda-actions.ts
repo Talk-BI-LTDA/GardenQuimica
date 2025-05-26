@@ -27,7 +27,16 @@ export async function criarVenda(data: VendaFormData) {
 
   try {
     // Gerar código de venda único (6 dígitos)
-    const codigoVenda = gerarCodigoVenda();
+    const codigoVenda = data.codigoManual || gerarCodigoVenda();
+    const naoVendaExistente = await prisma.naoVenda.findFirst({
+      where: {
+        codigoVenda: codigoVenda
+      }
+    });
+
+    if (naoVendaExistente) {
+      return { error: 'Este código já está em uso. Por favor, escolha outro.' };
+    }
     
     // Verificar se o cliente já existe
     let cliente = await prisma.cliente.findFirst({

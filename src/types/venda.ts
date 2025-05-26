@@ -43,4 +43,5 @@ export type VendaFormData = {
   condicaoPagamento: string;
   vendaRecorrente: boolean;
   nomeRecorrencia?: string;
+  codigoManual?: string; 
 };

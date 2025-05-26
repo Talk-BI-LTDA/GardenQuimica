@@ -74,6 +74,7 @@ export type NaoVendaFormData = {
   valorTotal: number;
   condicaoPagamento: string;
   objecaoGeral?: string;
+  codigoManual?: string;
 };
 
 // Tipo para cliente recorrente 

@@ -39,6 +39,7 @@ export type CotacaoFormData = {
   vendaRecorrente?: boolean;
   nomeRecorrencia?: string;
   status?: StatusCotacao;
+  codigoManual?: string; 
 };
 
 // Criar uma nova cotação
@@ -88,7 +89,19 @@ export async function criarCotacao(data: CotacaoFormData) {
     }
 
     // Gerar código único para a cotação
-    const codigoCotacao = `COT-${Date.now()}`;
+    const codigoCotacao = data.codigoManual || `COT-${Date.now()}`;
+    
+    // Verificar se o código já existe
+    const cotacaoExistente = await prisma.cotacao.findFirst({
+      where: {
+        codigoCotacao: codigoCotacao
+      }
+    });
+
+    if (cotacaoExistente) {
+      return { error: 'Este código já está em uso. Por favor, escolha outro.' };
+    }
+
 
     // Criar cotação
     const cotacao = await prisma.cotacao.create({
@@ -196,11 +209,23 @@ export async function atualizarCotacao(id: string, data: CotacaoFormData) {
         },
       });
     }
+    if (data.codigoManual && data.codigoManual !== cotacaoExistente.codigoCotacao) {
+      const codigoExistente = await prisma.cotacao.findFirst({
+        where: {
+          codigoCotacao: data.codigoManual,
+          id: { not: id }  // Excluir a cotação atual da verificação
+        }
+      });
 
+      if (codigoExistente) {
+        return { error: 'Este código já está em uso. Por favor, escolha outro.' };
+      }
+    }
     // Atualizar a cotação
     await prisma.cotacao.update({
       where: { id },
       data: {
+        codigoCotacao: data.codigoManual || cotacaoExistente.codigoCotacao,
         valorTotal: data.valorTotal,
         condicaoPagamento: data.condicaoPagamento,
         vendaRecorrente: data.vendaRecorrente || false,

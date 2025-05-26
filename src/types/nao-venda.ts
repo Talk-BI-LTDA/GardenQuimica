@@ -32,4 +32,5 @@ export type NaoVendaFormData = {
   valorTotal: number;
   condicaoPagamento: string;
   objecaoGeral?: string | null;
+  codigoManual?: string;
 };
