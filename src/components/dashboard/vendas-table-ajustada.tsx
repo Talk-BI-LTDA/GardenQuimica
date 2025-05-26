@@ -190,7 +190,7 @@ export function VendasTableAjustada({
   // Estados para dados reais
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [, setSegmentos] = useState<string[]>([]);
-  const [, setProdutos] = useState<ProdutoOption[]>([]);
+  const [produtos, setProdutos] = useState<ProdutoOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
 
@@ -1591,7 +1591,7 @@ export function VendasTableAjustada({
               </div>
             </div>
 
-            {/* <div>
+            <div>
               <label className="text-sm font-medium mb-1 flex items-center gap-1">
                 <PackageOpen className="h-4 w-4 text-[#00446A]" />
                 Produtos
@@ -1632,7 +1632,7 @@ export function VendasTableAjustada({
                   )}
                 </SelectContent>
               </Select>
-            </div> */}
+            </div>
 
             {/* Campos ilustrativos com cadeado */}
             <div className="flex items-center">

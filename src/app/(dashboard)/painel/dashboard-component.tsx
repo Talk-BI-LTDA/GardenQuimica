@@ -312,8 +312,18 @@ const EnhancedDashboard: React.FC = () => {
       label: "Hoje",
       value: "today",
       fn: () => {
+        // Obter a data atual
         const today = new Date();
-        return { from: today, to: today };
+        
+        // Criar data de início (hoje às 00:00:00)
+        const from = new Date(today);
+        from.setHours(0, 0, 0, 0);
+        
+        // Criar data de fim (hoje às 23:59:59)
+        const to = new Date(today);
+        to.setHours(23, 59, 59, 999);
+        
+        return { from, to };
       },
     },
     {
@@ -321,7 +331,12 @@ const EnhancedDashboard: React.FC = () => {
       value: "7days",
       fn: () => {
         const today = new Date();
-        return { from: subDays(today, 6), to: today };
+        today.setHours(23, 59, 59, 999); // Definir para final do dia
+        
+        const from = subDays(today, 6);
+        from.setHours(0, 0, 0, 0); // Definir para início do dia
+        
+        return { from, to: today };
       },
     },
     {
@@ -329,7 +344,12 @@ const EnhancedDashboard: React.FC = () => {
       value: "30days",
       fn: () => {
         const today = new Date();
-        return { from: subDays(today, 29), to: today };
+        today.setHours(23, 59, 59, 999); // Definir para final do dia
+        
+        const from = subDays(today, 29);
+        from.setHours(0, 0, 0, 0); // Definir para início do dia
+        
+        return { from, to: today };
       },
     },
     {
@@ -337,7 +357,11 @@ const EnhancedDashboard: React.FC = () => {
       value: "thisMonth",
       fn: () => {
         const today = new Date();
+        today.setHours(23, 59, 59, 999); // Definir para final do dia
+        
         const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        firstDay.setHours(0, 0, 0, 0); // Definir para início do dia
+        
         return { from: firstDay, to: today };
       },
     },
@@ -346,8 +370,13 @@ const EnhancedDashboard: React.FC = () => {
       value: "lastMonth",
       fn: () => {
         const today = new Date();
+        
         const firstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        firstDay.setHours(0, 0, 0, 0); // Definir para início do dia
+        
         const lastDay = new Date(today.getFullYear(), today.getMonth(), 0);
+        lastDay.setHours(23, 59, 59, 999); // Definir para final do dia
+        
         return { from: firstDay, to: lastDay };
       },
     },
@@ -356,7 +385,11 @@ const EnhancedDashboard: React.FC = () => {
       value: "thisYear",
       fn: () => {
         const today = new Date();
+        today.setHours(23, 59, 59, 999); // Definir para final do dia
+        
         const firstDay = new Date(today.getFullYear(), 0, 1);
+        firstDay.setHours(0, 0, 0, 0); // Definir para início do dia
+        
         return { from: firstDay, to: today };
       },
     },
@@ -882,35 +915,34 @@ const EnhancedDashboard: React.FC = () => {
           <CardContent className="p-4">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium">Desempenho de cotações</h3>
-              <div className="flex p-1 rounded-md">
                 <Tabs
                   value={chartTab}
                   onValueChange={(value) =>
                     setChartTab(value as "geral" | "vendas" | "naoVendas")
                   }
                 >
-                  <TabsList className="">
+                  <TabsList className="flex flex-col 2xl:flex-row gap-2 2xl:gap-0 2xl:!p-1 2xl:!mt-1 !w-fit">
                     <TabsTrigger
                       value="geral"
-                      className="data-[state=active]:shadow"
+                      className="data-[state=active]:shadow 2xl:!py-2"
                     >
                       Geral
                     </TabsTrigger>
                     <TabsTrigger
                       value="vendas"
-                      className="data-[state=active]:shadow"
+                      className="data-[state=active]:shadow 2xl:!py-2 "
                     >
                       Cotações finalizadas
                     </TabsTrigger>
                     <TabsTrigger
                       value="naoVendas"
-                      className="rounded data-[state=active]:shadow"
+                      className="rounded data-[state=active]:shadow 2xl:!py-2"
                     >
                       Cotações canceladas
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
-              </div>
+             
             </div>
 
             <p className="text-sm text-gray-500 mb-4">
