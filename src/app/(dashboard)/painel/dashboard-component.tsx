@@ -18,7 +18,7 @@ import {
   Filter,
   ArrowUp,
   ArrowDown,
-  Search,
+  // Search,
   Calendar,
   Download,
   CheckCircle,
@@ -42,7 +42,7 @@ import { toast } from "sonner";
 import { DateRange } from "react-day-picker";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+// import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -289,7 +289,7 @@ const EnhancedDashboard: React.FC = () => {
   const [filtroAberto, setFiltroAberto] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange>();
-  const [searchTerm, setSearchTerm] = useState("");
+  const [, setSearchTerm] = useState("");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [loading, setLoading] = useState(true);
 
@@ -1961,7 +1961,7 @@ const EnhancedDashboard: React.FC = () => {
               </Select>
             </div>
 
-            <div>
+            {/* <div>
               <label className="text-sm font-medium mb-1 block">Pesquisa</label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
@@ -1972,7 +1972,7 @@ const EnhancedDashboard: React.FC = () => {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-            </div>
+            </div> */}
           </div>
 
           <DialogFooter>
