@@ -248,6 +248,7 @@ const ClientesComponent: React.FC<{ session: SessionProps }> = ({ session }) => 
     null
   );
   const [vendasCliente, setVendasCliente] = useState<Venda[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [segmentos, setSegmentos] = useState<string[]>([]);
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [paginaAtual, setPaginaAtual] = useState(1);
@@ -369,6 +370,7 @@ const ClientesComponent: React.FC<{ session: SessionProps }> = ({ session }) => 
     setLoading(true);
     try {
       // Paralelizar solicitações de API para melhorar a performance
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const [segmentosResult, estatisticasResult] = await Promise.all([
         getSegmentos(),
         getEstatisticasClientes()
