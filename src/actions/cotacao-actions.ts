@@ -8,6 +8,8 @@ import { VendaFormData } from "@/types/venda-tipos";
 import { NaoVendaFormData } from "@/types/venda-tipos";
 import { criarVenda, atualizarVenda } from "@/actions/venda-actions";
 import { criarNaoVenda, atualizarNaoVenda } from "@/actions/nao-venda-actions";
+import { FiltrosCotacao } from "@/types/filtros";
+
 
 // Define o tipo StatusCotacao se não existir
 export type StatusCotacao = "pendente" | "finalizada" | "cancelada";
@@ -328,7 +330,10 @@ export async function getCotacao(id: string) {
 }
 
 // Obter todas as cotações
-export async function getCotacoes() {
+// Obter todas as cotações com suporte a filtros
+
+// Obter todas as cotações com suporte a filtros
+export async function getCotacoes(filtros?: FiltrosCotacao) {
   try {
     const session = await auth();
     if (!session || !session.user) {
@@ -338,7 +343,76 @@ export async function getCotacoes() {
     const vendedorId = session.user.id;
     const isAdmin = session.user.role === "ADMIN";
 
-    const where = isAdmin ? {} : { vendedorId };
+    // Base where
+    const where: Record<string, unknown> = isAdmin ? {} : { vendedorId };
+
+    // Aplicar filtros se fornecidos
+    if (filtros) {
+      // Filtro de data
+      if (filtros.dataInicio && filtros.dataFim) {
+        where.createdAt = {
+          gte: new Date(filtros.dataInicio),
+          lte: new Date(new Date(filtros.dataFim).setHours(23, 59, 59, 999)),
+        };
+      }
+
+      // Agrupar filtros de cliente
+      const clienteFilters: Record<string, unknown> = {};
+      
+      // Filtro de nome de cliente
+      if (filtros.nomeCliente) {
+        clienteFilters.nome = {
+          contains: filtros.nomeCliente,
+          mode: 'insensitive'
+        };
+      }
+
+      // Filtro de segmento
+      if (filtros.segmento) {
+        clienteFilters.segmento = filtros.segmento;
+      }
+      
+      // Cliente recorrente
+      if (filtros.clienteRecorrente) {
+        clienteFilters.recorrente = filtros.clienteRecorrente === 'sim';
+      }
+      
+      // Aplicar filtros de cliente se houver algum
+      if (Object.keys(clienteFilters).length > 0) {
+        where.cliente = clienteFilters;
+      }
+
+      // Filtro de valor
+      if (filtros.valorMinimo || filtros.valorMaximo) {
+        const valorFilter: Record<string, unknown> = {};
+        
+        if (filtros.valorMinimo) {
+          valorFilter.gte = parseFloat(filtros.valorMinimo);
+        }
+        
+        if (filtros.valorMaximo) {
+          valorFilter.lte = parseFloat(filtros.valorMaximo);
+        }
+        
+        where.valorTotal = valorFilter;
+      }
+
+      // Filtro de vendedor (admin)
+      if (isAdmin && filtros.vendedor) {
+        where.vendedorId = filtros.vendedor;
+      }
+      
+      // Filtro de produto (buscando produtos relacionados)
+      if (filtros.produto) {
+        where.produtos = {
+          some: {
+            produtoId: filtros.produto
+          }
+        };
+      }
+    }
+
+    console.log("Filtros aplicados na consulta:", where);
 
     const cotacoes = await prisma.cotacao.findMany({
       where,
@@ -349,10 +423,11 @@ export async function getCotacoes() {
         }
       },
       orderBy: {
-        updatedAt: 'desc'
+        createdAt: 'desc'
       }
     });
 
+    console.log(`Encontradas ${cotacoes.length} cotações`);
     return { success: true, cotacoes };
   } catch (error) {
     console.error("Erro ao buscar cotações:", error);

@@ -374,14 +374,8 @@ const ClientesComponent: React.FC<{ session: SessionProps }> = ({ session }) => 
         getEstatisticasClientes()
       ]);
       
-      if (segmentosResult.success && segmentosResult.segmentos) {
-        setSegmentos(segmentosResult.segmentos);
-      } else if (segmentosResult.error) {
-        toast.error(segmentosResult.error);
-      }
-  
       if (estatisticasResult.success && estatisticasResult.estatisticas) {
-        setEstatisticas(estatisticasResult.estatisticas);
+        setEstatisticas({ ...estatisticasResult.estatisticas, valorTotal: 0 });
       } else if (estatisticasResult.error) {
         toast.error(estatisticasResult.error);
       }

@@ -552,6 +552,41 @@ export async function getClienteById(id: string) {
       });
     });
     
+    // Processar cotações (considerar TODAS, independentemente do status)
+    cotacoes.forEach((cotacao: CotacaoPrisma) => {
+      // Adicionar à lista de interações para considerar nas datas
+      datasCompra.push(cotacao.createdAt);
+      ultimaCompraTimestamp = Math.max(ultimaCompraTimestamp, cotacao.createdAt.getTime());
+      
+      // Considerar TODAS as cotações no valor total, não apenas as finalizadas
+      valorTotal += cotacao.valorTotal;
+      maiorValor = Math.max(maiorValor, cotacao.valorTotal);
+      
+      cotacao.produtos.forEach(p => {
+        const nomeProduto = p.produto.nome;
+        produtosContagem[nomeProduto] = (produtosContagem[nomeProduto] || 0) + p.quantidade;
+      });
+    });
+    
+    // Processar não-vendas (agora também considerando o valor)
+    naoVendas.forEach((naoVenda: NaoVendaPrisma) => {
+      // Adicionar à lista de interações para datas
+      datasCompra.push(naoVenda.createdAt);
+      ultimaCompraTimestamp = Math.max(ultimaCompraTimestamp, naoVenda.createdAt.getTime());
+      
+      // Incluir valor das não-vendas no cálculo
+      valorTotal += naoVenda.valorTotal;
+      maiorValor = Math.max(maiorValor, naoVenda.valorTotal);
+      
+      // Contar produtos para estatísticas
+      naoVenda.produtos.forEach(p => {
+        const nomeProduto = p.produto.nome;
+        produtosContagem[nomeProduto] = (produtosContagem[nomeProduto] || 0) + p.quantidade;
+      });
+    });
+    
+    // Atualizar cálculo do valor médio para considerar todas as interações
+    
     // Processar cotações (considerar apenas as finalizadas para cálculos de valor)
     cotacoes.forEach((cotacao: CotacaoPrisma) => {
       // Adicionar à lista de interações para considerar nas datas
@@ -812,7 +847,7 @@ export async function getEstatisticasClientes() {
   }
 
   try {
-    // Otimização: buscar clientes com vendas em uma única consulta mais eficiente
+    // Otimização: buscar clientes com vendas, cotações e não-vendas em uma única consulta
     const clientes = await prisma.cliente.findMany({
       select: {
         id: true,
@@ -825,6 +860,22 @@ export async function getEstatisticasClientes() {
             valorTotal: true,
             createdAt: true,
             vendaRecorrente: true
+          }
+        },
+        Cotacao: {
+          select: {
+            id: true,
+            valorTotal: true,
+            createdAt: true,
+            vendaRecorrente: true,
+            status: true
+          }
+        },
+        naoVendas: {
+          select: {
+            id: true,
+            valorTotal: true,
+            createdAt: true
           }
         }
       }
@@ -846,17 +897,32 @@ export async function getEstatisticasClientes() {
     
     // Processar todos os clientes em uma única passagem
     clientes.forEach(cliente => {
-      const vendas = cliente.vendas;
+      const vendas = cliente.vendas || [];
+      const cotacoes = cliente.Cotacao || [];
+      const naoVendas = cliente.naoVendas || [];
       
-      // Verificar se é recorrente
-      const ehRecorrente = vendas.some(v => v.vendaRecorrente);
+      // Verificar se é recorrente (através de vendas ou cotações)
+      const ehRecorrente = 
+        vendas.some(v => v.vendaRecorrente) || 
+        cotacoes.some(c => c.vendaRecorrente);
+        
       if (ehRecorrente) clientesRecorrentes++;
       
-      // Calcular valor total do cliente
+      // Calcular valor total do cliente (incluindo todas as interações)
       let valorTotalCliente = 0;
+      
       vendas.forEach(venda => {
         valorTotalCliente += venda.valorTotal;
       });
+      
+      cotacoes.forEach(cotacao => {
+        valorTotalCliente += cotacao.valorTotal;
+      });
+      
+      naoVendas.forEach(naoVenda => {
+        valorTotalCliente += naoVenda.valorTotal;
+      });
+      
       valorTotalGeral += valorTotalCliente;
       
       // Adicionar ao mapa de valor para encontrar top clientes
@@ -866,15 +932,21 @@ export async function getEstatisticasClientes() {
         valorTotal: valorTotalCliente
       });
       
-      // Verificar se é inativo (sem compras há mais de 90 dias)
-      if (vendas.length === 0) {
+      // Verificar se é inativo (sem interações há mais de 90 dias)
+      const todasInteracoes = [
+        ...vendas.map(v => v.createdAt),
+        ...cotacoes.map(c => c.createdAt),
+        ...naoVendas.map(nv => nv.createdAt)
+      ];
+      
+      if (todasInteracoes.length === 0) {
         clientesInativos++;
       } else {
-        // Encontrar última compra
-        const ultimaCompra = new Date(Math.max(...vendas.map(v => v.createdAt.getTime())));
-        const diasDesdeUltimaCompra = differenceInDays(hoje, ultimaCompra);
+        // Encontrar última interação
+        const ultimaInteracao = new Date(Math.max(...todasInteracoes.map(data => data.getTime())));
+        const diasDesdeUltimaInteracao = differenceInDays(hoje, ultimaInteracao);
         
-        if (diasDesdeUltimaCompra > 90) {
+        if (diasDesdeUltimaInteracao > 90) {
           clientesInativos++;
         }
       }
@@ -884,10 +956,9 @@ export async function getEstatisticasClientes() {
         clientesNovos30Dias++;
       }
       
-      // Calcular frequência média se tiver mais de uma venda
-      if (vendas.length > 1) {
-        const datasCompra = vendas.map(v => v.createdAt);
-        const datasOrdenadas = [...datasCompra].sort((a, b) => a.getTime() - b.getTime());
+      // Calcular frequência média se tiver mais de uma interação
+      if (todasInteracoes.length > 1) {
+        const datasOrdenadas = [...todasInteracoes].sort((a, b) => a.getTime() - b.getTime());
         
         let somaIntervalo = 0;
         for (let i = 1; i < datasOrdenadas.length; i++) {
@@ -938,7 +1009,7 @@ export async function getEstatisticasClientes() {
         totalClientes,
         clientesRecorrentes,
         clientesNaoRecorrentes,
-        valorTotal: valorTotalGeral,
+        valorTotalGeral,
         valorMedio,
         clientesMaisValiosos,
         segmentos,

@@ -76,3 +76,19 @@ export interface FiltrosBase {
       dataFim: new Date()
     }
   ];
+
+  export interface FiltrosCotacao {
+    nomeCliente?: string;
+    segmento?: string;
+    vendedor?: string;
+    dataInicio?: string;
+    dataFim?: string;
+    valorMinimo?: string;
+    valorMaximo?: string;
+    produto?: string;
+    objecao?: string;
+    clienteRecorrente?: string;
+    empresaConcorrente?: string;
+    valorConcorrenciaMin?: string;
+    valorConcorrenciaMax?: string;
+  }
