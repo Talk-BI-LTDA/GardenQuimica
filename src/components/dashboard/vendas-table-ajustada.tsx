@@ -1398,7 +1398,7 @@ export function VendasTableAjustada({
 
       {/* Dialog de Filtros */}
       <Dialog open={filtroAberto} onOpenChange={setFiltroAberto}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="!max-w-3xl w-fit">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Filter className="h-5 w-5 text-[#00446A]" />
