@@ -80,8 +80,8 @@ import { Venda } from "@/types/venda";
 import { NaoVenda } from "@/types/nao-venda";
 import { ExportModal } from "@/components/export-modal";
 import { getCatalogoItens } from "@/actions/catalogo-actions";
-import { getClientesRecorrentes } from "@/actions/clientes-actions";
 import { Cliente } from "@/types/venda";
+import { getVendedores } from "@/actions/vendedores-actions";
 
 // Tipo para as estatísticas
 interface Estatisticas {
@@ -229,24 +229,22 @@ export function VendasTableAjustada({
       try {
         // Carregar vendedores (apenas para admin)
         if (isAdmin) {
-          const resClientes = await getClientesRecorrentes();
-          if (resClientes.success && resClientes.clientes) {
-            // Usar apenas os IDs e nomes dos clientes recorrentes como "vendedores" para demonstração
-            // Em um caso real, você usaria uma API real de vendedores
-            const vendedoresFromClientes = resClientes.clientes.map(c => ({
-              id: c.id,
-              nome: c.nome
+          const resVendedores = await getVendedores();
+          if (resVendedores.success && resVendedores.vendedores) {
+            const vendedoresFormatados = resVendedores.vendedores.map(v => ({
+              id: v.id,
+              nome: v.nome
             }));
-            setVendedores(vendedoresFromClientes);
+            setVendedores(vendedoresFormatados);
           }
         }
-
+  
         // Carregar segmentos do catálogo
         const resSegmentos = await getCatalogoItens("segmento");
         if (resSegmentos.success && resSegmentos.itens) {
           setSegmentos(resSegmentos.itens.map(item => item.nome));
         }
-
+  
         // Carregar produtos do catálogo
         const resProdutos = await getCatalogoItens("produto");
         if (resProdutos.success && resProdutos.itens) {
@@ -262,7 +260,7 @@ export function VendasTableAjustada({
         setDataLoading(false);
       }
     };
-
+  
     carregarDados();
   }, [isAdmin]);
 
@@ -310,39 +308,64 @@ export function VendasTableAjustada({
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const term = e.target.value.toLowerCase();
     setSearchTerm(term);
-
+  
     if (!term) {
       setVendas(initialVendas);
       setNaoVendas(initialNaoVendas);
       setCotacoes(initialCotacoes);
       return;
     }
-
-    // Filtrar vendas
+  
+    // Filtrar vendas com busca ampliada
     const filteredVendas = initialVendas.filter(
       (venda) =>
         venda.cliente.nome.toLowerCase().includes(term) ||
-        venda.codigoVenda.toLowerCase().includes(term)
+        venda.codigoVenda.toLowerCase().includes(term) ||
+        venda.vendedorNome.toLowerCase().includes(term) ||
+        venda.cliente.cnpj.toLowerCase().includes(term) ||
+        (venda.cliente.razaoSocial && venda.cliente.razaoSocial.toLowerCase().includes(term)) ||
+        (venda.cliente.whatsapp && venda.cliente.whatsapp.toLowerCase().includes(term)) ||
+        venda.cliente.segmento.toLowerCase().includes(term) ||
+        venda.condicaoPagamento.toLowerCase().includes(term) ||
+        venda.produtos.some(p => p.nome.toLowerCase().includes(term))
     );
-
+  
     setVendas(filteredVendas);
-
-    // Filtrar Cotações canceladas
+  
+    // Filtrar Cotações canceladas com busca ampliada
     const filteredNaoVendas = initialNaoVendas.filter(
       (naoVenda) =>
         naoVenda.cliente.nome.toLowerCase().includes(term) ||
-        naoVenda.codigoVenda.toLowerCase().includes(term)
+        naoVenda.codigoVenda.toLowerCase().includes(term) ||
+        naoVenda.vendedorNome.toLowerCase().includes(term) ||
+        naoVenda.cliente.cnpj.toLowerCase().includes(term) ||
+        (naoVenda.cliente.razaoSocial && naoVenda.cliente.razaoSocial.toLowerCase().includes(term)) ||
+        (naoVenda.cliente.whatsapp && naoVenda.cliente.whatsapp.toLowerCase().includes(term)) ||
+        naoVenda.cliente.segmento.toLowerCase().includes(term) ||
+        naoVenda.condicaoPagamento.toLowerCase().includes(term) ||
+        (naoVenda.objecaoGeral && naoVenda.objecaoGeral.toLowerCase().includes(term)) ||
+        naoVenda.produtosConcorrencia.some(p => 
+          p.produtoGarden.nome.toLowerCase().includes(term) || 
+          (p.nomeConcorrencia && p.nomeConcorrencia.toLowerCase().includes(term))
+        )
     );
-
+  
     setNaoVendas(filteredNaoVendas);
-
-    // Filtrar cotações pendentes
+  
+    // Filtrar cotações pendentes com busca ampliada
     const filteredCotacoes = initialCotacoes.filter(
       (cotacao) =>
         cotacao.cliente.nome.toLowerCase().includes(term) ||
-        cotacao.codigoCotacao.toLowerCase().includes(term)
+        cotacao.codigoCotacao.toLowerCase().includes(term) ||
+        cotacao.vendedorNome.toLowerCase().includes(term) ||
+        cotacao.cliente.cnpj.toLowerCase().includes(term) ||
+        (cotacao.cliente.razaoSocial && cotacao.cliente.razaoSocial.toLowerCase().includes(term)) ||
+        (cotacao.cliente.whatsapp && cotacao.cliente.whatsapp.toLowerCase().includes(term)) ||
+        cotacao.cliente.segmento.toLowerCase().includes(term) ||
+        cotacao.condicaoPagamento.toLowerCase().includes(term) ||
+        cotacao.produtos.some(p => p.nome.toLowerCase().includes(term))
     );
-
+  
     setCotacoes(filteredCotacoes);
   };
 
@@ -899,7 +922,7 @@ export function VendasTableAjustada({
                 <h3 className="text-2xl pl-12 font-bold mt-1">
                   {cotacoes.length}
                 </h3>
-                <p className="text-xs text-gray-400 pl-12 mt-1">
+                <p className="text-sm text-gray-400 pl-12 mt-1">
                   {formatarValorBRL(valorTotalCotacoesPendentes)}
                 </p>
               </div>

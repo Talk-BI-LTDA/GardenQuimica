@@ -847,7 +847,8 @@ const EnhancedDashboard: React.FC = () => {
                       <p className="text-md text-gray-400 pl-12 mt-1">
                         {formatarValorBRL(
                           (estatisticas?.valorTotalVendas || 0) +
-                            (estatisticas?.valorTotalNaoVendas || 0)
+                            (estatisticas?.valorTotalNaoVendas || 0) +
+                            (estatisticas?.valorTotalCotacoesPendentes || 0)
                         )}
                       </p>
                     </div>
@@ -871,7 +872,7 @@ const EnhancedDashboard: React.FC = () => {
                       <h3 className="text-2xl pl-12 font-bold mt-1">
                         {estatisticas?.totalCotacoesPendentes || 0}
                       </h3>
-                      <p className="text-xs text-gray-400 pl-12 mt-1">
+                      <p className="text-md text-gray-400 pl-12 mt-1">
                         {formatarValorBRL(
                           estatisticas?.valorTotalCotacoesPendentes || 0
                         )}
