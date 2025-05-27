@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import Link from "next/link";
@@ -168,84 +169,84 @@ export function Sidebar({ usuario }: SidebarProps) {
         )}
         
         {/* Estoque - Apenas para ADMIN */}
-        {isAdmin && (
+        {/* {isAdmin && (
           <SidebarItem
             href="#"
             icon={<Package2 className="w-5 h-5" />}
             label="Estoque"
             disabled
           />
-        )}
+        )} */}
         
         {/* Metas - Apenas para ADMIN */}
-        {isAdmin && (
+        {/* {isAdmin && (
           <SidebarItem
             href="#"
             icon={<Target className="w-5 h-5" />}
             label="Metas"
             disabled
           />
-        )}
+        )} */}
         
         {/* Clientes (UserCheck) - Apenas para ADMIN */}
-        {isAdmin && (
+        {/* {isAdmin && (
           <SidebarItem
             href="#"
             icon={<UserCheck className="w-5 h-5" />}
             label="Clientes"
             disabled
           />
-        )}
+        )} */}
         
         {/* Financeiro - Apenas para ADMIN */}
-        {isAdmin && (
+        {/* {isAdmin && (
           <SidebarItem
             href="#"
             icon={<DollarSign className="w-5 h-5" />}
             label="Financeiro"
             disabled
           />
-        )}
+        )} */}
         
         {/* Relatório - Apenas para ADMIN */}
-        {isAdmin && (
+        {/* {isAdmin && (
           <SidebarItem
             href="#"
             icon={<FileBarChart className="w-5 h-5" />}
             label="Relatório"
             disabled
           />
-        )}
+        )} */}
         
         {/* Estatísticas - Apenas para ADMIN */}
-        {isAdmin && (
+        {/* {isAdmin && (
           <SidebarItem
             href="#"
             icon={<BarChart3 className="w-5 h-5" />}
             label="Estatísticas"
             disabled
           />
-        )}
+        )} */}
         
         {/* Gerar Orçamento - Apenas para ADMIN */}
-        {isAdmin && (
+        {/* {isAdmin && (
           <SidebarItem
             href="#"
             icon={<FileText className="w-5 h-5" />}
             label="Gerar Orçamento"
             disabled
           />
-        )}
+        )} */}
         
         {/* Configuração - Apenas para ADMIN */}
-        {isAdmin && (
+        {/* {isAdmin && (
           <SidebarItem
             href="#"
             icon={<Settings className="w-5 h-5" />}
             label="Configuração"
             disabled
           />
-        )}
+        )} */}
       </nav>
 
       <div className="p-4 border-t">

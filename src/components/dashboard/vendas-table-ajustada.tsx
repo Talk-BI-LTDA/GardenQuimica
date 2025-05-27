@@ -59,7 +59,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getCotacoes, excluirCotacao } from "@/actions/cotacao-actions";
-import { Cotacao,  } from "@/types/cotacao-tipos";
+import { Cotacao } from "@/types/cotacao-tipos";
 import { formatarValorBRL } from "@/lib/utils";
 import { excluirVenda } from "@/actions/venda-actions";
 import { excluirNaoVenda } from "@/actions/nao-venda-actions";
@@ -124,6 +124,7 @@ export function VendasTableAjustada({
   initialVendas = [],
   initialNaoVendas = [],
   initialCotacoes = [],
+  initialCotacoes: initialCotacoesFromProps = [],
   initialEstatisticas = {},
   isAdmin = false,
 }: VendasTableProps) {
@@ -133,6 +134,8 @@ export function VendasTableAjustada({
   const [vendaSelecionada, setVendaSelecionada] = useState<
     Venda | NaoVenda | null
   >(null);
+  const [initialCotacoesLoadAttempted, setInitialCotacoesLoadAttempted] =
+    useState(false);
   const [confirmacaoExclusao, setConfirmacaoExclusao] = useState(false);
   const [itemTipo, setItemTipo] = useState<"venda" | "naoVenda" | "cotacao">(
     "venda"
@@ -265,7 +268,7 @@ export function VendasTableAjustada({
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const term = e.target.value.toLowerCase();
     setSearchTerm(term);
-  
+
     if (!term) {
       // Se o termo de busca estiver vazio, restaurar os dados iniciais
       if (filtroAplicado) {
@@ -279,7 +282,7 @@ export function VendasTableAjustada({
         return;
       }
     }
-  
+
     // Filtrar vendas com busca ampliada
     const filteredVendas = (filtroAplicado ? vendas : initialVendas).filter(
       (venda) => {
@@ -290,112 +293,99 @@ export function VendasTableAjustada({
           venda.codigoVenda.toLowerCase().includes(term) ||
           venda.vendedorNome.toLowerCase().includes(term) ||
           venda.cliente.cnpj.toLowerCase().includes(term) ||
-          
           // Buscar também no valor
           venda.valorTotal.toString().includes(term) ||
-          
           // Informações adicionais do cliente
-          (venda.cliente.razaoSocial && 
+          (venda.cliente.razaoSocial &&
             venda.cliente.razaoSocial.toLowerCase().includes(term)) ||
-          (venda.cliente.whatsapp && 
+          (venda.cliente.whatsapp &&
             venda.cliente.whatsapp.toLowerCase().includes(term)) ||
           venda.cliente.segmento.toLowerCase().includes(term) ||
-          
           // Informações de pagamento
           venda.condicaoPagamento.toLowerCase().includes(term) ||
-          
           // Buscar em produtos
-          venda.produtos.some((p) => 
-            p.nome.toLowerCase().includes(term) || 
-            p.medida.toLowerCase().includes(term)
+          venda.produtos.some(
+            (p) =>
+              p.nome.toLowerCase().includes(term) ||
+              p.medida.toLowerCase().includes(term)
           )
         );
       }
     );
-  
+
     setVendas(filteredVendas);
-  
+
     // Filtrar Cotações canceladas com busca ampliada
-    const filteredNaoVendas = (filtroAplicado ? naoVendas : initialNaoVendas).filter(
-      (naoVenda) => {
-        // Buscar em diversos campos
-        return (
-          // Informações básicas
-          naoVenda.cliente.nome.toLowerCase().includes(term) ||
-          naoVenda.codigoVenda.toLowerCase().includes(term) ||
-          naoVenda.vendedorNome.toLowerCase().includes(term) ||
-          naoVenda.cliente.cnpj.toLowerCase().includes(term) ||
-          
-          // Buscar também no valor
-          naoVenda.valorTotal.toString().includes(term) ||
-          
-          // Informações adicionais do cliente
-          (naoVenda.cliente.razaoSocial && 
-            naoVenda.cliente.razaoSocial.toLowerCase().includes(term)) ||
-          (naoVenda.cliente.whatsapp && 
-            naoVenda.cliente.whatsapp.toLowerCase().includes(term)) ||
-          naoVenda.cliente.segmento.toLowerCase().includes(term) ||
-          
-          // Informações de pagamento
-          naoVenda.condicaoPagamento.toLowerCase().includes(term) ||
-          
-          // Buscar em objeção geral
-          (naoVenda.objecaoGeral && 
-            naoVenda.objecaoGeral.toLowerCase().includes(term)) ||
-          
-          // Buscar em produtos e concorrência
-          naoVenda.produtosConcorrencia.some(
-            (p) => 
-              p.produtoGarden.nome.toLowerCase().includes(term) || 
-              (p.nomeConcorrencia && 
-                p.nomeConcorrencia.toLowerCase().includes(term)) ||
-              (p.objecao && 
-                p.objecao.toLowerCase().includes(term))
-          )
-        );
-      }
-    );
-  
+    const filteredNaoVendas = (
+      filtroAplicado ? naoVendas : initialNaoVendas
+    ).filter((naoVenda) => {
+      // Buscar em diversos campos
+      return (
+        // Informações básicas
+        naoVenda.cliente.nome.toLowerCase().includes(term) ||
+        naoVenda.codigoVenda.toLowerCase().includes(term) ||
+        naoVenda.vendedorNome.toLowerCase().includes(term) ||
+        naoVenda.cliente.cnpj.toLowerCase().includes(term) ||
+        // Buscar também no valor
+        naoVenda.valorTotal.toString().includes(term) ||
+        // Informações adicionais do cliente
+        (naoVenda.cliente.razaoSocial &&
+          naoVenda.cliente.razaoSocial.toLowerCase().includes(term)) ||
+        (naoVenda.cliente.whatsapp &&
+          naoVenda.cliente.whatsapp.toLowerCase().includes(term)) ||
+        naoVenda.cliente.segmento.toLowerCase().includes(term) ||
+        // Informações de pagamento
+        naoVenda.condicaoPagamento.toLowerCase().includes(term) ||
+        // Buscar em objeção geral
+        (naoVenda.objecaoGeral &&
+          naoVenda.objecaoGeral.toLowerCase().includes(term)) ||
+        // Buscar em produtos e concorrência
+        naoVenda.produtosConcorrencia.some(
+          (p) =>
+            p.produtoGarden.nome.toLowerCase().includes(term) ||
+            (p.nomeConcorrencia &&
+              p.nomeConcorrencia.toLowerCase().includes(term)) ||
+            (p.objecao && p.objecao.toLowerCase().includes(term))
+        )
+      );
+    });
+
     setNaoVendas(filteredNaoVendas);
-  
+
     // Filtrar cotações pendentes com busca ampliada
-    const filteredCotacoes = (filtroAplicado ? cotacoes : initialCotacoes).filter(
-      (cotacao) => {
-        // Buscar em diversos campos
-        return (
-          // Informações básicas
-          cotacao.cliente.nome.toLowerCase().includes(term) ||
-          cotacao.codigoCotacao.toLowerCase().includes(term) ||
-          cotacao.vendedorNome.toLowerCase().includes(term) ||
-          cotacao.cliente.cnpj.toLowerCase().includes(term) ||
-          
-          // Buscar também no valor
-          cotacao.valorTotal.toString().includes(term) ||
-          
-          // Informações adicionais do cliente
-          (cotacao.cliente.razaoSocial && 
-            cotacao.cliente.razaoSocial.toLowerCase().includes(term)) ||
-          (cotacao.cliente.whatsapp && 
-            cotacao.cliente.whatsapp.toLowerCase().includes(term)) ||
-          cotacao.cliente.segmento.toLowerCase().includes(term) ||
-          
-          // Informações de pagamento
-          cotacao.condicaoPagamento.toLowerCase().includes(term) ||
-          
-          // Buscar em produtos
-          cotacao.produtos.some((p) => 
-            p.nome.toLowerCase().includes(term) || 
+    const filteredCotacoes = (
+      filtroAplicado ? cotacoes : initialCotacoes
+    ).filter((cotacao) => {
+      // Buscar em diversos campos
+      return (
+        // Informações básicas
+        cotacao.cliente.nome.toLowerCase().includes(term) ||
+        cotacao.codigoCotacao.toLowerCase().includes(term) ||
+        cotacao.vendedorNome.toLowerCase().includes(term) ||
+        cotacao.cliente.cnpj.toLowerCase().includes(term) ||
+        // Buscar também no valor
+        cotacao.valorTotal.toString().includes(term) ||
+        // Informações adicionais do cliente
+        (cotacao.cliente.razaoSocial &&
+          cotacao.cliente.razaoSocial.toLowerCase().includes(term)) ||
+        (cotacao.cliente.whatsapp &&
+          cotacao.cliente.whatsapp.toLowerCase().includes(term)) ||
+        cotacao.cliente.segmento.toLowerCase().includes(term) ||
+        // Informações de pagamento
+        cotacao.condicaoPagamento.toLowerCase().includes(term) ||
+        // Buscar em produtos
+        cotacao.produtos.some(
+          (p) =>
+            p.nome.toLowerCase().includes(term) ||
             p.medida.toLowerCase().includes(term)
-          )
-        );
-      }
-    );
-  
+        )
+      );
+    });
+
     setCotacoes(filteredCotacoes);
   };
 
   // Função para mapear o resultado da API para o tipo Cotacao correto
-
 
   // Atualizar filtros quando as datas mudam
   useEffect(() => {
@@ -415,81 +405,81 @@ export function VendasTableAjustada({
   }, [dataInicio, dataFim]);
 
   // Resetar filtros
-const resetarFiltros = async () => {
-  setFiltros({
-    segmento: "",
-    nomeCliente: "",
-    vendedor: "",
-    dataInicio: "",
-    dataFim: "",
-    valorMinimo: "",
-    valorMaximo: "",
-    produto: "",
-    produtos: [],
-    objecao: "",
-    clienteRecorrente: "",
-    empresaConcorrente: "",
-    valorConcorrenciaMin: "",
-    valorConcorrenciaMax: "",
-  });
+  const resetarFiltros = async () => {
+    setFiltros({
+      segmento: "",
+      nomeCliente: "",
+      vendedor: "",
+      dataInicio: "",
+      dataFim: "",
+      valorMinimo: "",
+      valorMaximo: "",
+      produto: "",
+      produtos: [],
+      objecao: "",
+      clienteRecorrente: "",
+      empresaConcorrente: "",
+      valorConcorrenciaMin: "",
+      valorConcorrenciaMax: "",
+    });
 
-  setFiltroAplicado(false);
-  setLoading(true);
-  try {
-    // Buscar dados iniciais novamente
-    const [resVendas, resNaoVendas, resCotacoes] = await Promise.all([
-      getVendas(),
-      getNaoVendas(),
-      getCotacoes(), // Esta função já retorna Cotacao[] formatado
-    ]);
+    setFiltroAplicado(false);
+    setLoading(true);
+    try {
+      // Buscar dados iniciais novamente
+      const [resVendas, resNaoVendas, resCotacoes] = await Promise.all([
+        getVendas(),
+        getNaoVendas(),
+        getCotacoes(), // Esta função já retorna Cotacao[] formatado
+      ]);
 
-    // Atualizar estados com os resultados
-    if (resVendas.success && resVendas.vendas) {
-      setVendas(resVendas.vendas);
-    } else {
-      setVendas(initialVendas); // Fallback para dados iniciais
-      console.error(
-        "Erro ao buscar vendas ao resetar filtros:",
-        resVendas.error
-      );
+      // Atualizar estados com os resultados
+      if (resVendas.success && resVendas.vendas) {
+        setVendas(resVendas.vendas);
+      } else {
+        setVendas(initialVendas); // Fallback para dados iniciais
+        console.error(
+          "Erro ao buscar vendas ao resetar filtros:",
+          resVendas.error
+        );
+      }
+
+      if (resNaoVendas.success && resNaoVendas.naoVendas) {
+        setNaoVendas(resNaoVendas.naoVendas);
+      } else {
+        setNaoVendas(initialNaoVendas); // Fallback
+        console.error(
+          "Erro ao buscar não vendas ao resetar filtros:",
+          resNaoVendas.error
+        );
+      }
+
+      // CORREÇÃO PRINCIPAL AQUI:
+      // Os dados de resCotacoes.cotacoes já estão no formato Cotacao[]
+      // devido às correções na server action getCotacoes.
+      // Não é mais necessário mapear aqui.
+      if (resCotacoes.success && resCotacoes.cotacoes) {
+        setCotacoes(resCotacoes.cotacoes);
+      } else {
+        setCotacoes(initialCotacoes); // Fallback
+        console.error(
+          "Erro ao buscar cotações ao resetar filtros:",
+          resCotacoes.error
+        );
+      }
+
+      toast.success("Filtros resetados com sucesso");
+    } catch (error) {
+      console.error("Erro ao resetar filtros:", error);
+      toast.error("Erro ao resetar filtros");
+      // Restaurar para os dados iniciais em caso de erro na chamada da API
+      setVendas(initialVendas);
+      setNaoVendas(initialNaoVendas);
+      setCotacoes(initialCotacoes);
+    } finally {
+      setLoading(false);
     }
-
-    if (resNaoVendas.success && resNaoVendas.naoVendas) {
-      setNaoVendas(resNaoVendas.naoVendas);
-    } else {
-      setNaoVendas(initialNaoVendas); // Fallback
-      console.error(
-        "Erro ao buscar não vendas ao resetar filtros:",
-        resNaoVendas.error
-      );
-    }
-
-    // CORREÇÃO PRINCIPAL AQUI:
-    // Os dados de resCotacoes.cotacoes já estão no formato Cotacao[]
-    // devido às correções na server action getCotacoes.
-    // Não é mais necessário mapear aqui.
-    if (resCotacoes.success && resCotacoes.cotacoes) {
-      setCotacoes(resCotacoes.cotacoes);
-    } else {
-      setCotacoes(initialCotacoes); // Fallback
-      console.error(
-        "Erro ao buscar cotações ao resetar filtros:",
-        resCotacoes.error
-      );
-    }
-
-    toast.success("Filtros resetados com sucesso");
-  } catch (error) {
-    console.error("Erro ao resetar filtros:", error);
-    toast.error("Erro ao resetar filtros");
-    // Restaurar para os dados iniciais em caso de erro na chamada da API
-    setVendas(initialVendas);
-    setNaoVendas(initialNaoVendas);
-    setCotacoes(initialCotacoes);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   // Ver detalhes
   const verDetalhes = (
@@ -656,7 +646,7 @@ const resetarFiltros = async () => {
     setLoading(true);
     try {
       setFiltroAplicado(true);
-  
+
       const filtrosCotacao: FiltrosCotacao = {
         segmento: filtros.segmento || undefined,
         nomeCliente: filtros.nomeCliente || undefined,
@@ -666,14 +656,19 @@ const resetarFiltros = async () => {
         valorMinimo: filtros.valorMinimo || undefined,
         valorMaximo: filtros.valorMaximo || undefined,
         produto: filtros.produto || undefined,
-        produtos: filtros.produtos && filtros.produtos.length > 0 ? filtros.produtos : (filtros.produto ? [filtros.produto] : undefined),
+        produtos:
+          filtros.produtos && filtros.produtos.length > 0
+            ? filtros.produtos
+            : filtros.produto
+            ? [filtros.produto]
+            : undefined,
         objecao: filtros.objecao || undefined,
         clienteRecorrente: filtros.clienteRecorrente || undefined,
         empresaConcorrente: filtros.empresaConcorrente || undefined,
         valorConcorrenciaMin: filtros.valorConcorrenciaMin || undefined,
         valorConcorrenciaMax: filtros.valorConcorrenciaMax || undefined,
       };
-  
+
       const filtrosVenda: FiltrosVenda = {
         segmento: filtros.segmento || undefined,
         dataInicio: filtros.dataInicio || undefined,
@@ -688,39 +683,50 @@ const resetarFiltros = async () => {
         produtoId: filtros.produto || undefined,
         // Adicionando outros campos de FiltrosCotacao que também são válidos para FiltrosVenda
         nomeCliente: filtros.nomeCliente || undefined,
-        produtos: filtros.produtos && filtros.produtos.length > 0 ? filtros.produtos : (filtros.produto ? [filtros.produto] : undefined),
+        produtos:
+          filtros.produtos && filtros.produtos.length > 0
+            ? filtros.produtos
+            : filtros.produto
+            ? [filtros.produto]
+            : undefined,
         clienteRecorrente: filtros.clienteRecorrente || undefined,
       };
-  
+
       const [resVendas, resNaoVendas, resCotacoes] = await Promise.all([
         getVendas(filtrosVenda),
         getNaoVendas(filtrosVenda), // Assumindo que getNaoVendas também aceita FiltrosVenda
         getCotacoes(filtrosCotacao),
       ]);
-  
+
       if (resVendas.success && resVendas.vendas) {
         setVendas(resVendas.vendas);
       } else {
         setVendas([]);
         console.error("Erro ao aplicar filtros em vendas:", resVendas.error);
       }
-  
+
       if (resNaoVendas.success && resNaoVendas.naoVendas) {
         setNaoVendas(resNaoVendas.naoVendas);
       } else {
         setNaoVendas([]);
-        console.error("Erro ao aplicar filtros em não vendas:", resNaoVendas.error);
+        console.error(
+          "Erro ao aplicar filtros em não vendas:",
+          resNaoVendas.error
+        );
       }
-  
+
       // CORREÇÃO PRINCIPAL AQUI:
       // Remover a chamada a mapToCotacao, pois getCotacoes já retorna Cotacao[]
       if (resCotacoes.success && resCotacoes.cotacoes) {
         setCotacoes(resCotacoes.cotacoes);
       } else {
         setCotacoes([]);
-        console.error("Erro ao aplicar filtros em cotações:", resCotacoes.error);
+        console.error(
+          "Erro ao aplicar filtros em cotações:",
+          resCotacoes.error
+        );
       }
-  
+
       toast.success("Filtros aplicados com sucesso");
     } catch (error) {
       console.error("Erro ao aplicar filtros:", error);
@@ -732,33 +738,50 @@ const resetarFiltros = async () => {
 
   // para verificar o estado filtroAplicado
   const loadCotacoes = useCallback(async () => {
-    // Apenas carrega cotações se não houver nenhuma e nenhum filtro estiver aplicado,
-    // para evitar buscar dados desnecessariamente se já vierem de initialCotacoes ou de um filtro.
-    if (initialCotacoes.length === 0 && cotacoes.length === 0 && !filtroAplicado) {
-      try {
-        setLoading(true); // Pode ser útil ter um loading específico para esta carga inicial
-        setDataLoading(true); // Ou usar o dataLoading geral
-        const response = await getCotacoes(); // getCotacoes já retorna Cotacao[]
-        if (response.success && response.cotacoes) {
-          setCotacoes(response.cotacoes);
-        } else {
-          console.error("Erro ao carregar cotações iniciais:", response.error);
-          toast.error("Erro ao carregar cotações"); // Evitar toast se initialCotacoes for usado
-        }
-      } catch (error) {
-        console.error("Erro ao carregar cotações:", error);
-        toast.error("Erro ao carregar cotações");
-      } finally {
-        setLoading(false);
+    // Só executa se nenhum filtro estiver aplicado E a carga inicial de cotações não foi tentada.
+    if (!filtroAplicado && !initialCotacoesLoadAttempted) {
+      // Indicar que estamos iniciando o processo de carregamento dos dados da tabela de cotações
+      setDataLoading(true);
+      // setLoading(true); // Use setLoading se for um indicador de loading mais geral para todas as ações
+
+      if (initialCotacoesFromProps.length > 0) {
+        // Se houver cotações iniciais das props, usa elas.
+        setCotacoes(initialCotacoesFromProps);
+        setInitialCotacoesLoadAttempted(true); // Marca que a carga inicial (via props) foi feita
         setDataLoading(false);
+        // setLoading(false);
+      } else {
+        // Não há cotações iniciais via props, então busca da API.
+        try {
+          const response = await getCotacoes(); // Presume que getCotacoes já retorna Cotacao[] formatado
+          if (response.success && response.cotacoes) {
+            setCotacoes(response.cotacoes);
+          } else {
+            console.error(
+              "Erro ao carregar cotações iniciais:",
+              response.error
+            );
+            setCotacoes([]); // Define como vazio se a API falhar ou não retornar cotações
+            if (response.error) {
+              // Só mostra toast se houver mensagem de erro da API
+              toast.error(`Falha ao carregar cotações: ${response.error}`);
+            } else {
+              toast.error("Falha ao carregar cotações.");
+            }
+          }
+        } catch (error) {
+          console.error("Erro crítico ao carregar cotações:", error);
+          setCotacoes([]); // Define como vazio em caso de exceção
+          toast.error("Erro crítico ao carregar cotações.");
+        } finally {
+          setInitialCotacoesLoadAttempted(true);
+          setDataLoading(false);
+        }
       }
-    } else if (initialCotacoes.length > 0 && cotacoes.length === 0 && !filtroAplicado) {
-      setCotacoes(initialCotacoes);
-      setDataLoading(false); // Dados iniciais carregados
-    } else {
-       setDataLoading(false); // Se nenhuma condição acima for atendida, para o loading.
+    } else if (!filtroAplicado && initialCotacoesLoadAttempted) {
+      setDataLoading(false);
     }
-  }, [initialCotacoes, cotacoes.length, filtroAplicado]);
+  }, [initialCotacoesFromProps, filtroAplicado, initialCotacoesLoadAttempted]);
 
   useEffect(() => {
     loadCotacoes();
