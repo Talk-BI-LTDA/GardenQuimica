@@ -13,12 +13,8 @@ import {
   Filter,
   ArrowUp,
   ArrowDown,
-  X,
   Search,
-  Calendar,
-  RefreshCcw,
   Download,
-  Lock,
   MoreVertical,
   CheckCircle,
   XCircle,
@@ -26,14 +22,11 @@ import {
   ThumbsUp,
   Clock,
   Info,
-  DollarSign,
   User,
-  Users,
   PackageOpen,
-  CalendarRange
 } from "lucide-react";
 import { toast } from "sonner";
-
+import { FiltrosVenda, FiltrosCotacao } from "@/types/filtros";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -58,30 +51,25 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+
+import FiltroDialog from "@/components/FiltroDialog";
+
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getCotacoes, excluirCotacao } from "@/actions/cotacao-actions";
-import { Cotacao, StatusCotacao } from "@/types/cotacao-tipos";
+import { Cotacao,  } from "@/types/cotacao-tipos";
 import { formatarValorBRL } from "@/lib/utils";
-import { getVendas, excluirVenda } from "@/actions/venda-actions";
-import { getNaoVendas, excluirNaoVenda } from "@/actions/nao-venda-actions";
+import { excluirVenda } from "@/actions/venda-actions";
+import { excluirNaoVenda } from "@/actions/nao-venda-actions";
 import { Venda } from "@/types/venda";
 import { NaoVenda } from "@/types/nao-venda";
 import { ExportModal } from "@/components/export-modal";
 import { getCatalogoItens } from "@/actions/catalogo-actions";
-import { Cliente } from "@/types/venda";
 import { getVendedores } from "@/actions/vendedores-actions";
+import { getVendas } from "@/actions/venda-actions";
+import { getNaoVendas } from "@/actions/nao-venda-actions";
 
 // Tipo para as estatísticas
 interface Estatisticas {
@@ -99,41 +87,7 @@ interface Vendedor {
   id: string;
   nome: string;
 }
-interface CotacaoApiResponse {
-  id: string;
-  codigoCotacao: string;
-  cliente: {
-    id: string;
-    nome: string;
-    segmento: string;
-    cnpj: string;
-    razaoSocial: string | null;
-    whatsapp: string | null;
-    recorrente: boolean;
-  };
-  produtos?: Array<{
-    id?: string;
-    nome: string;
-    medida: string;
-    quantidade: number;
-    valor: number;
-    icms?: number;
-    ipi?: number;
-  }>;
-  valorTotal: number;
-  condicaoPagamento: string;
-  vendaRecorrente: boolean;
-  nomeRecorrencia?: string | null;
-  status?: string | null;
-  vendedorId: string;
-  vendedor?: {
-    name: string;
-    id?: string;  // Tornando id opcional
-  } | null;
-  createdAt: string | Date;
-  updatedAt: string | Date;
-  editedById?: string | null;
-}
+
 // Tipo para os produtos
 interface ProdutoOption {
   id: string;
@@ -149,7 +103,8 @@ interface Filtros {
   dataFim: string;
   valorMinimo: string;
   valorMaximo: string;
-  produto: string;
+  produto?: string;
+  produtos?: string[];
   objecao: string;
   clienteRecorrente: string;
   empresaConcorrente: string;
@@ -189,7 +144,7 @@ export function VendasTableAjustada({
 
   // Estados para dados reais
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
-  const [, setSegmentos] = useState<string[]>([]);
+  const [segmentos, setSegmentos] = useState<string[]>([]);
   const [produtos, setProdutos] = useState<ProdutoOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
@@ -204,6 +159,7 @@ export function VendasTableAjustada({
     valorMinimo: "",
     valorMaximo: "",
     produto: "",
+    produtos: [],
     objecao: "",
     clienteRecorrente: "",
     empresaConcorrente: "",
@@ -212,16 +168,15 @@ export function VendasTableAjustada({
   });
 
   // Estado para o calendário
-  const [dataInicio, setDataInicio] = useState<Date | undefined>(undefined);
-  const [dataFim, setDataFim] = useState<Date | undefined>(undefined);
-  const [filtroAplicado, setFiltroAplicado] = useState(false);
 
   // Dados
   const [vendas, setVendas] = useState<Venda[]>(initialVendas);
   const [naoVendas, setNaoVendas] = useState<NaoVenda[]>(initialNaoVendas);
   const [estatisticas] = useState<Estatisticas>(initialEstatisticas);
   const [cotacoes, setCotacoes] = useState<Cotacao[]>(initialCotacoes);
-
+  const [dataInicio] = useState<Date | undefined>(undefined);
+  const [dataFim] = useState<Date | undefined>(undefined);
+  const [filtroAplicado, setFiltroAplicado] = useState(false);
   // Carregar dados reais quando o componente é montado
   useEffect(() => {
     const carregarDados = async () => {
@@ -231,27 +186,29 @@ export function VendasTableAjustada({
         if (isAdmin) {
           const resVendedores = await getVendedores();
           if (resVendedores.success && resVendedores.vendedores) {
-            const vendedoresFormatados = resVendedores.vendedores.map(v => ({
+            const vendedoresFormatados = resVendedores.vendedores.map((v) => ({
               id: v.id,
-              nome: v.nome
+              nome: v.nome,
             }));
             setVendedores(vendedoresFormatados);
           }
         }
-  
+
         // Carregar segmentos do catálogo
         const resSegmentos = await getCatalogoItens("segmento");
         if (resSegmentos.success && resSegmentos.itens) {
-          setSegmentos(resSegmentos.itens.map(item => item.nome));
+          setSegmentos(resSegmentos.itens.map((item) => item.nome));
         }
-  
+
         // Carregar produtos do catálogo
         const resProdutos = await getCatalogoItens("produto");
         if (resProdutos.success && resProdutos.itens) {
-          setProdutos(resProdutos.itens.map(item => ({
-            id: item.id,
-            nome: item.nome
-          })));
+          setProdutos(
+            resProdutos.itens.map((item) => ({
+              id: item.id,
+              nome: item.nome,
+            }))
+          );
         }
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
@@ -260,7 +217,7 @@ export function VendasTableAjustada({
         setDataLoading(false);
       }
     };
-  
+
     carregarDados();
   }, [isAdmin]);
 
@@ -310,324 +267,229 @@ export function VendasTableAjustada({
     setSearchTerm(term);
   
     if (!term) {
-      setVendas(initialVendas);
-      setNaoVendas(initialNaoVendas);
-      setCotacoes(initialCotacoes);
-      return;
+      // Se o termo de busca estiver vazio, restaurar os dados iniciais
+      if (filtroAplicado) {
+        // Se o filtro estiver aplicado, mantenha os dados filtrados
+        return;
+      } else {
+        // Se não houver filtro aplicado, restaurar os dados iniciais
+        setVendas(initialVendas);
+        setNaoVendas(initialNaoVendas);
+        setCotacoes(initialCotacoes);
+        return;
+      }
     }
   
     // Filtrar vendas com busca ampliada
-    const filteredVendas = initialVendas.filter(
-      (venda) =>
-        venda.cliente.nome.toLowerCase().includes(term) ||
-        venda.codigoVenda.toLowerCase().includes(term) ||
-        venda.vendedorNome.toLowerCase().includes(term) ||
-        venda.cliente.cnpj.toLowerCase().includes(term) ||
-        (venda.cliente.razaoSocial && venda.cliente.razaoSocial.toLowerCase().includes(term)) ||
-        (venda.cliente.whatsapp && venda.cliente.whatsapp.toLowerCase().includes(term)) ||
-        venda.cliente.segmento.toLowerCase().includes(term) ||
-        venda.condicaoPagamento.toLowerCase().includes(term) ||
-        venda.produtos.some(p => p.nome.toLowerCase().includes(term))
+    const filteredVendas = (filtroAplicado ? vendas : initialVendas).filter(
+      (venda) => {
+        // Buscar em diversos campos
+        return (
+          // Informações básicas
+          venda.cliente.nome.toLowerCase().includes(term) ||
+          venda.codigoVenda.toLowerCase().includes(term) ||
+          venda.vendedorNome.toLowerCase().includes(term) ||
+          venda.cliente.cnpj.toLowerCase().includes(term) ||
+          
+          // Buscar também no valor
+          venda.valorTotal.toString().includes(term) ||
+          
+          // Informações adicionais do cliente
+          (venda.cliente.razaoSocial && 
+            venda.cliente.razaoSocial.toLowerCase().includes(term)) ||
+          (venda.cliente.whatsapp && 
+            venda.cliente.whatsapp.toLowerCase().includes(term)) ||
+          venda.cliente.segmento.toLowerCase().includes(term) ||
+          
+          // Informações de pagamento
+          venda.condicaoPagamento.toLowerCase().includes(term) ||
+          
+          // Buscar em produtos
+          venda.produtos.some((p) => 
+            p.nome.toLowerCase().includes(term) || 
+            p.medida.toLowerCase().includes(term)
+          )
+        );
+      }
     );
   
     setVendas(filteredVendas);
   
     // Filtrar Cotações canceladas com busca ampliada
-    const filteredNaoVendas = initialNaoVendas.filter(
-      (naoVenda) =>
-        naoVenda.cliente.nome.toLowerCase().includes(term) ||
-        naoVenda.codigoVenda.toLowerCase().includes(term) ||
-        naoVenda.vendedorNome.toLowerCase().includes(term) ||
-        naoVenda.cliente.cnpj.toLowerCase().includes(term) ||
-        (naoVenda.cliente.razaoSocial && naoVenda.cliente.razaoSocial.toLowerCase().includes(term)) ||
-        (naoVenda.cliente.whatsapp && naoVenda.cliente.whatsapp.toLowerCase().includes(term)) ||
-        naoVenda.cliente.segmento.toLowerCase().includes(term) ||
-        naoVenda.condicaoPagamento.toLowerCase().includes(term) ||
-        (naoVenda.objecaoGeral && naoVenda.objecaoGeral.toLowerCase().includes(term)) ||
-        naoVenda.produtosConcorrencia.some(p => 
-          p.produtoGarden.nome.toLowerCase().includes(term) || 
-          (p.nomeConcorrencia && p.nomeConcorrencia.toLowerCase().includes(term))
-        )
+    const filteredNaoVendas = (filtroAplicado ? naoVendas : initialNaoVendas).filter(
+      (naoVenda) => {
+        // Buscar em diversos campos
+        return (
+          // Informações básicas
+          naoVenda.cliente.nome.toLowerCase().includes(term) ||
+          naoVenda.codigoVenda.toLowerCase().includes(term) ||
+          naoVenda.vendedorNome.toLowerCase().includes(term) ||
+          naoVenda.cliente.cnpj.toLowerCase().includes(term) ||
+          
+          // Buscar também no valor
+          naoVenda.valorTotal.toString().includes(term) ||
+          
+          // Informações adicionais do cliente
+          (naoVenda.cliente.razaoSocial && 
+            naoVenda.cliente.razaoSocial.toLowerCase().includes(term)) ||
+          (naoVenda.cliente.whatsapp && 
+            naoVenda.cliente.whatsapp.toLowerCase().includes(term)) ||
+          naoVenda.cliente.segmento.toLowerCase().includes(term) ||
+          
+          // Informações de pagamento
+          naoVenda.condicaoPagamento.toLowerCase().includes(term) ||
+          
+          // Buscar em objeção geral
+          (naoVenda.objecaoGeral && 
+            naoVenda.objecaoGeral.toLowerCase().includes(term)) ||
+          
+          // Buscar em produtos e concorrência
+          naoVenda.produtosConcorrencia.some(
+            (p) => 
+              p.produtoGarden.nome.toLowerCase().includes(term) || 
+              (p.nomeConcorrencia && 
+                p.nomeConcorrencia.toLowerCase().includes(term)) ||
+              (p.objecao && 
+                p.objecao.toLowerCase().includes(term))
+          )
+        );
+      }
     );
   
     setNaoVendas(filteredNaoVendas);
   
     // Filtrar cotações pendentes com busca ampliada
-    const filteredCotacoes = initialCotacoes.filter(
-      (cotacao) =>
-        cotacao.cliente.nome.toLowerCase().includes(term) ||
-        cotacao.codigoCotacao.toLowerCase().includes(term) ||
-        cotacao.vendedorNome.toLowerCase().includes(term) ||
-        cotacao.cliente.cnpj.toLowerCase().includes(term) ||
-        (cotacao.cliente.razaoSocial && cotacao.cliente.razaoSocial.toLowerCase().includes(term)) ||
-        (cotacao.cliente.whatsapp && cotacao.cliente.whatsapp.toLowerCase().includes(term)) ||
-        cotacao.cliente.segmento.toLowerCase().includes(term) ||
-        cotacao.condicaoPagamento.toLowerCase().includes(term) ||
-        cotacao.produtos.some(p => p.nome.toLowerCase().includes(term))
+    const filteredCotacoes = (filtroAplicado ? cotacoes : initialCotacoes).filter(
+      (cotacao) => {
+        // Buscar em diversos campos
+        return (
+          // Informações básicas
+          cotacao.cliente.nome.toLowerCase().includes(term) ||
+          cotacao.codigoCotacao.toLowerCase().includes(term) ||
+          cotacao.vendedorNome.toLowerCase().includes(term) ||
+          cotacao.cliente.cnpj.toLowerCase().includes(term) ||
+          
+          // Buscar também no valor
+          cotacao.valorTotal.toString().includes(term) ||
+          
+          // Informações adicionais do cliente
+          (cotacao.cliente.razaoSocial && 
+            cotacao.cliente.razaoSocial.toLowerCase().includes(term)) ||
+          (cotacao.cliente.whatsapp && 
+            cotacao.cliente.whatsapp.toLowerCase().includes(term)) ||
+          cotacao.cliente.segmento.toLowerCase().includes(term) ||
+          
+          // Informações de pagamento
+          cotacao.condicaoPagamento.toLowerCase().includes(term) ||
+          
+          // Buscar em produtos
+          cotacao.produtos.some((p) => 
+            p.nome.toLowerCase().includes(term) || 
+            p.medida.toLowerCase().includes(term)
+          )
+        );
+      }
     );
   
     setCotacoes(filteredCotacoes);
   };
 
   // Função para mapear o resultado da API para o tipo Cotacao correto
-  const mapToCotacao = (cotacao: CotacaoApiResponse): Cotacao => {
-    // Converter cliente.razaoSocial de null para undefined se necessário
-    const cliente: Cliente = {
-      id: cotacao.cliente.id,
-      nome: cotacao.cliente.nome,
-      segmento: cotacao.cliente.segmento,
-      cnpj: cotacao.cliente.cnpj,
-      razaoSocial: cotacao.cliente.razaoSocial || undefined,
-      whatsapp: cotacao.cliente.whatsapp || undefined,
-      recorrente: cotacao.cliente.recorrente || false
-    };
-  
-    // Garantir que produtos exista mesmo que seja um array vazio
-    const produtos = cotacao.produtos || [];
-  
-    return {
-      id: cotacao.id,
-      codigoCotacao: cotacao.codigoCotacao,
-      cliente: cliente,
-      produtos: produtos,
-      valorTotal: cotacao.valorTotal,
-      condicaoPagamento: cotacao.condicaoPagamento,
-      vendaRecorrente: cotacao.vendaRecorrente,
-      nomeRecorrencia: cotacao.nomeRecorrencia || undefined,
-      status: (cotacao.status || "pendente") as StatusCotacao,
-      vendedorId: cotacao.vendedorId,
-      vendedorNome: cotacao.vendedor?.name || "Sem vendedor",
-      createdAt: new Date(cotacao.createdAt),
-      updatedAt: new Date(cotacao.updatedAt),
-      editedById: cotacao.editedById || undefined,
-    };
-  };
-  
 
-  const loadCotacoes = useCallback(async () => {
-    if (cotacoes.length === 0 && !filtroAplicado) {
-      try {
-        setLoading(true);
-        const response = await getCotacoes();
-        if (response.success && response.cotacoes) {
-          // Usar o mapeador para garantir tipos corretos
-          const cotacoesFormatadas = response.cotacoes.map(mapToCotacao);
-          setCotacoes(cotacoesFormatadas);
-        }
-      } catch (error) {
-        console.error("Erro ao carregar cotações:", error);
-        toast.error("Erro ao carregar cotações");
-      } finally {
-        setLoading(false);
-      }
-    }
-  }, [cotacoes.length, filtroAplicado]);
-  
-  useEffect(() => {
-    loadCotacoes();
-  }, [loadCotacoes]);
 
   // Atualizar filtros quando as datas mudam
   useEffect(() => {
     if (dataInicio) {
-      setFiltros(prev => ({
+      setFiltros((prev) => ({
         ...prev,
-        dataInicio: dataInicio.toISOString().split('T')[0]
+        dataInicio: dataInicio.toISOString().split("T")[0],
       }));
     }
-    
+
     if (dataFim) {
-      setFiltros(prev => ({
+      setFiltros((prev) => ({
         ...prev,
-        dataFim: dataFim.toISOString().split('T')[0]
+        dataFim: dataFim.toISOString().split("T")[0],
       }));
     }
   }, [dataInicio, dataFim]);
 
-  // Filtrar dados por data
-  // const handleFilterByDate = () => {
-  //   if (!dataInicio || !dataFim) {
-  //     toast.error("Selecione uma data inicial e final");
-  //     return;
-  //   }
-
-  //   // Ajustar data final para incluir o dia inteiro
-  //   const adjustedEndDate = new Date(dataFim);
-  //   adjustedEndDate.setHours(23, 59, 59, 999);
-    
-  //   const filteredVendas = initialVendas.filter((venda) => {
-  //     const vendaDate = new Date(venda.createdAt);
-  //     return vendaDate >= dataInicio && vendaDate <= adjustedEndDate;
-  //   });
-
-  //   setVendas(filteredVendas);
-
-  //   const filteredNaoVendas = initialNaoVendas.filter((naoVenda) => {
-  //     const naoVendaDate = new Date(naoVenda.createdAt);
-  //     return naoVendaDate >= dataInicio && naoVendaDate <= adjustedEndDate;
-  //   });
-
-  //   setNaoVendas(filteredNaoVendas);
-
-  //   const filteredCotacoes = initialCotacoes.filter((cotacao) => {
-  //     const cotacaoDate = new Date(cotacao.createdAt);
-  //     return cotacaoDate >= dataInicio && cotacaoDate <= adjustedEndDate;
-  //   });
-
-  //   setCotacoes(filteredCotacoes);
-
-  //   toast.success(`Filtrado por período: ${format(dataInicio, 'dd/MM/yyyy')} até ${format(adjustedEndDate, 'dd/MM/yyyy')}`);
-  // };
-
-  // // Selecionar o mês atual
-  // const selecionarMesAtual = () => {
-  //   const hoje = new Date();
-  //   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-  //   const fimMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
-    
-  //   setDataInicio(inicioMes);
-  //   setDataFim(fimMes);
-    
-  //   // A atualização dos filtros acontece no useEffect
-    
-  //   // Aplicar filtro
-  //   const adjustedEndDate = new Date(fimMes);
-  //   adjustedEndDate.setHours(23, 59, 59, 999);
-    
-  //   const filteredVendas = initialVendas.filter((venda) => {
-  //     const vendaDate = new Date(venda.createdAt);
-  //     return vendaDate >= inicioMes && vendaDate <= adjustedEndDate;
-  //   });
-
-  //   setVendas(filteredVendas);
-
-  //   const filteredNaoVendas = initialNaoVendas.filter((naoVenda) => {
-  //     const naoVendaDate = new Date(naoVenda.createdAt);
-  //     return naoVendaDate >= inicioMes && naoVendaDate <= adjustedEndDate;
-  //   });
-
-  //   setNaoVendas(filteredNaoVendas);
-
-  //   const filteredCotacoes = initialCotacoes.filter((cotacao) => {
-  //     const cotacaoDate = new Date(cotacao.createdAt);
-  //     return cotacaoDate >= inicioMes && cotacaoDate <= adjustedEndDate;
-  //   });
-
-  //   setCotacoes(filteredCotacoes);
-
-  //   toast.success("Filtrado por período: Mês atual");
-  // };
-
-  // Filtrar dados
-  const aplicarFiltros = async () => {
-    setLoading(true);
-  
-    try {
-      // Aplicar filtros às vendas
-      const filtrosConvertidos: Record<string, string | number | boolean> = {};
-  
-      // Converter filtros para tipos adequados
-      Object.entries(filtros).forEach(([key, value]) => {
-        if (value) {
-          if (
-            [
-              "valorMinimo",
-              "valorMaximo",
-              "valorConcorrenciaMin",
-              "valorConcorrenciaMax",
-            ].includes(key)
-          ) {
-            const numValue = parseFloat(value);
-            if (!isNaN(numValue)) {
-              filtrosConvertidos[key] = numValue;
-            }
-          } else {
-            filtrosConvertidos[key] = value;
-          }
-        }
-      });
-  
-      // CORREÇÃO: Verificar e corrigir a ordem das datas
-      if (filtrosConvertidos.dataInicio && filtrosConvertidos.dataFim) {
-        const dataInicio = new Date(filtrosConvertidos.dataInicio as string);
-        const dataFim = new Date(filtrosConvertidos.dataFim as string);
-        
-        // Se a data inicial for depois da data final, inverta-as
-        if (dataInicio > dataFim) {
-          const temp = filtrosConvertidos.dataInicio;
-          filtrosConvertidos.dataInicio = filtrosConvertidos.dataFim;
-          filtrosConvertidos.dataFim = temp;
-          console.log("Datas invertidas corrigidas:", filtrosConvertidos);
-        }
-      }
-  
-      // Obter vendas filtradas
-      const resultadoVendas = await getVendas(filtrosConvertidos);
-      if (resultadoVendas.success) {
-        setVendas(resultadoVendas.vendas);
-      }
-  
-      // Obter não-vendas filtradas
-      const resultadoNaoVendas = await getNaoVendas(filtrosConvertidos);
-      if (resultadoNaoVendas.success) {
-        setNaoVendas(resultadoNaoVendas.naoVendas);
-      }
-  
-      // Obter cotações filtradas
-      console.log("Chamando getCotacoes com:", filtrosConvertidos);
-      const resultadoCotacoes = await getCotacoes(filtrosConvertidos);
-      console.log("Resultado de getCotacoes:", resultadoCotacoes);
-      
-      if (resultadoCotacoes.success) {
-        // Garantir que cotacoes existe antes de mapear
-        const cotacaoesArray = resultadoCotacoes.cotacoes || [];
-        console.log("Número de cotações retornadas:", cotacaoesArray.length);
-        
-        const cotacoesFormatadas = cotacaoesArray.map(mapToCotacao);
-        setCotacoes(cotacoesFormatadas);
-        
-        // IMPORTANTE: Marcar que um filtro foi aplicado
-        setFiltroAplicado(true);
-      }
-  
-      setFiltroAberto(false);
-      toast.success("Filtros aplicados com sucesso");
-    } catch (error) {
-      console.error("Erro ao aplicar filtros:", error);
-      toast.error("Erro ao aplicar filtros");
-    } finally {
-      setLoading(false);
-    }
-  };
-  
   // Resetar filtros
-  const resetarFiltros = () => {
-    setFiltros({
-      segmento: "",
-      nomeCliente: "",
-      vendedor: "",
-      dataInicio: "",
-      dataFim: "",
-      valorMinimo: "",
-      valorMaximo: "",
-      produto: "",
-      objecao: "",
-      clienteRecorrente: "",
-      empresaConcorrente: "",
-      valorConcorrenciaMin: "",
-      valorConcorrenciaMax: "",
-    });
-    setDataInicio(undefined);
-    setDataFim(undefined);
-    
-    // Reiniciar flag de filtro aplicado para permitir carregamento automático
-    setFiltroAplicado(false);
-    
-    // Limpar resultados de filtro
+const resetarFiltros = async () => {
+  setFiltros({
+    segmento: "",
+    nomeCliente: "",
+    vendedor: "",
+    dataInicio: "",
+    dataFim: "",
+    valorMinimo: "",
+    valorMaximo: "",
+    produto: "",
+    produtos: [],
+    objecao: "",
+    clienteRecorrente: "",
+    empresaConcorrente: "",
+    valorConcorrenciaMin: "",
+    valorConcorrenciaMax: "",
+  });
+
+  setFiltroAplicado(false);
+  setLoading(true);
+  try {
+    // Buscar dados iniciais novamente
+    const [resVendas, resNaoVendas, resCotacoes] = await Promise.all([
+      getVendas(),
+      getNaoVendas(),
+      getCotacoes(), // Esta função já retorna Cotacao[] formatado
+    ]);
+
+    // Atualizar estados com os resultados
+    if (resVendas.success && resVendas.vendas) {
+      setVendas(resVendas.vendas);
+    } else {
+      setVendas(initialVendas); // Fallback para dados iniciais
+      console.error(
+        "Erro ao buscar vendas ao resetar filtros:",
+        resVendas.error
+      );
+    }
+
+    if (resNaoVendas.success && resNaoVendas.naoVendas) {
+      setNaoVendas(resNaoVendas.naoVendas);
+    } else {
+      setNaoVendas(initialNaoVendas); // Fallback
+      console.error(
+        "Erro ao buscar não vendas ao resetar filtros:",
+        resNaoVendas.error
+      );
+    }
+
+    // CORREÇÃO PRINCIPAL AQUI:
+    // Os dados de resCotacoes.cotacoes já estão no formato Cotacao[]
+    // devido às correções na server action getCotacoes.
+    // Não é mais necessário mapear aqui.
+    if (resCotacoes.success && resCotacoes.cotacoes) {
+      setCotacoes(resCotacoes.cotacoes);
+    } else {
+      setCotacoes(initialCotacoes); // Fallback
+      console.error(
+        "Erro ao buscar cotações ao resetar filtros:",
+        resCotacoes.error
+      );
+    }
+
+    toast.success("Filtros resetados com sucesso");
+  } catch (error) {
+    console.error("Erro ao resetar filtros:", error);
+    toast.error("Erro ao resetar filtros");
+    // Restaurar para os dados iniciais em caso de erro na chamada da API
     setVendas(initialVendas);
     setNaoVendas(initialNaoVendas);
     setCotacoes(initialCotacoes);
-  };
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Ver detalhes
   const verDetalhes = (
@@ -790,6 +652,118 @@ export function VendasTableAjustada({
     });
   };
 
+  const aplicarFiltros = async () => {
+    setLoading(true);
+    try {
+      setFiltroAplicado(true);
+  
+      const filtrosCotacao: FiltrosCotacao = {
+        segmento: filtros.segmento || undefined,
+        nomeCliente: filtros.nomeCliente || undefined,
+        vendedor: filtros.vendedor || undefined,
+        dataInicio: filtros.dataInicio || undefined,
+        dataFim: filtros.dataFim || undefined,
+        valorMinimo: filtros.valorMinimo || undefined,
+        valorMaximo: filtros.valorMaximo || undefined,
+        produto: filtros.produto || undefined,
+        produtos: filtros.produtos && filtros.produtos.length > 0 ? filtros.produtos : (filtros.produto ? [filtros.produto] : undefined),
+        objecao: filtros.objecao || undefined,
+        clienteRecorrente: filtros.clienteRecorrente || undefined,
+        empresaConcorrente: filtros.empresaConcorrente || undefined,
+        valorConcorrenciaMin: filtros.valorConcorrenciaMin || undefined,
+        valorConcorrenciaMax: filtros.valorConcorrenciaMax || undefined,
+      };
+  
+      const filtrosVenda: FiltrosVenda = {
+        segmento: filtros.segmento || undefined,
+        dataInicio: filtros.dataInicio || undefined,
+        dataFim: filtros.dataFim || undefined,
+        valorMinimo: filtros.valorMinimo
+          ? parseFloat(filtros.valorMinimo)
+          : undefined,
+        valorMaximo: filtros.valorMaximo
+          ? parseFloat(filtros.valorMaximo)
+          : undefined,
+        vendedorId: filtros.vendedor || undefined,
+        produtoId: filtros.produto || undefined,
+        // Adicionando outros campos de FiltrosCotacao que também são válidos para FiltrosVenda
+        nomeCliente: filtros.nomeCliente || undefined,
+        produtos: filtros.produtos && filtros.produtos.length > 0 ? filtros.produtos : (filtros.produto ? [filtros.produto] : undefined),
+        clienteRecorrente: filtros.clienteRecorrente || undefined,
+      };
+  
+      const [resVendas, resNaoVendas, resCotacoes] = await Promise.all([
+        getVendas(filtrosVenda),
+        getNaoVendas(filtrosVenda), // Assumindo que getNaoVendas também aceita FiltrosVenda
+        getCotacoes(filtrosCotacao),
+      ]);
+  
+      if (resVendas.success && resVendas.vendas) {
+        setVendas(resVendas.vendas);
+      } else {
+        setVendas([]);
+        console.error("Erro ao aplicar filtros em vendas:", resVendas.error);
+      }
+  
+      if (resNaoVendas.success && resNaoVendas.naoVendas) {
+        setNaoVendas(resNaoVendas.naoVendas);
+      } else {
+        setNaoVendas([]);
+        console.error("Erro ao aplicar filtros em não vendas:", resNaoVendas.error);
+      }
+  
+      // CORREÇÃO PRINCIPAL AQUI:
+      // Remover a chamada a mapToCotacao, pois getCotacoes já retorna Cotacao[]
+      if (resCotacoes.success && resCotacoes.cotacoes) {
+        setCotacoes(resCotacoes.cotacoes);
+      } else {
+        setCotacoes([]);
+        console.error("Erro ao aplicar filtros em cotações:", resCotacoes.error);
+      }
+  
+      toast.success("Filtros aplicados com sucesso");
+    } catch (error) {
+      console.error("Erro ao aplicar filtros:", error);
+      toast.error("Erro ao aplicar filtros");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // para verificar o estado filtroAplicado
+  const loadCotacoes = useCallback(async () => {
+    // Apenas carrega cotações se não houver nenhuma e nenhum filtro estiver aplicado,
+    // para evitar buscar dados desnecessariamente se já vierem de initialCotacoes ou de um filtro.
+    if (initialCotacoes.length === 0 && cotacoes.length === 0 && !filtroAplicado) {
+      try {
+        setLoading(true); // Pode ser útil ter um loading específico para esta carga inicial
+        setDataLoading(true); // Ou usar o dataLoading geral
+        const response = await getCotacoes(); // getCotacoes já retorna Cotacao[]
+        if (response.success && response.cotacoes) {
+          setCotacoes(response.cotacoes);
+        } else {
+          console.error("Erro ao carregar cotações iniciais:", response.error);
+          toast.error("Erro ao carregar cotações"); // Evitar toast se initialCotacoes for usado
+        }
+      } catch (error) {
+        console.error("Erro ao carregar cotações:", error);
+        toast.error("Erro ao carregar cotações");
+      } finally {
+        setLoading(false);
+        setDataLoading(false);
+      }
+    } else if (initialCotacoes.length > 0 && cotacoes.length === 0 && !filtroAplicado) {
+      setCotacoes(initialCotacoes);
+      setDataLoading(false); // Dados iniciais carregados
+    } else {
+       setDataLoading(false); // Se nenhuma condição acima for atendida, para o loading.
+    }
+  }, [initialCotacoes, cotacoes.length, filtroAplicado]);
+
+  useEffect(() => {
+    loadCotacoes();
+  }, [loadCotacoes]);
+
   return (
     <div className="space-y-6">
       {/* Cabeçalho e filtros */}
@@ -806,60 +780,15 @@ export function VendasTableAjustada({
             />
           </div>
 
-          <Button variant="outline" onClick={toggleSortDirection} size="icon" className="px-2">
+          <Button
+            variant="outline"
+            onClick={toggleSortDirection}
+            size="icon"
+            className="px-2"
+          >
             {renderSortIcon()}
             <span className="sr-only">Ordenar</span>
           </Button>
-
-          {/* <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="px-3">
-                <Calendar className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Período</span>
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <div className="p-4 space-y-4">
-                <div className="grid gap-2">
-                  <div className="grid gap-1">
-                    <div className="flex items-center justify-between">
-                      <label htmlFor="data-inicio" className="text-sm font-medium">Data Inicial</label>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-7 px-2 text-xs"
-                        onClick={selecionarMesAtual}
-                      >
-                        Mês atual
-                      </Button>
-                    </div>
-                    <CalendarComponent
-                      mode="single"
-                      selected={dataInicio}
-                      onSelect={setDataInicio}
-                      initialFocus
-                      locale={ptBR}
-                    />
-                  </div>
-                  <div className="grid gap-1">
-                    <label htmlFor="data-fim" className="text-sm font-medium">Data Final</label>
-                    <CalendarComponent
-                      mode="single"
-                      selected={dataFim}
-                      onSelect={setDataFim}
-                      initialFocus
-                      locale={ptBR}
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end">
-                  <Button onClick={handleFilterByDate}>
-                    Aplicar Filtro
-                  </Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover> */}
 
           <Button variant="outline" onClick={() => setFiltroAberto(true)}>
             <Filter className="mr-2 h-4 w-4" />
@@ -881,7 +810,19 @@ export function VendasTableAjustada({
           </DropdownMenu>
         </div>
       </div>
-
+      <FiltroDialog
+        open={filtroAberto}
+        onOpenChange={setFiltroAberto}
+        filtros={filtros}
+        setFiltros={setFiltros}
+        aplicarFiltros={aplicarFiltros}
+        resetarFiltros={resetarFiltros}
+        loading={loading}
+        vendedores={vendedores}
+        segmentos={segmentos}
+        produtos={produtos}
+        isAdmin={isAdmin}
+      />
       {/* Estatísticas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-white">
@@ -1000,10 +941,18 @@ export function VendasTableAjustada({
         className="space-y-4"
       >
         <TabsList className="bg-gray-100 p-1 w-full overflow-x-auto flex-nowrap whitespace-nowrap">
-          <TabsTrigger value="painel" className="flex-1">Todas as Cotações</TabsTrigger>
-          <TabsTrigger value="cotacoes" className="flex-1">Cotações Pendentes</TabsTrigger>
-          <TabsTrigger value="vendas" className="flex-1">Cotações Finalizadas</TabsTrigger>
-          <TabsTrigger value="naovendas" className="flex-1">Cotações Canceladas</TabsTrigger>
+          <TabsTrigger value="painel" className="flex-1">
+            Todas as Cotações
+          </TabsTrigger>
+          <TabsTrigger value="cotacoes" className="flex-1">
+            Cotações Pendentes
+          </TabsTrigger>
+          <TabsTrigger value="vendas" className="flex-1">
+            Cotações Finalizadas
+          </TabsTrigger>
+          <TabsTrigger value="naovendas" className="flex-1">
+            Cotações Canceladas
+          </TabsTrigger>
         </TabsList>
 
         {/* Conteúdo da Tab Painel - TODAS AS COTAÇÕES */}
@@ -1016,7 +965,9 @@ export function VendasTableAjustada({
                   <TableHead>Vendedor</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead className="hidden md:table-cell">CNPJ</TableHead>
-                  <TableHead className="hidden md:table-cell">Contato</TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Contato
+                  </TableHead>
                   <TableHead>Valor Total</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Data</TableHead>
@@ -1043,8 +994,12 @@ export function VendasTableAjustada({
                       </TableCell>
                       <TableCell>{item.vendedorNome}</TableCell>
                       <TableCell>{item.cliente.nome}</TableCell>
-                      <TableCell className="hidden md:table-cell">{item.cliente.cnpj}</TableCell>
-                      <TableCell className="hidden md:table-cell">{item.cliente.whatsapp}</TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {item.cliente.cnpj}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {item.cliente.whatsapp}
+                      </TableCell>
 
                       <TableCell>{formatarValorBRL(item.valorTotal)}</TableCell>
                       <TableCell>
@@ -1129,7 +1084,9 @@ export function VendasTableAjustada({
                   <TableHead>Vendedor</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead className="hidden md:table-cell">CNPJ</TableHead>
-                  <TableHead className="hidden md:table-cell">Contato</TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Contato
+                  </TableHead>
                   <TableHead>Valor Total</TableHead>
                   <TableHead>Data</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -1153,8 +1110,12 @@ export function VendasTableAjustada({
                       </TableCell>
                       <TableCell>{venda.vendedorNome}</TableCell>
                       <TableCell>{venda.cliente.nome}</TableCell>
-                      <TableCell className="hidden md:table-cell">{venda.cliente.cnpj}</TableCell>
-                      <TableCell className="hidden md:table-cell">{venda.cliente.whatsapp}</TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {venda.cliente.cnpj}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {venda.cliente.whatsapp}
+                      </TableCell>
                       <TableCell>
                         {formatarValorBRL(venda.valorTotal)}
                       </TableCell>
@@ -1224,7 +1185,9 @@ export function VendasTableAjustada({
                   <TableHead>Vendedor</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead className="hidden md:table-cell">CNPJ</TableHead>
-                  <TableHead className="hidden md:table-cell">Contato</TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Contato
+                  </TableHead>
                   <TableHead>Valor Total</TableHead>
                   <TableHead>Objeção</TableHead>
                   <TableHead>Data</TableHead>
@@ -1249,8 +1212,12 @@ export function VendasTableAjustada({
                       </TableCell>
                       <TableCell>{naoVenda.vendedorNome}</TableCell>
                       <TableCell>{naoVenda.cliente.nome}</TableCell>
-                      <TableCell className="hidden md:table-cell">{naoVenda.cliente.cnpj}</TableCell>
-                      <TableCell className="hidden md:table-cell">{naoVenda.cliente.whatsapp}</TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {naoVenda.cliente.cnpj}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {naoVenda.cliente.whatsapp}
+                      </TableCell>
 
                       <TableCell>
                         {formatarValorBRL(naoVenda.valorTotal)}
@@ -1350,7 +1317,9 @@ export function VendasTableAjustada({
                       </TableCell>
                       <TableCell>{cotacao.vendedorNome}</TableCell>
                       <TableCell>{cotacao.cliente.nome}</TableCell>
-                      <TableCell className="hidden md:table-cell">{cotacao.cliente.cnpj}</TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {cotacao.cliente.cnpj}
+                      </TableCell>
                       <TableCell>
                         {formatarValorBRL(cotacao.valorTotal)}
                       </TableCell>
@@ -1420,370 +1389,6 @@ export function VendasTableAjustada({
       </Tabs>
 
       {/* Dialog de Filtros */}
-      <Dialog open={filtroAberto} onOpenChange={setFiltroAberto}>
-        <DialogContent className="!max-w-3xl w-fit">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Filter className="h-5 w-5 text-[#00446A]" />
-              Filtrar Cotações
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-            {/* <div>
-              <label className="text-sm font-medium mb-1 flex items-center gap-1">
-                <Building className="h-4 w-4 text-[#00446A]" />
-                Segmento da Empresa
-              </label>
-              <Select
-                value={filtros.segmento}
-                onValueChange={(value) =>
-                  setFiltros({ ...filtros, segmento: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o segmento" />
-                </SelectTrigger>
-                <SelectContent>
-                  {dataLoading ? (
-                    <div className="flex items-center justify-center p-2">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#00446A]"></div>
-                      <span className="ml-2">Carregando...</span>
-                    </div>
-                  ) : segmentos.length > 0 ? (
-                    segmentos.map((segmento) => (
-                      <SelectItem key={segmento} value={segmento}>
-                        {segmento}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="" disabled>
-                      Nenhum segmento disponível
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div> */}
-
-            {/* <div>
-              <label className="text-sm font-medium mb-1 flex items-center gap-1">
-                <User className="h-4 w-4 text-[#00446A]" />
-                Nome do Cliente
-              </label>
-              <Input
-                placeholder="Digite o nome do cliente"
-                value={filtros.nomeCliente}
-                onChange={(e) =>
-                  setFiltros({ ...filtros, nomeCliente: e.target.value })
-                }
-              />
-            </div> */}
-
-            {isAdmin && (
-              <div>
-                <label className="text-sm font-medium mb-1 flex items-center gap-1">
-                  <Users className="h-4 w-4 text-[#00446A]" />
-                  Vendedor
-                </label>
-                <Select
-                  value={filtros.vendedor}
-                  onValueChange={(value) =>
-                    setFiltros({ ...filtros, vendedor: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o vendedor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {dataLoading ? (
-                      <div className="flex items-center justify-center p-2">
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#00446A]"></div>
-                        <span className="ml-2">Carregando...</span>
-                      </div>
-                    ) : vendedores.length > 0 ? (
-                      vendedores.map((vendedor) => (
-                        <SelectItem key={vendedor.id} value={vendedor.id}>
-                          {vendedor.nome}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="" disabled>
-                        Nenhum vendedor disponível
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div>
-              <label className="text-sm font-medium mb-1 flex items-center gap-1">
-                <CalendarRange className="h-4 w-4 text-[#00446A]" />
-                Período
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={`w-full justify-start text-left font-normal ${
-                        !dataInicio && "text-muted-foreground"
-                      }`}
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {dataInicio ? (
-                        format(dataInicio, "dd/MM/yyyy", { locale: ptBR })
-                      ) : (
-                        <span>Data inicial</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <CalendarComponent
-                      mode="single"
-                      selected={dataInicio}
-                      onSelect={setDataInicio}
-                      initialFocus
-                      locale={ptBR}
-                    />
-                  </PopoverContent>
-                </Popover>
-                
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={`w-full justify-start text-left font-normal ${
-                        !dataFim && "text-muted-foreground"
-                      }`}
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {dataFim ? (
-                        format(dataFim, "dd/MM/yyyy", { locale: ptBR })
-                      ) : (
-                        <span>Data final</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <CalendarComponent
-                      mode="single"
-                      selected={dataFim}
-                      onSelect={setDataFim}
-                      initialFocus
-                      locale={ptBR}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium mb-1 flex items-center gap-1">
-                <DollarSign className="h-4 w-4 text-[#00446A]" />
-                Intervalo de Valor
-              </label>
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <span className="absolute left-3 top-2 text-gray-500">
-                    R$
-                  </span>
-                  <Input
-                    className="pl-8"
-                    placeholder="Mínimo"
-                    value={filtros.valorMinimo}
-                    onChange={(e) =>
-                      setFiltros({ ...filtros, valorMinimo: e.target.value })
-                    }
-                  />
-                </div>
-                <span>até</span>
-                <div className="relative flex-1">
-                  <span className="absolute left-3 top-2 text-gray-500">
-                    R$
-                  </span>
-                  <Input
-                    className="pl-8"
-                    placeholder="Máximo"
-                    value={filtros.valorMaximo}
-                    onChange={(e) =>
-                      setFiltros({ ...filtros, valorMaximo: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium mb-1 flex items-center gap-1">
-                <PackageOpen className="h-4 w-4 text-[#00446A]" />
-                Produtos
-              </label>
-              <Select
-                value={filtros.produto}
-                onValueChange={(value) =>
-                  setFiltros({ ...filtros, produto: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o produto" />
-                </SelectTrigger>
-                <SelectContent>
-                  {dataLoading ? (
-                    <div className="flex items-center justify-center p-2">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#00446A]"></div>
-                      <span className="ml-2">Carregando...</span>
-                    </div>
-                  ) : produtos.length > 0 ? (
-                    <>
-                      <div className="px-3 py-2">
-                        <Input
-                          placeholder="Buscar produto..."
-                          className="mb-2"
-                        />
-                      </div>
-                      {produtos.map((produto) => (
-                        <SelectItem key={produto.id} value={produto.id}>
-                          {produto.nome}
-                        </SelectItem>
-                      ))}
-                    </>
-                  ) : (
-                    <SelectItem value="" disabled>
-                      Nenhum produto disponível
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Campos ilustrativos com cadeado */}
-            <div className="flex items-center">
-              <div className="flex-1">
-                <label className="text-sm font-medium mb-1 flex items-center gap-1">
-                  <Info className="h-4 w-4 text-[#00446A]" />
-                  Objeções
-                </label>
-                <Select
-                  disabled
-                  value={filtros.objecao}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a objeção" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="preco">Preço</SelectItem>
-                    <SelectItem value="prazo">Prazo</SelectItem>
-                    <SelectItem value="qualidade">Qualidade</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Lock className="ml-2 h-4 w-4 text-gray-500" />
-            </div>
-
-            <div className="flex items-center">
-              <div className="flex-1">
-                <label className="text-sm font-medium mb-1 flex items-center gap-1">
-                  <Info className="h-4 w-4 text-[#00446A]" />
-                  Cliente Recorrente
-                </label>
-                <Select
-                  disabled
-                  value={filtros.clienteRecorrente}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o cliente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="sim">Sim</SelectItem>
-                    <SelectItem value="nao">Não</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Lock className="ml-2 h-4 w-4 text-gray-500" />
-            </div>
-
-            <div className="flex items-center">
-              <div className="flex-1">
-                <label className="text-sm font-medium mb-1 flex items-center gap-1">
-                  <Info className="h-4 w-4 text-[#00446A]" />
-                  Empresa Concorrente
-                </label>
-                <Select
-                  disabled
-                  value={filtros.empresaConcorrente}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a concorrência" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="empresa-a">Empresa A</SelectItem>
-                    <SelectItem value="empresa-b">Empresa B</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Lock className="ml-2 h-4 w-4 text-gray-500" />
-            </div>
-
-            <div className="flex items-center">
-              <div className="flex-1">
-                <label className="text-sm font-medium mb-1 flex items-center gap-1">
-                  <Info className="h-4 w-4 text-[#00446A]" />
-                  Valor Concorrência
-                </label>
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-2 text-gray-500">
-                      R$
-                    </span>
-                    <Input
-                      disabled
-                      className="pl-8"
-                      placeholder="Mínimo"
-                    />
-                  </div>
-                  <span>até</span>
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-2 text-gray-500">
-                      R$
-                    </span>
-                    <Input
-                      disabled
-                      className="pl-8"
-                      placeholder="Máximo"
-                    />
-                  </div>
-                </div>
-              </div>
-              <Lock className="ml-2 h-4 w-4 text-gray-500" />
-            </div>
-          </div>
-
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
-            <Button variant="outline" onClick={resetarFiltros}>
-              <RefreshCcw className="mr-2 h-4 w-4" />
-              Resetar
-            </Button>
-            <Button variant="outline" onClick={() => setFiltroAberto(false)}>
-              <X className="mr-2 h-4 w-4" />
-              Cancelar
-            </Button>
-            <Button onClick={aplicarFiltros} disabled={loading} className="bg-[#00446A] hover:bg-[#00345A]">
-              {loading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  Aplicando...
-                </>
-              ) : (
-                <>
-                  <Filter className="mr-2 h-4 w-4" />
-                  Aplicar Filtros
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Dialog de Detalhes */}
       {vendaSelecionada && (
@@ -2036,7 +1641,10 @@ export function VendasTableAjustada({
               >
                 Fechar
               </Button>
-              <Button onClick={() => editarItem(vendaSelecionada, itemTipo)} className="bg-[#00446A] hover:bg-[#00345A]">
+              <Button
+                onClick={() => editarItem(vendaSelecionada, itemTipo)}
+                className="bg-[#00446A] hover:bg-[#00345A]"
+              >
                 <Edit className="mr-2 h-4 w-4" />
                 Editar
               </Button>

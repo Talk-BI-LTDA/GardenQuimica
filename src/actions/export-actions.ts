@@ -4,6 +4,7 @@
 import { prisma } from "@/lib/supabase/prisma";
 import { utils, write } from "@/lib/xlsx-wrapper";
 import { StatusCotacao } from "@/types/cotacao-tipos";
+import { auth } from "@/lib/auth";
 
 // Tipos para as opções de exportação
 export type ExportFormat = "csv" | "xlsx" | "tsv" | "json";
@@ -20,6 +21,12 @@ export interface ExportOptions {
 // Função principal de exportação
 export async function exportVendasData(options: ExportOptions) {
   try {
+    // Obter a sessão do usuário atual
+    const session = await auth();
+    if (!session || !session.user) {
+      throw new Error("Usuário não autenticado");
+    }
+
     // Obter dados de acordo com os tabs selecionados
     const pendentes: Record<string, unknown>[] = [];
     const finalizadas: Record<string, unknown>[] = [];
@@ -27,6 +34,11 @@ export async function exportVendasData(options: ExportOptions) {
 
     // Construir filtros para consulta
     const where: Record<string, unknown> = {};
+    
+    // Se não for admin, filtrar apenas pelos dados do usuário
+    if (session.user.role !== "ADMIN") {
+      where.vendedorId = session.user.id;
+    }
     
     // Aplicar filtros fornecidos
     if (options.filters) {
@@ -52,6 +64,14 @@ export async function exportVendasData(options: ExportOptions) {
         where.cliente = { 
           ...where.cliente as Record<string, unknown> || {},
           segmento: options.filters.segmento 
+        };
+      }
+      
+      // Filtro de cliente recorrente
+      if (options.filters.clienteRecorrente) {
+        where.cliente = {
+          ...where.cliente as Record<string, unknown> || {},
+          recorrente: options.filters.clienteRecorrente === 'sim'
         };
       }
       
@@ -82,6 +102,42 @@ export async function exportVendasData(options: ExportOptions) {
       // Filtro de vendedor
       if (options.filters.vendedor) {
         where.vendedorId = options.filters.vendedor;
+      }
+      
+      // Filtro de produtos
+      if (options.filters.produtos && Array.isArray(options.filters.produtos) && options.filters.produtos.length > 0) {
+        where.produtos = {
+          some: {
+            produto: {
+              nome: {
+                in: options.filters.produtos
+              }
+            }
+          }
+        };
+      } else if (options.filters.produto) {
+        where.produtos = {
+          some: {
+            produto: {
+              nome: options.filters.produto
+            }
+          }
+        };
+      }
+      
+      // Filtro de objeção
+      if (options.filters.objecao) {
+        // Para não-vendas, verificar objeção geral e objeções de produtos
+        where.OR = [
+          { objecaoGeral: { contains: options.filters.objecao, mode: 'insensitive' } },
+          { 
+            produtos: {
+              some: {
+                objecao: { contains: options.filters.objecao, mode: 'insensitive' }
+              }
+            }
+          }
+        ];
       }
     }
 
@@ -121,8 +177,14 @@ export async function exportVendasData(options: ExportOptions) {
 
     if (options.tabs.includes("finalizadas")) {
       try {
+        // Limpar filtros específicos que não se aplicam a vendas
+        const vendaWhere = {...where};
+        if (vendaWhere.OR && Array.isArray(vendaWhere.OR)) {
+          delete vendaWhere.OR;
+        }
+        
         const vendas = await prisma.venda.findMany({
-          where,
+          where: vendaWhere,
           include: {
             cliente: true,
             produtos: {
@@ -237,6 +299,7 @@ function formatDataForExport(
         baseData["Segmento do Cliente"] = cliente.segmento as string || "N/A";
         baseData["Razão Social"] = cliente.razaoSocial as string || "N/A";
         baseData["WhatsApp"] = cliente.whatsapp as string || "N/A";
+        baseData["Cliente Recorrente"] = cliente.recorrente ? "Sim" : "Não";
       }
       
       // Verificar se é uma venda recorrente

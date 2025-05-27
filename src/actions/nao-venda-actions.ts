@@ -126,7 +126,7 @@ export async function getNaoVendas(filtros?: FiltrosVenda) {
     // Se não for admin, filtrar apenas vendas do usuário logado
     if (session.user.role !== "ADMIN") {
       where.vendedorId = session.user.id;
-    } else if (filtros?.vendedorId) {
+    } else if (filtros?.vendedorId && filtros.vendedorId !== 'todos_vendedores') {
       where.vendedorId = filtros.vendedorId;
     }
 
@@ -141,13 +141,28 @@ export async function getNaoVendas(filtros?: FiltrosVenda) {
     // Aplicar filtro de cliente
     if (filtros?.clienteId) {
       where.clienteId = filtros.clienteId;
+    } else if (filtros?.nomeCliente && filtros.nomeCliente.trim() !== '') {
+      where.cliente = {
+        nome: { 
+          contains: filtros.nomeCliente.trim(), 
+          mode: 'insensitive' 
+        }
+      };
     }
 
     // Aplicar filtro de segmento
-    if (filtros?.segmento) {
+    if (filtros?.segmento && filtros.segmento !== 'todos_segmentos') {
       where.cliente = {
         ...((where.cliente as Record<string, unknown>) || {}),
         segmento: filtros.segmento,
+      };
+    }
+    
+    // Aplicar filtro de cliente recorrente
+    if (filtros?.clienteRecorrente) {
+      where.cliente = {
+        ...((where.cliente as Record<string, unknown>) || {}),
+        recorrente: filtros.clienteRecorrente === 'sim'
       };
     }
 
@@ -183,10 +198,34 @@ export async function getNaoVendas(filtros?: FiltrosVenda) {
     }
 
     // Aplicar filtro de produto
-    if (filtros?.produtoId) {
+    if (filtros?.produtos && Array.isArray(filtros.produtos) && filtros.produtos.length > 0) {
+      where.produtos = {
+        some: {
+          produto: {
+            nome: {
+              in: filtros.produtos
+            }
+          }
+        }
+      };
+    } else if (filtros?.produtoId) {
       where.produtos = {
         some: { produtoId: filtros.produtoId },
       };
+    }
+
+    // Aplicar filtro de objeção
+    if (filtros?.objecao && filtros.objecao !== 'todas_objecoes') {
+      // Buscar por objeção geral ou objeção do produto
+      where.OR = [
+        { objecaoGeral: { contains: filtros.objecao, mode: 'insensitive' } },
+        { produtos: { 
+            some: { 
+              objecao: { contains: filtros.objecao, mode: 'insensitive' } 
+            } 
+          } 
+        }
+      ];
     }
 
     // Aplicar filtro de condição de pagamento
@@ -201,6 +240,8 @@ export async function getNaoVendas(filtros?: FiltrosVenda) {
     } else {
       orderBy.createdAt = "desc"; // Padrão: mais recentes primeiro
     }
+
+    console.log("Filtros aplicados nas não-vendas:", where);
 
     // Buscar vendas
     const naoVendas = await prisma.naoVenda.findMany({
@@ -228,6 +269,8 @@ export async function getNaoVendas(filtros?: FiltrosVenda) {
       orderBy,
     });
 
+    console.log(`Encontradas ${naoVendas.length} não-vendas`);
+
     // Mapear para formato esperado
     const naoVendasMapeadas = naoVendas.map((naoVenda) => ({
       id: naoVenda.id,
@@ -239,6 +282,7 @@ export async function getNaoVendas(filtros?: FiltrosVenda) {
         cnpj: naoVenda.cliente.cnpj,
         whatsapp: naoVenda.cliente.whatsapp || undefined,
         razaoSocial: naoVenda.cliente.razaoSocial || undefined,
+        recorrente: naoVenda.cliente.recorrente
       },
       produtosConcorrencia: naoVenda.produtos.map((p) => ({
         produtoGarden: {

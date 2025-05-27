@@ -8,12 +8,16 @@ export interface FiltrosBase {
   }
   
   export interface FiltrosVenda extends FiltrosBase {
+    nomeCliente?: string;
     vendedorId?: string;
     clienteId?: string;
     segmento?: string;
     valorMinimo?: number;
     valorMaximo?: number;
     produtoId?: string;
+    produtos?: string[]; 
+    clienteRecorrente?: string;
+    objecao?: string;
     vendaRecorrente?: boolean;
     condicaoPagamento?: string;
   }
@@ -86,6 +90,7 @@ export interface FiltrosBase {
     valorMinimo?: string;
     valorMaximo?: string;
     produto?: string;
+    produtos?: string[];
     objecao?: string;
     clienteRecorrente?: string;
     empresaConcorrente?: string;

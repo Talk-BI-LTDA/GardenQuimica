@@ -9,7 +9,7 @@ import { NaoVendaFormData } from "@/types/venda-tipos";
 import { criarVenda, atualizarVenda } from "@/actions/venda-actions";
 import { criarNaoVenda, atualizarNaoVenda } from "@/actions/nao-venda-actions";
 import { FiltrosCotacao } from "@/types/filtros";
-
+import { Prisma } from "@prisma/client";
 
 // Define o tipo StatusCotacao se não existir
 export type StatusCotacao = "pendente" | "finalizada" | "cancelada";
@@ -354,9 +354,6 @@ export async function getCotacao(id: string) {
   }
 }
 
-// Obter todas as cotações
-// Obter todas as cotações com suporte a filtros
-
 // Obter todas as cotações com suporte a filtros
 export async function getCotacoes(filtros?: FiltrosCotacao) {
   try {
@@ -368,12 +365,13 @@ export async function getCotacoes(filtros?: FiltrosCotacao) {
     const vendedorId = session.user.id;
     const isAdmin = session.user.role === "ADMIN";
 
-    // Base where
-    const where: Record<string, unknown> = isAdmin ? {} : { vendedorId };
+    // UTILIZANDO TIPOS FORTES DO PRISMA PARA O OBJETO 'where'
+    const where: Prisma.CotacaoWhereInput = {};
+    if (!isAdmin) {
+      where.vendedorId = vendedorId;
+    }
 
-    // Aplicar filtros se fornecidos
     if (filtros) {
-      // Filtro de data
       if (filtros.dataInicio && filtros.dataFim) {
         where.createdAt = {
           gte: new Date(filtros.dataInicio),
@@ -381,82 +379,134 @@ export async function getCotacoes(filtros?: FiltrosCotacao) {
         };
       }
 
-      // Agrupar filtros de cliente
-      const clienteFilters: Record<string, unknown> = {};
-      
-      // Filtro de nome de cliente
-      if (filtros.nomeCliente) {
+      // UTILIZANDO TIPOS FORTES DO PRISMA PARA 'clienteFilters'
+      const clienteFilters: Prisma.ClienteWhereInput = {};
+      if (filtros.nomeCliente && filtros.nomeCliente.trim() !== "") {
         clienteFilters.nome = {
-          contains: filtros.nomeCliente,
-          mode: 'insensitive'
+          contains: filtros.nomeCliente.trim(),
+          mode: "insensitive",
         };
       }
-
-      // Filtro de segmento
-      if (filtros.segmento) {
+      if (filtros.segmento && filtros.segmento !== "todos_segmentos") {
         clienteFilters.segmento = filtros.segmento;
       }
-      
-      // Cliente recorrente
       if (filtros.clienteRecorrente) {
-        clienteFilters.recorrente = filtros.clienteRecorrente === 'sim';
+        if (filtros.clienteRecorrente === "sim")
+          clienteFilters.recorrente = true;
+        else if (filtros.clienteRecorrente === "nao")
+          clienteFilters.recorrente = false;
       }
-      
-      // Aplicar filtros de cliente se houver algum
       if (Object.keys(clienteFilters).length > 0) {
+        // Aninhar corretamente o filtro de cliente
         where.cliente = clienteFilters;
       }
 
-      // Filtro de valor
-      if (filtros.valorMinimo || filtros.valorMaximo) {
-        const valorFilter: Record<string, unknown> = {};
-        
-        if (filtros.valorMinimo) {
-          valorFilter.gte = parseFloat(filtros.valorMinimo);
-        }
-        
-        if (filtros.valorMaximo) {
-          valorFilter.lte = parseFloat(filtros.valorMaximo);
-        }
-        
-        where.valorTotal = valorFilter;
-      }
+      // UTILIZANDO TIPOS FORTES DO PRISMA PARA 'valorFilter'
+      const valorFilter: Prisma.FloatFilter = {};
+      if (filtros.valorMinimo)
+        valorFilter.gte = parseFloat(filtros.valorMinimo);
+      if (filtros.valorMaximo)
+        valorFilter.lte = parseFloat(filtros.valorMaximo);
+      if (Object.keys(valorFilter).length > 0) where.valorTotal = valorFilter;
 
-      // Filtro de vendedor (admin)
-      if (isAdmin && filtros.vendedor) {
+      if (
+        isAdmin &&
+        filtros.vendedor &&
+        filtros.vendedor !== "todos_vendedores"
+      ) {
         where.vendedorId = filtros.vendedor;
       }
-      
-      // Filtro de produto (buscando produtos relacionados)
-      if (filtros.produto) {
+
+      if (
+        filtros.produtos &&
+        Array.isArray(filtros.produtos) &&
+        filtros.produtos.length > 0
+      ) {
         where.produtos = {
-          some: {
-            produtoId: filtros.produto
-          }
+          some: { produto: { nome: { in: filtros.produtos } } },
         };
+      } else if (filtros.produto && filtros.produto !== "todos_produtos") {
+        where.produtos = { some: { produto: { nome: filtros.produto } } };
       }
+      // O filtro de objeção não se aplica diretamente ao modelo Cotacao como está definido,
+      // então a lógica original de não aplicar o filtro para cotações pendentes está mantida.
     }
 
-    console.log("Filtros aplicados na consulta:", where);
+    console.log(
+      "Filtros aplicados na consulta de cotações (getCotacoes - lógica original mantida e tipagem forte):",
+      JSON.stringify(where, null, 2)
+    );
 
-    const cotacoes = await prisma.cotacao.findMany({
-      where,
+    const cotacoesFromDb = await prisma.cotacao.findMany({
+      where, // Sua lógica de filtros original é usada aqui, agora com tipos fortes
       include: {
         cliente: true,
         vendedor: {
-          select: { name: true }
-        }
+          select: { name: true, id: true },
+        },
+        produtos: {
+          include: {
+            produto: true,
+          },
+        },
+        editedBy: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
       orderBy: {
-        createdAt: 'desc'
-      }
+        createdAt: "desc",
+      },
     });
 
-    console.log(`Encontradas ${cotacoes.length} cotações`);
-    return { success: true, cotacoes };
+    // A ALTERAÇÃO ESSENCIAL ESTÁ AQUI: MAPEAMENTO DOS DADOS RETORNADOS
+    const cotacoesMapeadas = cotacoesFromDb.map((cotacao) => ({
+      id: cotacao.id,
+      codigoCotacao: cotacao.codigoCotacao,
+      cliente: {
+        id: cotacao.cliente.id,
+        nome: cotacao.cliente.nome,
+        segmento: cotacao.cliente.segmento,
+        cnpj: cotacao.cliente.cnpj,
+        razaoSocial: cotacao.cliente.razaoSocial || undefined,
+        whatsapp: cotacao.cliente.whatsapp || undefined,
+        recorrente: cotacao.cliente.recorrente,
+      },
+      produtos: cotacao.produtos.map((p) => ({
+        id: p.produto.id,
+        nome: p.produto.nome,
+        medida: p.medida,
+        quantidade: p.quantidade,
+        valor: p.valor,
+        comissao: p.comissao || 0,
+        icms: p.icms || 0,
+        ipi: p.ipi || 0,
+      })),
+      valorTotal: cotacao.valorTotal,
+      condicaoPagamento: cotacao.condicaoPagamento,
+      vendaRecorrente: cotacao.vendaRecorrente,
+      nomeRecorrencia: cotacao.nomeRecorrencia || undefined,
+      status: (cotacao.status || "pendente") as StatusCotacao,
+      vendedorId: cotacao.vendedorId,
+      vendedorNome: cotacao.vendedor.name,
+      createdAt: cotacao.createdAt,
+      updatedAt: cotacao.updatedAt,
+      editedById: cotacao.editedById || undefined,
+    }));
+
+    console.log(
+      `Encontradas ${cotacoesMapeadas.length} cotações após mapeamento.`
+    );
+    return { success: true, cotacoes: cotacoesMapeadas };
   } catch (error) {
     console.error("Erro ao buscar cotações:", error);
-    return { error: "Erro ao buscar cotações. Por favor, tente novamente." };
+    const errorMessage =
+      error instanceof Error ? error.message : "Erro desconhecido";
+    return {
+      error: `Erro ao buscar cotações: ${errorMessage}. Por favor, tente novamente.`,
+    };
   }
 }
 

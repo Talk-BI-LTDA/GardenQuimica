@@ -55,7 +55,15 @@ export async function criarVenda(data: VendaFormData) {
           razaoSocial: data.cliente.razaoSocial,
           createdById: session.user.id,
           whatsapp: data.cliente.whatsapp,
+          // Definir recorrente baseado na informação da venda
+          recorrente: data.vendaRecorrente ? true : false,
         },
+      });
+    } else if (data.vendaRecorrente && !cliente.recorrente) {
+      // Se o cliente existe mas não está marcado como recorrente e esta venda é recorrente
+      await prisma.cliente.update({
+        where: { id: cliente.id },
+        data: { recorrente: true }
       });
     }
 
@@ -142,11 +150,11 @@ export async function getVendas(filtros?: FiltrosVenda) {
     // Se não for admin, filtrar apenas vendas do usuário logado
     if (session.user.role !== 'ADMIN') {
       where.vendedorId = session.user.id;
-    } else if (filtros?.vendedorId) {
+    } else if (filtros?.vendedorId && filtros.vendedorId !== 'todos_vendedores') {
       where.vendedorId = filtros.vendedorId;
     }
 
-    // Aplicar filtro de data
+    // Aplicar filtro de data - Corrigido para garantir período inteiro do dia
     if (filtros?.dataInicio && filtros?.dataFim) {
       where.createdAt = { 
         gte: new Date(filtros.dataInicio), 
@@ -158,12 +166,31 @@ export async function getVendas(filtros?: FiltrosVenda) {
     if (filtros?.clienteId) {
       where.clienteId = filtros.clienteId;
     }
+    
+    // Filtro por nome do cliente
+    if (filtros?.nomeCliente && typeof filtros.nomeCliente === 'string' && filtros.nomeCliente.trim() !== '') {
+      where.cliente = { 
+        ...((where.cliente as Record<string, unknown>) || {}),
+        nome: { 
+          contains: filtros.nomeCliente.trim(), 
+          mode: 'insensitive' 
+        } 
+      };
+    }
 
     // Aplicar filtro de segmento
-    if (filtros?.segmento) {
+    if (filtros?.segmento && filtros.segmento !== 'todos_segmentos') {
       where.cliente = { 
-        ...(where.cliente as Record<string, unknown> || {}), 
+        ...((where.cliente as Record<string, unknown>) || {}), 
         segmento: filtros.segmento 
+      };
+    }
+    
+    // Aplicar filtro de cliente recorrente
+    if (filtros?.clienteRecorrente) {
+      where.cliente = {
+        ...((where.cliente as Record<string, unknown>) || {}),
+        recorrente: filtros.clienteRecorrente === 'sim'
       };
     }
     
@@ -194,8 +221,18 @@ export async function getVendas(filtros?: FiltrosVenda) {
       };
     }
     
-    // Aplicar filtro de produto
-    if (filtros?.produtoId) {
+    // Aplicar filtro de produto com suporte para array de produtos
+    if (filtros?.produtos && Array.isArray(filtros.produtos) && filtros.produtos.length > 0) {
+      where.produtos = {
+        some: {
+          produto: {
+            nome: {
+              in: filtros.produtos
+            }
+          }
+        }
+      };
+    } else if (filtros?.produtoId) {
       where.produtos = {
         some: { produtoId: filtros.produtoId }
       };
@@ -255,7 +292,8 @@ export async function getVendas(filtros?: FiltrosVenda) {
         segmento: venda.cliente.segmento,
         cnpj: venda.cliente.cnpj,
         razaoSocial: venda.cliente.razaoSocial || undefined,
-        whatsapp: venda.cliente.whatsapp || undefined
+        whatsapp: venda.cliente.whatsapp || undefined,
+        recorrente: venda.cliente.recorrente
       },
       produtos: venda.produtos.map(p => ({
         id: p.produto.id,
@@ -277,6 +315,9 @@ export async function getVendas(filtros?: FiltrosVenda) {
       updatedAt: venda.updatedAt,
       editedById: venda.editedById || undefined
     }));
+
+    console.log("Filtros aplicados nas vendas:", where);
+    console.log(`Encontradas ${vendas.length} vendas`);
 
     return { success: true, vendas: vendasMapeadas };
   } catch (error) {
@@ -383,7 +424,15 @@ export async function atualizarVenda(id: string, data: VendaFormData) {
           razaoSocial: data.cliente.razaoSocial,
           createdById: session.user.id,
           whatsapp: data.cliente.whatsapp,
+          // Definir recorrente baseado na informação da venda
+          recorrente: data.vendaRecorrente ? true : false,
         },
+      });
+    } else if (data.vendaRecorrente && !cliente.recorrente) {
+      // Se o cliente existe mas não está marcado como recorrente e esta venda é recorrente
+      await prisma.cliente.update({
+        where: { id: cliente.id },
+        data: { recorrente: true }
       });
     }
 
