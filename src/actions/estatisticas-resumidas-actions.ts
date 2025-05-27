@@ -13,6 +13,12 @@ export interface ChartDataPoint {
   date: string;
   vendas: number;
   naoVendas: number;
+  cotacoesPendentes?: number;
+}
+
+export interface EstatisticasCotacoesPendentes {
+  totalCotacoesPendentes: number;
+  valorTotalCotacoesPendentes: number;
 }
 
 export interface EstatisticasPainelResponse {
@@ -21,7 +27,7 @@ export interface EstatisticasPainelResponse {
   error?: string;
 }
 
-export interface EstatisticasPainel extends EstatisticasResumidas {
+export interface EstatisticasPainel extends EstatisticasResumidas, EstatisticasCotacoesPendentes {
   chartData?: ChartDataPoint[];
   produtoMaisVendido?: {
     id: string;
@@ -128,6 +134,22 @@ interface WhereCondition {
   };
 }
 
+interface WhereCondition {
+  vendedorId?: string;
+  createdAt?: {
+    gte: Date;
+    lte: Date;
+  };
+  produtos?: {
+    some: {
+      produtoId: string;
+    };
+  };
+}
+interface CotacaoWhereCondition extends Omit<WhereCondition, 'status'> {
+  status: string;
+}
+
 interface UserWhereInput {
   role: Role;
   OR?: Array<{
@@ -176,7 +198,7 @@ interface ClienteComVendas {
   segmento: string;
   vendas: Array<{
     id: string;
-    valorTotal: number;
+    valorTotal: number; // Corrigido: alterado de 'true' para 'number'
     createdAt: Date;
     vendaRecorrente: boolean;
     produtos: Array<{
@@ -218,6 +240,11 @@ interface VendaParaGrafico {
 }
 
 interface NaoVendaParaGrafico {
+  valorTotal: number;
+  createdAt: Date;
+}
+
+interface CotacaoPendenteParaGrafico {
   valorTotal: number;
   createdAt: Date;
 }
@@ -290,6 +317,8 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
       totalNaoVendas: 0,
       valorTotalNaoVendas: 0,
       totalOrcamentos: 0,
+      totalCotacoesPendentes: 0,
+      valorTotalCotacoesPendentes: 0,
       chartData: [],
       funcionarios: {
         total: 0,
@@ -304,22 +333,39 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
     // Construir filtros base COM TIPAGEM CORRETA
     const where: WhereCondition = {};
     
-    // Aplicar filtros
+    // Aplicar filtros de vendedor - CORREÇÃO
     if (session.user.role !== 'ADMIN') {
+      // Se não for admin, sempre filtrar pelo usuário logado
       where.vendedorId = session.user.id;
     } else if (filtros?.vendedorId) {
+      // Se for admin e tiver filtro de vendedor, aplicar o filtro
       where.vendedorId = filtros.vendedorId;
+      console.log("Aplicando filtro para vendedor:", filtros.vendedorId);
     }
     
     if (filtros?.dataInicio && filtros?.dataFim) {
+      // Certifique-se de que a data de início é o início do dia
+      const dataInicio = new Date(filtros.dataInicio);
+      dataInicio.setHours(0, 0, 0, 0);
+      
+      // Certifique-se de que a data de fim é o final do dia
+      const dataFim = new Date(filtros.dataFim);
+      dataFim.setHours(23, 59, 59, 999);
+      
       where.createdAt = {
-        gte: new Date(filtros.dataInicio),
-        lte: new Date(filtros.dataFim)
+        gte: dataInicio,
+        lte: dataFim
       };
+      
+      console.log('Filtrando por data:', {
+        inicio: dataInicio.toISOString(),
+        fim: dataFim.toISOString()
+      });
     }
 
-    // Aplicar filtro de produto se especificado
+    // Aplicar filtro de produto se especificado - CORREÇÃO
     if (filtros?.produtoId) {
+      console.log("Aplicando filtro para produto:", filtros.produtoId);
       where.produtos = {
         some: {
           produtoId: filtros.produtoId
@@ -340,7 +386,6 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
       estatisticas.valorTotalVendas = vendasAggregate._sum.valorTotal || 0;
       estatisticas.totalNaoVendas = totalNaoVendas;
       estatisticas.valorTotalNaoVendas = naoVendasAggregate._sum.valorTotal || 0;
-      estatisticas.totalOrcamentos = totalVendas + totalNaoVendas;
       
       estatisticas.funcionarios = {
         total: totalFuncionarios,
@@ -352,6 +397,83 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
       // Continuar mesmo com erro para tentar buscar outros dados
     }
 
+    // ADIÇÃO: Consultar cotações pendentes
+    try {
+      // Construir filtro para cotações pendentes
+      // De acordo com o schema prisma, o campo status é uma string com valor default "pendente"
+      const whereCotacoesPendentes: CotacaoWhereCondition = { 
+        status: 'pendente'
+      };
+      
+      
+      // Aplicar filtro de vendedor
+      if (session.user.role !== 'ADMIN') {
+        whereCotacoesPendentes.vendedorId = session.user.id;
+      } else if (filtros?.vendedorId) {
+        whereCotacoesPendentes.vendedorId = filtros.vendedorId;
+      }
+      
+      // Aplicar filtro de data
+      if (filtros?.dataInicio && filtros?.dataFim) {
+        // Certifique-se de que a data de início é o início do dia
+        const dataInicio = new Date(filtros.dataInicio);
+        dataInicio.setHours(0, 0, 0, 0);
+        
+        // Certifique-se de que a data de fim é o final do dia
+        const dataFim = new Date(filtros.dataFim);
+        dataFim.setHours(23, 59, 59, 999);
+        
+        whereCotacoesPendentes.createdAt = {
+          gte: dataInicio,
+          lte: dataFim
+        };
+      }
+      
+      // Aplicar filtro de produto se especificado
+      if (filtros?.produtoId) {
+        whereCotacoesPendentes.produtos = {
+          some: {
+            produtoId: filtros.produtoId
+          }
+        };
+      }
+      
+      console.log("Filtro de cotações pendentes:", JSON.stringify(whereCotacoesPendentes, null, 2));
+      
+      // Buscar cotações pendentes
+      const [totalCotacoesPendentes, valorCotacoesPendentes] = await executeWithRetry(() => 
+        prisma.$transaction([
+          // Contar cotações pendentes
+          prisma.cotacao.count({ where: whereCotacoesPendentes }),
+          // Calcular valor total das cotações pendentes
+          prisma.cotacao.aggregate({ 
+            where: whereCotacoesPendentes, 
+            _sum: { valorTotal: true } 
+          })
+        ])
+      );
+      
+      console.log("Resultado cotações pendentes:", {
+        total: totalCotacoesPendentes,
+        valor: valorCotacoesPendentes._sum.valorTotal
+      });
+      
+      // Atualizar estatísticas com dados de cotações pendentes
+      estatisticas.totalCotacoesPendentes = totalCotacoesPendentes;
+      estatisticas.valorTotalCotacoesPendentes = valorCotacoesPendentes._sum.valorTotal || 0;
+      
+      // Atualizar o total de orçamentos para incluir cotações pendentes
+      estatisticas.totalOrcamentos = estatisticas.totalCotacoesPendentes + estatisticas.totalVendas + estatisticas.totalNaoVendas;
+      
+    } catch (error) {
+      console.error('Erro ao buscar cotações pendentes:', error);
+      console.error('Detalhes do erro:', error instanceof Error ? error.stack : String(error));
+      // Continuar mesmo com erro para tentar buscar outros dados
+      
+      // Se der erro, atualizar o total de orçamentos só com vendas e não vendas
+      estatisticas.totalOrcamentos = estatisticas.totalVendas + estatisticas.totalNaoVendas;
+    }
+
     // 2. OTIMIZAÇÃO: Early return se não há dados
     if (estatisticas.totalOrcamentos === 0) {
       return { success: true, estatisticas };
@@ -359,8 +481,8 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
 
     // 3. CONSULTAS PARALELAS OTIMIZADAS PARA DADOS DETALHADOS
     try {
-      // CORREÇÃO: Criar whereVendas corretamente
-      const whereVendas = { ...where };
+      // CORREÇÃO: Criar whereVendas corretamente usando JSON.parse para criar cópia profunda
+      const whereVendas = JSON.parse(JSON.stringify(where));
       
       // OTIMIZAÇÃO: Só buscar vendedores se for admin ou se houver filtro específico
       const shouldFetchVendedores = session.user.role === 'ADMIN' || filtros?.searchVendedores;
@@ -646,8 +768,8 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
       const shouldFetchProdutos = !filtros || filtros.searchProdutos || estatisticas.totalVendas > 0;
       
       if (shouldFetchProdutos) {
-        // CORREÇÃO: Usar whereVendas definido corretamente
-        const whereVendasProdutos = { ...where };
+        // CORREÇÃO: Usar whereVendas definido corretamente com cópia profunda
+        const whereVendasProdutos = JSON.parse(JSON.stringify(where));
         
         // Filtro de busca para produtos
         const whereProdutos: { OR?: Array<{ nome?: { contains: string; mode: 'insensitive' }; medida?: { contains: string; mode: 'insensitive' } }> } = {};
@@ -678,7 +800,7 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
             },
             take: 100 // Limite para performance
           })
-        ) as ProdutoComVendas[];
+        ) as unknown as ProdutoComVendas[]; // Usando 'unknown' como intermediário para evitar erro de tipo
         
         // Processar e transformar dados de produtos
         estatisticas.produtos = produtosComVendas.map(produto => {
@@ -708,8 +830,8 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
       const shouldFetchClientes = !filtros || filtros.searchClientes || estatisticas.totalVendas > 0;
       
       if (shouldFetchClientes) {
-        // CORREÇÃO: Usar whereVendas definido corretamente
-        const whereVendasClientes = { ...where };
+        // CORREÇÃO: Usar whereVendas definido corretamente com cópia profunda
+        const whereVendasClientes = JSON.parse(JSON.stringify(where));
         
         // Filtro de busca para clientes
         const whereClientes: { OR?: Array<{ nome?: { contains: string; mode: 'insensitive' }; cnpj?: { contains: string; mode: 'insensitive' }; segmento?: { contains: string; mode: 'insensitive' } }> } = {};
@@ -749,13 +871,13 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
             },
             take: 50 // Limite para performance
           })
-        ) as ClienteComVendas[];
+        ) as unknown as ClienteComVendas[]; // Usando 'unknown' como intermediário para evitar erro de tipo
         
         // Processar dados de clientes para gerar estatísticas
         estatisticas.clientes = clientesComVendas.map(cliente => {
           const vendas = cliente.vendas;
           const quantidadeVendas = vendas.length;
-          const valorTotal = vendas.reduce((sum, venda) => sum + venda.valorTotal, 0);
+          const valorTotal = vendas.reduce((sum, venda) => sum + Number(venda.valorTotal), 0);
           const valorMedio = quantidadeVendas > 0 ? valorTotal / quantidadeVendas : 0;
           
           // Cliente é recorrente se pelo menos uma venda tem a flag vendaRecorrente = true
@@ -763,7 +885,7 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
           
           // Maior valor
           const maiorValor = vendas.length > 0 
-            ? Math.max(...vendas.map(venda => venda.valorTotal))
+            ? Math.max(...vendas.map(venda => Number(venda.valorTotal)))
             : 0;
           
           // Última compra
@@ -819,8 +941,28 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
       
       // OTIMIZAÇÃO: Só gerar gráfico se há dados
       if (estatisticas.totalOrcamentos > 0) {
-        // CORREÇÃO: Usar whereVendas definido corretamente
-        const whereVendasGrafico = { ...where };
+        // CORREÇÃO: Usar whereVendas definido corretamente com cópia profunda
+        const whereVendasGrafico = JSON.parse(JSON.stringify(where));
+        
+        // Filtro para cotações pendentes no gráfico
+        const whereCotacoesPendentesGrafico: CotacaoWhereCondition = { 
+          status: 'pendente'
+        };// Usar any aqui para evitar problemas com a tipagem
+        
+        // Aplicar filtros comuns
+        if (session.user.role !== 'ADMIN') {
+          whereCotacoesPendentesGrafico.vendedorId = session.user.id;
+        } else if (filtros?.vendedorId) {
+          whereCotacoesPendentesGrafico.vendedorId = filtros.vendedorId;
+        }
+        
+        if (filtros?.produtoId) {
+          whereCotacoesPendentesGrafico.produtos = {
+            some: {
+              produtoId: filtros.produtoId
+            }
+          };
+        }
         
         // Array com os últimos 30 dias formatados
         const dias: Array<{data: Date, dataFormatada: string}> = [];
@@ -836,15 +978,20 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
         const resultadosPorDia = new Map<string, {
           vendas: number;
           naoVendas: number;
+          cotacoesPendentes: number;
         }>();
         
         // Inicializar o mapa com zeros
         dias.forEach(({dataFormatada}) => {
-          resultadosPorDia.set(dataFormatada, {vendas: 0, naoVendas: 0});
+          resultadosPorDia.set(dataFormatada, {
+            vendas: 0, 
+            naoVendas: 0,
+            cotacoesPendentes: 0
+          });
         });
         
-        // Buscar vendas para todos os dias em uma única consulta OTIMIZADA
-        const [vendas, naoVendas] = await Promise.all([
+        // Buscar vendas, não vendas e cotações pendentes para todos os dias em uma única consulta OTIMIZADA
+        const [vendas, naoVendas, cotacoesPendentes] = await Promise.all([
           executeWithRetry(() =>
             prisma.venda.findMany({
               where: {
@@ -875,7 +1022,23 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
                 createdAt: true
               }
             })
-          ) as Promise<NaoVendaParaGrafico[]>
+          ) as Promise<NaoVendaParaGrafico[]>,
+          
+          executeWithRetry(() =>
+            prisma.cotacao.findMany({
+              where: {
+                ...whereCotacoesPendentesGrafico,
+                createdAt: {
+                  gte: subDays(hoje, 29),
+                  lte: hoje
+                }
+              },
+              select: {
+                valorTotal: true,
+                createdAt: true
+              }
+            })
+          ) as Promise<CotacaoPendenteParaGrafico[]>
         ]);
         
         // Processar vendas
@@ -896,13 +1059,27 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
           }
         });
         
+        // Processar cotações pendentes
+        cotacoesPendentes.forEach(cotacao => {
+          const dataFormatada = format(cotacao.createdAt, 'yyyy-MM-dd');
+          const dadosDia = resultadosPorDia.get(dataFormatada);
+          if (dadosDia) {
+            dadosDia.cotacoesPendentes += cotacao.valorTotal;
+          }
+        });
+        
         // Converter o mapa para o formato esperado do chartData
         estatisticas.chartData = dias.map(({dataFormatada}) => {
-          const dadosDia = resultadosPorDia.get(dataFormatada) || {vendas: 0, naoVendas: 0};
+          const dadosDia = resultadosPorDia.get(dataFormatada) || {
+            vendas: 0, 
+            naoVendas: 0,
+            cotacoesPendentes: 0
+          };
           return {
             date: dataFormatada,
             vendas: dadosDia.vendas,
-            naoVendas: dadosDia.naoVendas
+            naoVendas: dadosDia.naoVendas,
+            cotacoesPendentes: dadosDia.cotacoesPendentes
           };
         });
       }
@@ -910,6 +1087,17 @@ export async function getEstatisticasPainel(filtros?: EstatisticasPainelParams):
       console.error('Erro ao gerar dados do gráfico:', error);
       estatisticas.chartData = [];
     }
+
+    // Log para depuração dos filtros aplicados
+    console.log("Estatísticas geradas com sucesso:", {
+      totalVendas: estatisticas.totalVendas,
+      valorTotalVendas: estatisticas.valorTotalVendas,
+      totalNaoVendas: estatisticas.totalNaoVendas,
+      valorTotalNaoVendas: estatisticas.valorTotalNaoVendas,
+      totalCotacoesPendentes: estatisticas.totalCotacoesPendentes,
+      valorTotalCotacoesPendentes: estatisticas.valorTotalCotacoesPendentes,
+      totalOrcamentos: estatisticas.totalOrcamentos
+    });
 
     return { success: true, estatisticas };
   } catch (error) {
@@ -945,9 +1133,17 @@ export async function getEstatisticasResumidas(filtros?: FiltrosBase): Promise<{
     
     // Filtrar por data
     if (filtros?.dataInicio && filtros?.dataFim) {
+      // Certifique-se de que a data de início é o início do dia
+      const dataInicio = new Date(filtros.dataInicio);
+      dataInicio.setHours(0, 0, 0, 0);
+      
+      // Certifique-se de que a data de fim é o final do dia
+      const dataFim = new Date(filtros.dataFim);
+      dataFim.setHours(23, 59, 59, 999);
+      
       where.createdAt = {
-        gte: new Date(filtros.dataInicio),
-        lte: new Date(filtros.dataFim)
+        gte: dataInicio,
+        lte: dataFim
       };
     }
 
@@ -1011,9 +1207,17 @@ export async function getEstatisticasResumidasVendas(filtros?: FiltrosBase): Pro
     
     // Filtrar por data
     if (filtros?.dataInicio && filtros?.dataFim) {
+      // Certifique-se de que a data de início é o início do dia
+      const dataInicio = new Date(filtros.dataInicio);
+      dataInicio.setHours(0, 0, 0, 0);
+      
+      // Certifique-se de que a data de fim é o final do dia
+      const dataFim = new Date(filtros.dataFim);
+      dataFim.setHours(23, 59, 59, 999);
+      
       where.createdAt = {
-        gte: new Date(filtros.dataInicio),
-        lte: new Date(filtros.dataFim)
+        gte: dataInicio,
+        lte: dataFim
       };
     }
 
@@ -1061,9 +1265,17 @@ export async function getEstatisticasResumidasNaoVendas(filtros?: FiltrosBase): 
     
     // Filtrar por data
     if (filtros?.dataInicio && filtros?.dataFim) {
+      // Certifique-se de que a data de início é o início do dia
+      const dataInicio = new Date(filtros.dataInicio);
+      dataInicio.setHours(0, 0, 0, 0);
+      
+      // Certifique-se de que a data de fim é o final do dia
+      const dataFim = new Date(filtros.dataFim);
+      dataFim.setHours(23, 59, 59, 999);
+      
       where.createdAt = {
-        gte: new Date(filtros.dataInicio),
-        lte: new Date(filtros.dataFim)
+        gte: dataInicio,
+        lte: dataFim
       };
     }
 
@@ -1084,5 +1296,73 @@ export async function getEstatisticasResumidasNaoVendas(filtros?: FiltrosBase): 
   } catch (error) {
     console.error('Erro ao buscar estatísticas resumidas de não vendas:', error);
     return { success: false, error: 'Ocorreu um erro ao buscar as estatísticas' };
+  }
+}
+
+// NOVA FUNÇÃO para buscar estatísticas de cotações pendentes
+export async function getEstatisticasCotacoesPendentes(filtros?: FiltrosBase): Promise<{ 
+  success: boolean; 
+  estatisticas?: EstatisticasCotacoesPendentes;
+  error?: string;
+}> {
+  // Validar autenticação
+  const session = await auth();
+  
+  if (!session) {
+    redirect('/login');
+  }
+
+  try {
+    // Construir filtro para cotações pendentes
+    const where: CotacaoWhereCondition = { 
+      status: 'pendente'
+    };
+    
+    // Se não for admin, filtrar por usuário logado
+    if (session.user.role !== 'ADMIN') {
+      where.vendedorId = session.user.id;
+    }
+    
+    // Filtrar por data
+    if (filtros?.dataInicio && filtros?.dataFim) {
+      // Certifique-se de que a data de início é o início do dia
+      const dataInicio = new Date(filtros.dataInicio);
+      dataInicio.setHours(0, 0, 0, 0);
+      
+      // Certifique-se de que a data de fim é o final do dia
+      const dataFim = new Date(filtros.dataFim);
+      dataFim.setHours(23, 59, 59, 999);
+      
+      where.createdAt = {
+        gte: dataInicio,
+        lte: dataFim
+      };
+    }
+    
+    console.log("Buscando cotações pendentes com filtro:", JSON.stringify(where, null, 2));
+    
+    // Executar consultas em uma única transação
+    const [totalCotacoesPendentes, valorCotacoesPendentes] = await executeWithRetry(() => 
+      prisma.$transaction([
+        prisma.cotacao.count({ where }),
+        prisma.cotacao.aggregate({ where, _sum: { valorTotal: true } })
+      ])
+    );
+    
+    console.log("Resultado cotações pendentes:", totalCotacoesPendentes, valorCotacoesPendentes);
+    
+    const estatisticas: EstatisticasCotacoesPendentes = {
+      totalCotacoesPendentes,
+      valorTotalCotacoesPendentes: valorCotacoesPendentes._sum.valorTotal || 0
+    };
+    
+    return { success: true, estatisticas };
+  } catch (error) {
+    console.error('Erro ao buscar estatísticas de cotações pendentes:', error);
+    console.error('Detalhes do erro:', error instanceof Error ? error.stack : String(error));
+    return { 
+      success: false, 
+      error: 'Ocorreu um erro ao buscar as estatísticas de cotações pendentes' 
+    };
   }
 }

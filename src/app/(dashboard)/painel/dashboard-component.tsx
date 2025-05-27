@@ -18,7 +18,7 @@ import {
   Filter,
   ArrowUp,
   ArrowDown,
-  // Search,
+  Clock,
   Calendar,
   Download,
   CheckCircle,
@@ -307,104 +307,112 @@ const EnhancedDashboard: React.FC = () => {
   });
 
   // Opções de filtro de período predefinidas - usando useMemo para otimização
-  const periodoOptions: PeriodoOption[] = useMemo(() => [
-    {
-      label: "Hoje",
-      value: "today",
-      fn: () => {
-        // Obter a data atual
-        const today = new Date();
-        
-        // Criar data de início (hoje às 00:00:00)
-        const from = new Date(today);
-        from.setHours(0, 0, 0, 0);
-        
-        // Criar data de fim (hoje às 23:59:59)
-        const to = new Date(today);
-        to.setHours(23, 59, 59, 999);
-        
-        return { from, to };
+  const periodoOptions: PeriodoOption[] = useMemo(
+    () => [
+      {
+        label: "Hoje",
+        value: "today",
+        fn: () => {
+          // Obter a data atual
+          const today = new Date();
+
+          // Criar data de início (hoje às 00:00:00)
+          const from = new Date(today);
+          from.setHours(0, 0, 0, 0);
+
+          // Criar data de fim (hoje às 23:59:59)
+          const to = new Date(today);
+          to.setHours(23, 59, 59, 999);
+
+          return { from, to };
+        },
       },
-    },
-    {
-      label: "Últimos 7 dias",
-      value: "7days",
-      fn: () => {
-        const today = new Date();
-        today.setHours(23, 59, 59, 999); // Definir para final do dia
-        
-        const from = subDays(today, 6);
-        from.setHours(0, 0, 0, 0); // Definir para início do dia
-        
-        return { from, to: today };
+      {
+        label: "Últimos 7 dias",
+        value: "7days",
+        fn: () => {
+          const today = new Date();
+          today.setHours(23, 59, 59, 999); // Definir para final do dia
+
+          const from = subDays(today, 6);
+          from.setHours(0, 0, 0, 0); // Definir para início do dia
+
+          return { from, to: today };
+        },
       },
-    },
-    {
-      label: "Últimos 30 dias",
-      value: "30days",
-      fn: () => {
-        const today = new Date();
-        today.setHours(23, 59, 59, 999); // Definir para final do dia
-        
-        const from = subDays(today, 29);
-        from.setHours(0, 0, 0, 0); // Definir para início do dia
-        
-        return { from, to: today };
+      {
+        label: "Últimos 30 dias",
+        value: "30days",
+        fn: () => {
+          const today = new Date();
+          today.setHours(23, 59, 59, 999); // Definir para final do dia
+
+          const from = subDays(today, 29);
+          from.setHours(0, 0, 0, 0); // Definir para início do dia
+
+          return { from, to: today };
+        },
       },
-    },
-    {
-      label: "Este mês",
-      value: "thisMonth",
-      fn: () => {
-        const today = new Date();
-        today.setHours(23, 59, 59, 999); // Definir para final do dia
-        
-        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-        firstDay.setHours(0, 0, 0, 0); // Definir para início do dia
-        
-        return { from: firstDay, to: today };
+      {
+        label: "Este mês",
+        value: "thisMonth",
+        fn: () => {
+          const today = new Date();
+          today.setHours(23, 59, 59, 999); // Definir para final do dia
+
+          const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+          firstDay.setHours(0, 0, 0, 0); // Definir para início do dia
+
+          return { from: firstDay, to: today };
+        },
       },
-    },
-    {
-      label: "Mês passado",
-      value: "lastMonth",
-      fn: () => {
-        const today = new Date();
-        
-        const firstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        firstDay.setHours(0, 0, 0, 0); // Definir para início do dia
-        
-        const lastDay = new Date(today.getFullYear(), today.getMonth(), 0);
-        lastDay.setHours(23, 59, 59, 999); // Definir para final do dia
-        
-        return { from: firstDay, to: lastDay };
+      {
+        label: "Mês passado",
+        value: "lastMonth",
+        fn: () => {
+          const today = new Date();
+
+          const firstDay = new Date(
+            today.getFullYear(),
+            today.getMonth() - 1,
+            1
+          );
+          firstDay.setHours(0, 0, 0, 0); // Definir para início do dia
+
+          const lastDay = new Date(today.getFullYear(), today.getMonth(), 0);
+          lastDay.setHours(23, 59, 59, 999); // Definir para final do dia
+
+          return { from: firstDay, to: lastDay };
+        },
       },
-    },
-    {
-      label: "Este ano",
-      value: "thisYear",
-      fn: () => {
-        const today = new Date();
-        today.setHours(23, 59, 59, 999); // Definir para final do dia
-        
-        const firstDay = new Date(today.getFullYear(), 0, 1);
-        firstDay.setHours(0, 0, 0, 0); // Definir para início do dia
-        
-        return { from: firstDay, to: today };
+      {
+        label: "Este ano",
+        value: "thisYear",
+        fn: () => {
+          const today = new Date();
+          today.setHours(23, 59, 59, 999); // Definir para final do dia
+
+          const firstDay = new Date(today.getFullYear(), 0, 1);
+          firstDay.setHours(0, 0, 0, 0); // Definir para início do dia
+
+          return { from: firstDay, to: today };
+        },
       },
-    },
-  ], []);
+    ],
+    []
+  );
 
   // Função otimizada para carregar dados iniciais
   const loadInitialData = useCallback(async () => {
     setLoading(true);
     try {
       // Carregar dados simultaneamente com Promise.all para melhor performance
-      const [estatisticasResult, vendedoresResult, produtosResult] = await Promise.all([
-        getEstatisticasPainel(),
-        getVendedores(),
-        getProdutos()
-      ]);
+      const [estatisticasResult, vendedoresResult, produtosResult] =
+        await Promise.all([
+          getEstatisticasPainel(),
+          getVendedores(),
+          getProdutos(),
+        ]);
 
       if (estatisticasResult.success && estatisticasResult.estatisticas) {
         setEstatisticas(estatisticasResult.estatisticas);
@@ -436,22 +444,39 @@ const EnhancedDashboard: React.FC = () => {
   const aplicarFiltros = useCallback(async () => {
     setLoading(true);
     try {
+      console.log("Aplicando filtros:", {
+        dateRange: filter.dateRange,
+        vendedorId: filter.vendedorId,
+        produtoId: filter.produtoId,
+        searchTerm: filter.searchTerm,
+      });
+
       const params: EstatisticasPainelParams = {};
 
-      // Aplicar filtro de data
+      // Aplicar filtro de data com ajuste para garantir dia completo
       if (filter.dateRange?.from && filter.dateRange?.to) {
-        params.dataInicio = filter.dateRange.from;
-        params.dataFim = filter.dateRange.to;
+        // Certifique-se de que a data de início é o início do dia
+        const dataInicio = new Date(filter.dateRange.from);
+        dataInicio.setHours(0, 0, 0, 0);
+
+        // Certifique-se de que a data de fim é o final do dia
+        const dataFim = new Date(filter.dateRange.to);
+        dataFim.setHours(23, 59, 59, 999);
+
+        params.dataInicio = dataInicio;
+        params.dataFim = dataFim;
       }
 
       // Aplicar filtro de vendedor
       if (filter.vendedorId) {
         params.vendedorId = filter.vendedorId;
+        console.log("Filtrando por vendedor:", filter.vendedorId);
       }
 
       // Aplicar filtro de produto
       if (filter.produtoId) {
         params.produtoId = filter.produtoId;
+        console.log("Filtrando por produto:", filter.produtoId);
       }
 
       // Aplicar filtro de busca
@@ -510,39 +535,42 @@ const EnhancedDashboard: React.FC = () => {
   }, []);
 
   // Aplicar filtro de período - otimizado com useCallback
-  const aplicarPeriodo = useCallback(async (value: string) => {
-    const periodoOption = periodoOptions.find((p) => p.value === value);
+  const aplicarPeriodo = useCallback(
+    async (value: string) => {
+      const periodoOption = periodoOptions.find((p) => p.value === value);
 
-    if (periodoOption) {
-      const newDateRange = periodoOption.fn();
-      setDateRange(newDateRange);
-      setFilter((prev) => ({ ...prev, dateRange: newDateRange }));
+      if (periodoOption) {
+        const newDateRange = periodoOption.fn();
+        setDateRange(newDateRange);
+        setFilter((prev) => ({ ...prev, dateRange: newDateRange }));
 
-      // Aplicar filtro imediatamente
-      setLoading(true);
+        // Aplicar filtro imediatamente
+        setLoading(true);
 
-      try {
-        const params: EstatisticasPainelParams = {
-          dataInicio: newDateRange.from,
-          dataFim: newDateRange.to,
-        };
+        try {
+          const params: EstatisticasPainelParams = {
+            dataInicio: newDateRange.from,
+            dataFim: newDateRange.to,
+          };
 
-        const result = await getEstatisticasPainel(params);
+          const result = await getEstatisticasPainel(params);
 
-        if (result.success && result.estatisticas) {
-          setEstatisticas(result.estatisticas);
-          toast.success(`Filtro aplicado: ${periodoOption.label}`);
-        } else if (result.error) {
-          toast.error(result.error);
+          if (result.success && result.estatisticas) {
+            setEstatisticas(result.estatisticas);
+            toast.success(`Filtro aplicado: ${periodoOption.label}`);
+          } else if (result.error) {
+            toast.error(result.error);
+          }
+        } catch (error) {
+          console.error("Erro ao aplicar filtro de período:", error);
+          toast.error("Erro ao aplicar filtro de período");
+        } finally {
+          setLoading(false);
         }
-      } catch (error) {
-        console.error("Erro ao aplicar filtro de período:", error);
-        toast.error("Erro ao aplicar filtro de período");
-      } finally {
-        setLoading(false);
       }
-    }
-  }, [periodoOptions]);
+    },
+    [periodoOptions]
+  );
 
   // Toggle de ordenação - otimizado com useCallback
   const toggleSortDirection = useCallback(() => {
@@ -613,7 +641,12 @@ const EnhancedDashboard: React.FC = () => {
     });
 
     return vendedoresFiltrados;
-  }, [estatisticas?.vendedores, filter.searchTerm, vendedoresTab, sortDirection]);
+  }, [
+    estatisticas?.vendedores,
+    filter.searchTerm,
+    vendedoresTab,
+    sortDirection,
+  ]);
 
   // Filtrar clientes pelo termo de pesquisa - otimizado com useMemo
   const filtrarClientes = useMemo(() => {
@@ -791,122 +824,192 @@ const EnhancedDashboard: React.FC = () => {
 
       {/* Cards de Estatísticas */}
       <div className="flex flex-col w-full gap-4">
-      <div className="flex gap-4 w-full">
-        {/* Total de Orçamentos */}
-        <Card className="w-[33%] !py-3">
-          <CardContent >
-            <div className="flex items-start justify-between">
-              <div>
-                <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
-                  Total de Orçamentos
-                  <div className="bg-blue-100 w-fit p-2 rounded-full">
-                    <FileText className="h-6 w-6 text-blue-600" />
+        <div className="flex gap-4 w-full">
+          {/* Total de Orçamentos */}
+          <div className="flex flex-col w-full gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 w-full">
+              {/* Total de Orçamentos */}
+              <Card className="bg-white">
+                <CardContent className="pt-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="bg-blue-100 p-2 rounded-full">
+                          <FileText className="h-6 w-6 text-blue-600" />
+                        </div>
+                        <p className="text-sm text-gray-500">
+                          Total de Cotações
+                        </p>
+                      </div>
+                      <h3 className="text-2xl pl-12 font-bold mt-1">
+                        {estatisticas?.totalOrcamentos || 0}
+                      </h3>
+                      <p className="text-md text-gray-400 pl-12 mt-1">
+                        {formatarValorBRL(
+                          (estatisticas?.valorTotalVendas || 0) +
+                            (estatisticas?.valorTotalNaoVendas || 0)
+                        )}
+                      </p>
+                    </div>
                   </div>
-                </CardDescription>
-                <CardTitle className="text-3xl mt-1">
-                  {estatisticas?.totalOrcamentos || 0}
-                </CardTitle>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                </CardContent>
+              </Card>
 
-        {/* Cotações Finalizadas */}
-        <Card className="w-[33%] !py-3">
-          <CardContent >
-            <div className="flex items-start justify-between">
-              <div>
-                <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
-                  Cotações Finalizadas{" "}
-                  <div className="bg-green-100 w-fit p-2 rounded-full">
-                    <CheckCircle className="h-6 w-6 text-green-600" />
+              {/* Cotações Pendentes */}
+              <Card className="bg-white">
+                <CardContent className="pt-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="bg-orange-100 p-2 rounded-full">
+                          <Clock className="h-6 w-6 text-orange-600" />
+                        </div>
+                        <p className="text-sm text-gray-500">
+                          Cotações Pendentes
+                        </p>
+                      </div>
+                      <h3 className="text-2xl pl-12 font-bold mt-1">
+                        {estatisticas?.totalCotacoesPendentes || 0}
+                      </h3>
+                      <p className="text-xs text-gray-400 pl-12 mt-1">
+                        {formatarValorBRL(
+                          estatisticas?.valorTotalCotacoesPendentes || 0
+                        )}
+                      </p>
+                    </div>
                   </div>
-                </CardDescription>
-                <CardTitle className="text-3xl mt-1">
-                  {estatisticas?.totalVendas || 0}
-                </CardTitle>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                </CardContent>
+              </Card>
 
-        {/* Cotações canceladas (Recusados) */}
-        <Card className="w-[33%] !py-3">
-          <CardContent >
-            <div className="flex items-start justify-between">
-              <div>
-                <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
-                  Cotações Canceladas{" "}
-                  <div className="bg-red-100 w-fit p-2 rounded-full">
-                    <XCircle className="h-6 w-6 text-red-600" />
+              {/* Cotações Finalizadas */}
+              <Card className="bg-white">
+                <CardContent className="pt-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="bg-green-100 p-2 rounded-full">
+                          <CheckCircle className="h-6 w-6 text-green-600" />
+                        </div>
+                        <p className="text-sm text-gray-500">
+                          Cotações Finalizadas
+                        </p>
+                      </div>
+                      <h3 className="text-2xl pl-12 font-bold mt-1">
+                        {estatisticas?.totalVendas || 0}
+                      </h3>
+                      <p className="text-md text-gray-400 pl-12 mt-1">
+                        {formatarValorBRL(estatisticas?.valorTotalVendas || 0)}
+                      </p>
+                    </div>
                   </div>
-                </CardDescription>
-                <CardTitle className="text-3xl mt-1">
-                  {estatisticas?.totalNaoVendas || 0}
-                </CardTitle>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      <div className="flex gap-4">
-        {/* Valor Total de Vendas */}
-        <Card className="w-[33%] !py-3">
-          <CardContent >
-            <div className="flex items-start justify-between">
-              <div>
-                <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
-                  Valor Total de Cotações finalizadas{" "}
-                  <div className="bg-purple-100 w-fit p-2 rounded-full">
-                    <DollarSign className="h-6 w-6 text-purple-600" />
-                  </div>
-                </CardDescription>
-                <CardTitle className="text-2xl mt-1">
-                  {formatarValorBRL(estatisticas?.valorTotalVendas || 0)}
-                </CardTitle>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                </CardContent>
+              </Card>
 
-        {/* Vendas Canceladas */}
-        <Card className="w-[33%] !py-3">
-          <CardContent >
-            <div className="flex items-start justify-between">
-              <div>
-                <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
-                  Cotações canceladas{" "}
-                  <div className="bg-orange-100 w-fit p-2 rounded-full">
-                    <TrendingDown className="h-6 w-6 text-orange-600" />
+              {/* Cotações Canceladas */}
+              <Card className="bg-white">
+                <CardContent className="pt-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="bg-red-100 p-2 rounded-full">
+                          <XCircle className="h-6 w-6 text-red-600" />
+                        </div>
+                        <p className="text-sm text-gray-500">
+                          Cotações Canceladas
+                        </p>
+                      </div>
+                      <h3 className="text-2xl pl-12 font-bold mt-1">
+                        {estatisticas?.totalNaoVendas || 0}
+                      </h3>
+                      <p className="text-md text-gray-400 pl-12 mt-1">
+                        {formatarValorBRL(
+                          estatisticas?.valorTotalNaoVendas || 0
+                        )}
+                      </p>
+                    </div>
                   </div>
-                </CardDescription>
-                <CardTitle className="text-2xl mt-1">
-                  {formatarValorBRL(estatisticas?.valorTotalNaoVendas || 0)}
-                </CardTitle>
-              </div>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Total de Clientes */}
-        <Card className="w-[33%] !py-3">
-          <CardContent >
-            <div className="flex items-start justify-between">
-              <div>
-                <CardDescription className="text-sm flex gap-3 items-center text-gray-500">
-                  Total de Clientes{" "}
-                  <div className="bg-indigo-100 w-fit p-2 rounded-full">
-                    <UserCheck className="h-6 w-6 text-indigo-600" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Valor Total de Vendas */}
+              <Card className="bg-white">
+                <CardContent className="pt-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="bg-purple-100 p-2 rounded-full">
+                          <DollarSign className="h-6 w-6 text-purple-600" />
+                        </div>
+                        <p className="text-sm text-gray-500">
+                          Valor Total de Cotações Finalizadas
+                        </p>
+                      </div>
+                      <h3 className="text-2xl pl-12 font-bold mt-1">
+                        {formatarValorBRL(estatisticas?.valorTotalVendas || 0)}
+                      </h3>
+                      <p className="text-md text-gray-400 pl-12 mt-1">
+                        {estatisticas?.totalVendas || 0} cotações finalizadas
+                      </p>
+                    </div>
                   </div>
-                </CardDescription>
-                <CardTitle className="text-3xl mt-1">
-                  {estatisticas?.totalClientes || 0}
-                </CardTitle>
-              </div>
+                </CardContent>
+              </Card>
+
+              {/* Valor de Cotações Canceladas */}
+              <Card className="bg-white">
+                <CardContent className="pt-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="bg-orange-100 p-2 rounded-full">
+                          <TrendingDown className="h-6 w-6 text-orange-600" />
+                        </div>
+                        <p className="text-sm text-gray-500">
+                          Valor de Cotações Canceladas
+                        </p>
+                      </div>
+                      <h3 className="text-2xl pl-12 font-bold mt-1">
+                        {formatarValorBRL(
+                          estatisticas?.valorTotalNaoVendas || 0
+                        )}
+                      </h3>
+                      <p className="text-md text-gray-400 pl-12 mt-1">
+                        {estatisticas?.totalNaoVendas || 0} cotações canceladas
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Total de Clientes */}
+              <Card className="bg-white">
+                <CardContent className="pt-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="bg-indigo-100 p-2 rounded-full">
+                          <UserCheck className="h-6 w-6 text-indigo-600" />
+                        </div>
+                        <p className="text-sm text-gray-500">
+                          Total de Clientes
+                        </p>
+                      </div>
+                      <h3 className="text-2xl pl-12 font-bold mt-1">
+                        {estatisticas?.totalClientes || 0}
+                      </h3>
+                      <p className="text-md text-gray-400 pl-12 mt-1">
+                        {estatisticas?.clientesRecorrentes || 0} clientes
+                        recorrentes
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </div>
       </div>
       {/* Gráficos */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -915,34 +1018,33 @@ const EnhancedDashboard: React.FC = () => {
           <CardContent className="p-4">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium">Desempenho de cotações</h3>
-                <Tabs
-                  value={chartTab}
-                  onValueChange={(value) =>
-                    setChartTab(value as "geral" | "vendas" | "naoVendas")
-                  }
-                >
-                  <TabsList className="flex flex-col 2xl:flex-row gap-2 2xl:gap-0 2xl:!p-1 2xl:!mt-1 !w-fit">
-                    <TabsTrigger
-                      value="geral"
-                      className="data-[state=active]:shadow 2xl:!py-2"
-                    >
-                      Geral
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="vendas"
-                      className="data-[state=active]:shadow 2xl:!py-2 "
-                    >
-                      Cotações finalizadas
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="naoVendas"
-                      className="rounded data-[state=active]:shadow 2xl:!py-2"
-                    >
-                      Cotações canceladas
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
-             
+              <Tabs
+                value={chartTab}
+                onValueChange={(value) =>
+                  setChartTab(value as "geral" | "vendas" | "naoVendas")
+                }
+              >
+                <TabsList className="flex flex-col 2xl:flex-row gap-2 2xl:gap-0 2xl:!p-1 2xl:!mt-1 !w-fit">
+                  <TabsTrigger
+                    value="geral"
+                    className="data-[state=active]:shadow 2xl:!py-2"
+                  >
+                    Geral
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="vendas"
+                    className="data-[state=active]:shadow 2xl:!py-2 "
+                  >
+                    Cotações finalizadas
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="naoVendas"
+                    className="rounded data-[state=active]:shadow 2xl:!py-2"
+                  >
+                    Cotações canceladas
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
 
             <p className="text-sm text-gray-500 mb-4">
@@ -1382,82 +1484,74 @@ const EnhancedDashboard: React.FC = () => {
                       <TabsContent value="rank">
                         <div className="space-y-3">
                           {filtrarProdutos.length > 0 ? (
-                            filtrarProdutos
-                              .slice(0, 10)
-                              .map((produto, idx) => (
-                                <Card
-                                  key={produto.id}
-                                  className={`${
-                                    idx < 3
-                                      ? "border-l-4 border-l-[#00446A]"
-                                      : ""
-                                  }`}
-                                >
-                                  <CardContent className="p-4">
-                                    <div className="flex items-center gap-4">
-                                      <div className="flex items-center justify-center w-8 h-8 rounded-full">
-                                        <span className="font-bold text-gray-700">
-                                          {idx + 1}
-                                        </span>
-                                      </div>
-                                      <div className="flex-grow">
-                                        <div className="flex justify-between items-center">
-                                          <div>
-                                            <h3 className="font-medium text-lg">
-                                              {produto.nome}
-                                            </h3>
-                                            <p className="text-sm text-gray-500">
-                                              {produto.medida}
-                                            </p>
-                                          </div>
-                                          <Badge
-                                            className={`${
-                                              idx < 3
-                                                ? "bg-[#00446A]"
-                                                : "bg-gray-600"
-                                            } text-white`}
-                                          >
-                                            {formatarValorBRL(
-                                              produto.valorTotal
-                                            )}
-                                          </Badge>
+                            filtrarProdutos.slice(0, 10).map((produto, idx) => (
+                              <Card
+                                key={produto.id}
+                                className={`${
+                                  idx < 3 ? "border-l-4 border-l-[#00446A]" : ""
+                                }`}
+                              >
+                                <CardContent className="p-4">
+                                  <div className="flex items-center gap-4">
+                                    <div className="flex items-center justify-center w-8 h-8 rounded-full">
+                                      <span className="font-bold text-gray-700">
+                                        {idx + 1}
+                                      </span>
+                                    </div>
+                                    <div className="flex-grow">
+                                      <div className="flex justify-between items-center">
+                                        <div>
+                                          <h3 className="font-medium text-lg">
+                                            {produto.nome}
+                                          </h3>
+                                          <p className="text-sm text-gray-500">
+                                            {produto.medida}
+                                          </p>
                                         </div>
-                                        <div className="grid grid-cols-3 gap-4 mt-3">
-                                          <div>
-                                            <p className="text-xs text-gray-500">
-                                              Presente em
-                                            </p>
-                                            <p className="font-medium">
-                                              {produto.presenteEmVendas} vendas
-                                            </p>
-                                          </div>
-                                          <div>
-                                            <p className="text-xs text-gray-500">
-                                              Média por venda
-                                            </p>
-                                            <p className="font-medium">
-                                              {produto.quantidadeMedia.toFixed(
-                                                2
-                                              )}{" "}
-                                              unidades
-                                            </p>
-                                          </div>
-                                          <div>
-                                            <p className="text-xs text-gray-500">
-                                              Valor médio
-                                            </p>
-                                            <p className="font-medium">
-                                              {formatarValorBRL(
-                                                produto.valorMedio
-                                              )}
-                                            </p>
-                                          </div>
+                                        <Badge
+                                          className={`${
+                                            idx < 3
+                                              ? "bg-[#00446A]"
+                                              : "bg-gray-600"
+                                          } text-white`}
+                                        >
+                                          {formatarValorBRL(produto.valorTotal)}
+                                        </Badge>
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-4 mt-3">
+                                        <div>
+                                          <p className="text-xs text-gray-500">
+                                            Presente em
+                                          </p>
+                                          <p className="font-medium">
+                                            {produto.presenteEmVendas} vendas
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="text-xs text-gray-500">
+                                            Média por venda
+                                          </p>
+                                          <p className="font-medium">
+                                            {produto.quantidadeMedia.toFixed(2)}{" "}
+                                            unidades
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="text-xs text-gray-500">
+                                            Valor médio
+                                          </p>
+                                          <p className="font-medium">
+                                            {formatarValorBRL(
+                                              produto.valorMedio
+                                            )}
+                                          </p>
                                         </div>
                                       </div>
                                     </div>
-                                  </CardContent>
-                                </Card>
-                              ))
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))
                           ) : (
                             <div className="text-center py-8 text-gray-500">
                               <Package2 className="h-8 w-8 mx-auto mb-2" />
@@ -1752,95 +1846,88 @@ const EnhancedDashboard: React.FC = () => {
                       <TabsContent value="rank">
                         <div className="space-y-3">
                           {filtrarClientes.length > 0 ? (
-                            filtrarClientes
-                              .slice(0, 10)
-                              .map((cliente, idx) => (
-                                <Card
-                                  key={cliente.id}
-                                  className={`${
-                                    idx < 3
-                                      ? "border-l-4 border-l-[#00446A]"
-                                      : ""
-                                  }`}
-                                >
-                                  <CardContent className="p-4">
-                                    <div className="flex items-center gap-4">
-                                      <div className="flex items-center justify-center w-8 h-8 rounded-full">
-                                        <span className="font-bold text-gray-700">
-                                          {idx + 1}
-                                        </span>
-                                      </div>
-                                      <div className="flex-grow">
-                                        <div className="flex justify-between items-center">
-                                          <div>
-                                            <h3 className="font-medium text-lg">
-                                              {cliente.nome}
-                                            </h3>
-                                            <p className="text-sm text-gray-500">
-                                              {cliente.segmento} -{" "}
-                                              {cliente.cnpj}
-                                            </p>
-                                          </div>
-                                          <Badge
-                                            className={`${
-                                              idx < 3
-                                                ? "bg-[#00446A]"
-                                                : "bg-gray-600"
-                                            } text-white`}
-                                          >
-                                            {formatarValorBRL(
-                                              cliente.valorTotal
-                                            )}
-                                          </Badge>
+                            filtrarClientes.slice(0, 10).map((cliente, idx) => (
+                              <Card
+                                key={cliente.id}
+                                className={`${
+                                  idx < 3 ? "border-l-4 border-l-[#00446A]" : ""
+                                }`}
+                              >
+                                <CardContent className="p-4">
+                                  <div className="flex items-center gap-4">
+                                    <div className="flex items-center justify-center w-8 h-8 rounded-full">
+                                      <span className="font-bold text-gray-700">
+                                        {idx + 1}
+                                      </span>
+                                    </div>
+                                    <div className="flex-grow">
+                                      <div className="flex justify-between items-center">
+                                        <div>
+                                          <h3 className="font-medium text-lg">
+                                            {cliente.nome}
+                                          </h3>
+                                          <p className="text-sm text-gray-500">
+                                            {cliente.segmento} - {cliente.cnpj}
+                                          </p>
                                         </div>
-                                        <div className="grid grid-cols-4 gap-4 mt-3">
-                                          <div>
-                                            <p className="text-xs text-gray-500">
-                                              Compras
-                                            </p>
-                                            <p className="font-medium">
-                                              {cliente.quantidadeVendas}
-                                            </p>
-                                          </div>
-                                          <div>
-                                            <p className="text-xs text-gray-500">
-                                              Valor Médio
-                                            </p>
-                                            <p className="font-medium">
-                                              {formatarValorBRL(
-                                                cliente.valorMedio
-                                              )}
-                                            </p>
-                                          </div>
-                                          <div>
-                                            <p className="text-xs text-gray-500">
-                                              Última Compra
-                                            </p>
-                                            <p className="font-medium">
-                                              {formatDate(cliente.ultimaCompra)}
-                                            </p>
-                                          </div>
-                                          <div>
-                                            <p className="text-xs text-gray-500">
-                                              Produto Favorito
-                                            </p>
-                                            <p
-                                              className="font-medium truncate"
-                                              title={
-                                                cliente.produtoMaisComprado ||
-                                                "N/A"
-                                              }
-                                            >
-                                              {cliente.produtoMaisComprado ||
-                                                "N/A"}
-                                            </p>
-                                          </div>
+                                        <Badge
+                                          className={`${
+                                            idx < 3
+                                              ? "bg-[#00446A]"
+                                              : "bg-gray-600"
+                                          } text-white`}
+                                        >
+                                          {formatarValorBRL(cliente.valorTotal)}
+                                        </Badge>
+                                      </div>
+                                      <div className="grid grid-cols-4 gap-4 mt-3">
+                                        <div>
+                                          <p className="text-xs text-gray-500">
+                                            Compras
+                                          </p>
+                                          <p className="font-medium">
+                                            {cliente.quantidadeVendas}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="text-xs text-gray-500">
+                                            Valor Médio
+                                          </p>
+                                          <p className="font-medium">
+                                            {formatarValorBRL(
+                                              cliente.valorMedio
+                                            )}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="text-xs text-gray-500">
+                                            Última Compra
+                                          </p>
+                                          <p className="font-medium">
+                                            {formatDate(cliente.ultimaCompra)}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="text-xs text-gray-500">
+                                            Produto Favorito
+                                          </p>
+                                          <p
+                                            className="font-medium truncate"
+                                            title={
+                                              cliente.produtoMaisComprado ||
+                                              "N/A"
+                                            }
+                                          >
+                                            {cliente.produtoMaisComprado ||
+                                              "N/A"}
+                                          </p>
                                         </div>
                                       </div>
                                     </div>
-                                  </CardContent>
-                                </Card>
-                              ))
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))
                           ) : (
                             <div className="text-center py-8 text-gray-500">
                               <UserCheck className="h-8 w-8 mx-auto mb-2" />
@@ -1996,9 +2083,7 @@ const EnhancedDashboard: React.FC = () => {
         </DialogContent>
       </Dialog>
       {/* <MapaVendasRegiao /> */}
-
     </div>
-    
   );
 };
 
