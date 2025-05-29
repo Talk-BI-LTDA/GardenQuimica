@@ -6,7 +6,7 @@ export const produtoSchema = z.object({
   nome: z.string().min(1, "Nome do produto é obrigatório"),
   medida: z.string().min(1, "Medida é obrigatória"),
   quantidade: z.number().min(1, "Quantidade deve ser maior que zero"),
-  valor: z.number().min(0.01, "Valor deve ser maior que zero"),
+  valor: z.number().min(0.00, "Valor deve ser maior que zero"),
   // Adicione essas propriedades como opcionais
   comissao: z.number().optional().default(0),
   icms: z.number().optional().default(0),
@@ -25,6 +25,7 @@ export const clienteSchema = z.object({
 
 export const vendaSchema = z.object({
   cliente: clienteSchema,
+  codigoManual: z.string().optional(),
   produtos: z.array(produtoSchema).min(1, "Adicione pelo menos um produto"),
   valorTotal: z.number().min(0.01, "Valor total deve ser maior que zero"),
   condicaoPagamento: z.string().min(1, "Condição de pagamento é obrigatória"),

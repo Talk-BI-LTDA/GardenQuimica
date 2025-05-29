@@ -6,7 +6,7 @@ const produtoGardenSchema = z.object({
   nome: z.string().min(1, 'Nome do produto é obrigatório'),
   medida: z.string().min(1, 'Medida é obrigatória'),
   quantidade: z.number().min(1, 'Quantidade deve ser maior que zero'),
-  valor: z.number().min(0.01, 'Valor deve ser maior que zero'),
+  valor: z.number().min(0.00, 'Valor deve ser maior que zero'),
   comissao: z.number().min(0).max(100).optional().default(0),
   icms: z.number().min(0).max(100).optional().default(0),
   ipi: z.number().min(0).max(100).optional().default(0),
@@ -41,10 +41,11 @@ const clienteSchema = z.object({
 // Schema principal para não venda (cotação cancelada)
 export const naoVendaSchema = z.object({
   cliente: clienteSchema,
+  codigoManual: z.string().optional(),
   produtosConcorrencia: z.array(produtoConcorrenciaSchema).min(1, 'Adicione pelo menos um produto'),
   valorTotal: z.number().min(0.01, 'Valor total deve ser maior que zero'),
   condicaoPagamento: z.string().min(1, 'Condição de pagamento é obrigatória'),
-  objecaoGeral: z.string().optional(),
+  objecaoGeral: z.string().optional().default(""),
   // Campos adicionais para edição
   id: z.string().optional(),
   status: z.enum(['pendente', 'finalizada', 'cancelada']).optional(),

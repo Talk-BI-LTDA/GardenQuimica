@@ -80,7 +80,6 @@ interface ProdutoVendaFormProps {
   statusCotacao: StatusCotacao;
   temObjecao: boolean;
   setTemObjecao: (value: boolean) => void;
-  // REMOVIDO: setShowProdutoNaoCatalogadoDialog não é mais necessário
 }
 
 export function ProdutoVendaForm({
@@ -89,7 +88,7 @@ export function ProdutoVendaForm({
   handleAddProdutoVenda,
   temObjecao,
   setTemObjecao,
-}: // REMOVIDO: setShowProdutoNaoCatalogadoDialog
+}: 
 ProdutoVendaFormProps) {
   const [produtoSearchTerm, setProdutoSearchTerm] = useState<string>("");
   const selectProdutoRef = useRef<HTMLInputElement>(null);

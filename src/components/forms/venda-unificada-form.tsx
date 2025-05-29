@@ -699,40 +699,65 @@ export function VendaUnificadaFormTipado({
       toast.error("Digite o nome do produto para adicionar a objeção");
       return;
     }
-
-    // Atualizar o nome do produto atual
-    const produtoComObjecao: ProdutoEstendido = {
-      ...currentProduto,
-      nome: nomeProdutoObjecao,
-      id: `produto_obj_${Date.now()}`,
-    };
-
-    // Adicionar à lista de produtos
-    vendaAppend(produtoComObjecao);
-
-    // Adicionar a objeção para este produto
-    setObjecoesIndividuais((prev) => [
-      ...prev,
-      {
-        produtoId: produtoComObjecao.id as string,
-        objecao: "Produto que não trabalhamos",
-        tipoObjecao: "padrao",
-      },
-    ]);
-
-    // Limpar e fechar o diálogo
+  
+    if (formMode === "venda") {
+      const produtoComObjecao: ProdutoEstendido = {
+        ...currentProduto,
+        nome: nomeProdutoObjecao,
+        id: `produto_obj_${Date.now()}`,
+      };
+      
+      const tempProduto = {...produtoComObjecao};
+      
+      setFormMode("naoVenda");
+      setStatusCotacao("cancelada");
+      
+      const clienteData = vendaForm.getValues("cliente");
+      const condicaoPagamento = vendaForm.getValues("condicaoPagamento");
+      naoVendaForm.setValue("cliente", clienteData);
+      naoVendaForm.setValue("condicaoPagamento", condicaoPagamento);
+      
+      const produtoConcorrencia = {
+        produtoGarden: tempProduto,
+        valorConcorrencia: 0,
+        nomeConcorrencia: "Não disponível",
+        infoNaoDisponivel: true,
+        objecao: "Produto que não trabalhamos"
+      };
+      
+      naoVendaAppend(produtoConcorrencia as unknown as NaoVendaSchemaType["produtosConcorrencia"][0]);
+      
+      naoVendaForm.setValue("valorTotal", tempProduto.valor * tempProduto.quantidade);
+      
+      naoVendaForm.setValue("objecaoGeral", "Produto que não trabalhamos");
+      
+      toast.info("Modo alterado para Cotação Cancelada devido a produto que Garden não trabalha");
+    } else {
+      const produtoComObjecao: ProdutoEstendido = {
+        ...currentProduto,
+        nome: nomeProdutoObjecao,
+        id: `produto_obj_${Date.now()}`,
+      };
+      
+      const novoProdutoConcorrencia = {
+        produtoGarden: produtoComObjecao,
+        valorConcorrencia: 0,
+        nomeConcorrencia: "Não disponível",
+        infoNaoDisponivel: true,
+        objecao: "Produto que não trabalhamos"
+      };
+      
+      naoVendaAppend(novoProdutoConcorrencia as unknown as NaoVendaSchemaType["produtosConcorrencia"][0]);
+      
+      const valorAtual = naoVendaForm.getValues("valorTotal") || 0;
+      const valorProduto = produtoComObjecao.valor * produtoComObjecao.quantidade;
+      naoVendaForm.setValue("valorTotal", Number((valorAtual + valorProduto).toFixed(2)));
+      
+      toast.success("Produto adicionado com objeção");
+    }
+  
     setNomeProdutoObjecao("");
     setShowObjecaoProdutoDialog(false);
-
-    // Atualizar valor total sugerido
-    const valorAtual = vendaForm.getValues("valorTotal") || 0;
-    const valorProduto = produtoComObjecao.valor * produtoComObjecao.quantidade;
-    vendaForm.setValue(
-      "valorTotal",
-      Number((valorAtual + valorProduto).toFixed(2))
-    );
-
-    toast.success("Produto adicionado com objeção");
   };
 
   // Handler para registrar objeção individual em um produto
@@ -1456,15 +1481,21 @@ export function VendaUnificadaFormTipado({
       } else if (statusCotacao === "cancelada") {
         // Cancelar cotação ou atualizar não venda
         if (isEditing && initialData && "id" in initialData) {
-          // Se está editando uma cotação pendente, cancelar
-          if ("status" in initialData && initialData.status === "pendente") {
-            result = await cancelarCotacao(initialData.id as string, formData);
+          // Verificar o status original da cotação
+          if ("status" in initialData) {
+            if (initialData.status === "pendente") {
+              // Se era pendente, cancelar
+              result = await cancelarCotacao(initialData.id as string, formData);
+            } else if (initialData.status === "finalizada") {
+              // Se era finalizada, converter de venda para não-venda
+              result = await converterCotacao(initialData.id as string, "cancelada", formData);
+            } else {
+              // Se já era cancelada, atualizar
+              result = await atualizarNaoVenda(initialData.id as string, formData);
+            }
           } else {
-            // Se está editando uma não venda, atualizar
-            result = await atualizarNaoVenda(
-              initialData.id as string,
-              formData
-            );
+            // Se não tiver status (provavelmente uma não-venda), atualizar
+            result = await atualizarNaoVenda(initialData.id as string, formData);
           }
         } else {
           // Criar nova não venda
@@ -1528,10 +1559,34 @@ export function VendaUnificadaFormTipado({
     } else {
       const clienteData = naoVendaForm.getValues("cliente");
       const condicaoPagamento = naoVendaForm.getValues("condicaoPagamento");
-
+    
       vendaForm.setValue("cliente", clienteData);
       vendaForm.setValue("condicaoPagamento", condicaoPagamento);
-
+    
+      // ADICIONAR: Migrar produtos de não-venda para venda
+      const produtosConcorrencia = naoVendaForm.getValues("produtosConcorrencia");
+      if (produtosConcorrencia && produtosConcorrencia.length > 0) {
+        // Converter produtos de não-venda para o formato de venda
+        const produtosVenda = produtosConcorrencia.map(item => ({
+          nome: item.produtoGarden.nome,
+          medida: item.produtoGarden.medida,
+          quantidade: item.produtoGarden.quantidade,
+          valor: item.produtoGarden.valor,
+          comissao: item.produtoGarden.comissao || 0,
+          icms: item.produtoGarden.icms || 0,
+          ipi: item.produtoGarden.ipi || 0
+        }));
+        
+        // Limpar produtos existentes e adicionar os novos
+        vendaForm.setValue("produtos", []);
+        produtosVenda.forEach(produto => {
+          vendaAppend(produto);
+        });
+        
+        // Atualizar valor total
+        vendaForm.setValue("valorTotal", naoVendaForm.getValues("valorTotal"));
+      }
+    
       setFormMode("venda");
       setStatusCotacao("finalizada");
     }
@@ -1577,26 +1632,30 @@ export function VendaUnificadaFormTipado({
   }
 
   const [isLoadingClientes, setIsLoadingClientes] = useState<boolean>(false);
-
   const carregarClientesRecorrentes = useCallback(async () => {
-    if (clientesRecorrentes.length > 0 || isLoadingClientes) return;
-
+    if (isLoadingClientes) return;
+  
     setIsLoadingClientes(true);
     try {
       const result = await getClientesRecorrentes();
       if (result.success && result.clientes) {
-        setClientesRecorrentes(result.clientes);
+        // Usar Map para garantir unicidade baseada em ID
+        const clientesMap = new Map();
+        
+        // Adicionar apenas os clientes retornados pela API
+        result.clientes.forEach(cliente => {
+          clientesMap.set(cliente.id, cliente);
+        });
+        
+        // Converter Map de volta para array
+        setClientesRecorrentes(Array.from(clientesMap.values()));
       }
     } catch (error) {
       console.error("Erro ao carregar clientes recorrentes:", error);
-      // Dados mockados em caso de erro
-      setClientesRecorrentes([
-        // Dados mockados
-      ]);
     } finally {
       setIsLoadingClientes(false);
     }
-  }, [clientesRecorrentes.length, isLoadingClientes]);
+  }, [isLoadingClientes]);
 
   const [catalogoCondicoesPagamento, setCatalogoCondicoesPagamento] = useState<
     string[]

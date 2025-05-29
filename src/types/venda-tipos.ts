@@ -32,6 +32,7 @@ export type VendaFormData = {
   cliente: Cliente;
   produtos: Produto[];
   valorTotal: number;
+  codigoManual?: string;
   condicaoPagamento: string;
   vendaRecorrente: boolean;
   nomeRecorrencia?: string;

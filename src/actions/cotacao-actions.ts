@@ -39,7 +39,7 @@ export type CotacaoFormData = {
   vendaRecorrente?: boolean;
   nomeRecorrencia?: string;
   status?: StatusCotacao;
-  codigoManual?: string; 
+  codigoManual?: string;
 };
 
 // Criar uma nova cotação
@@ -70,8 +70,8 @@ export async function criarCotacao(data: CotacaoFormData) {
           segmento: data.cliente.segmento,
           cnpj: data.cliente.cnpj,
           razaoSocial: data.cliente.razaoSocial || null,
-          whatsapp: data.cliente.whatsapp || null, 
-          recorrente: isRecorrente ? true : false, 
+          whatsapp: data.cliente.whatsapp || null,
+          recorrente: isRecorrente ? true : false,
           createdById: vendedorId,
         },
       });
@@ -80,9 +80,9 @@ export async function criarCotacao(data: CotacaoFormData) {
       if (isRecorrente && !cliente.recorrente) {
         await prisma.cliente.update({
           where: { id: cliente.id },
-          data: { 
+          data: {
             recorrente: true,
-            whatsapp: data.cliente.whatsapp || cliente.whatsapp, 
+            whatsapp: data.cliente.whatsapp || cliente.whatsapp,
           },
         });
       }
@@ -90,18 +90,17 @@ export async function criarCotacao(data: CotacaoFormData) {
 
     // Gerar código único para a cotação
     const codigoCotacao = data.codigoManual || `COT-${Date.now()}`;
-    
+
     // Verificar se o código já existe
     const cotacaoExistente = await prisma.cotacao.findFirst({
       where: {
-        codigoCotacao: codigoCotacao
-      }
+        codigoCotacao: codigoCotacao,
+      },
     });
 
     if (cotacaoExistente) {
-      return { error: 'Este código já está em uso. Por favor, escolha outro.' };
+      return { error: "Este código já está em uso. Por favor, escolha outro." };
     }
-
 
     // Criar cotação
     const cotacao = await prisma.cotacao.create({
@@ -188,7 +187,7 @@ export async function atualizarCotacao(id: string, data: CotacaoFormData) {
     }
 
     // Verificar se cliente já existe pelo CNPJ
-    let   cliente = await prisma.cliente.findFirst({
+    let cliente = await prisma.cliente.findFirst({
       where: {
         cnpj: data.cliente.cnpj,
       },
@@ -209,16 +208,21 @@ export async function atualizarCotacao(id: string, data: CotacaoFormData) {
         },
       });
     }
-    if (data.codigoManual && data.codigoManual !== cotacaoExistente.codigoCotacao) {
+    if (
+      data.codigoManual &&
+      data.codigoManual !== cotacaoExistente.codigoCotacao
+    ) {
       const codigoExistente = await prisma.cotacao.findFirst({
         where: {
           codigoCotacao: data.codigoManual,
-          id: { not: id }  // Excluir a cotação atual da verificação
-        }
+          id: { not: id }, // Excluir a cotação atual da verificação
+        },
       });
 
       if (codigoExistente) {
-        return { error: 'Este código já está em uso. Por favor, escolha outro.' };
+        return {
+          error: "Este código já está em uso. Por favor, escolha outro.",
+        };
       }
     }
     // Atualizar a cotação
@@ -329,7 +333,7 @@ export async function getCotacao(id: string) {
         cnpj: cotacao.cliente.cnpj,
         razaoSocial: cotacao.cliente.razaoSocial || "",
         whatsapp: cotacao.cliente.whatsapp || "",
-        recorrente: cotacao.cliente.recorrente || false, 
+        recorrente: cotacao.cliente.recorrente || false,
       },
       produtos: cotacao.produtos.map((prod) => ({
         id: prod.produtoId,
@@ -521,14 +525,14 @@ export async function finalizarCotacao(id: string, data: VendaFormData) {
     // Buscar a cotação para garantir que existe
     const cotacao = await prisma.cotacao.findUnique({
       where: { id },
-      include: { 
+      include: {
         cliente: true,
         produtos: {
           include: {
-            produto: true
-          }
-        }
-      }
+            produto: true,
+          },
+        },
+      },
     });
 
     if (!cotacao) {
@@ -544,7 +548,7 @@ export async function finalizarCotacao(id: string, data: VendaFormData) {
 
     // Se sucesso, excluir a cotação original
     await prisma.cotacao.delete({
-      where: { id }
+      where: { id },
     });
 
     revalidatePath("/vendas");
@@ -566,14 +570,14 @@ export async function cancelarCotacao(id: string, data: NaoVendaFormData) {
     // Buscar a cotação para garantir que existe
     const cotacao = await prisma.cotacao.findUnique({
       where: { id },
-      include: { 
+      include: {
         cliente: true,
         produtos: {
           include: {
-            produto: true
-          }
-        }
-      }
+            produto: true,
+          },
+        },
+      },
     });
 
     if (!cotacao) {
@@ -589,7 +593,7 @@ export async function cancelarCotacao(id: string, data: NaoVendaFormData) {
 
     // Se sucesso, excluir a cotação original
     await prisma.cotacao.delete({
-      where: { id }
+      where: { id },
     });
 
     revalidatePath("/vendas");
@@ -601,135 +605,254 @@ export async function cancelarCotacao(id: string, data: NaoVendaFormData) {
 }
 
 export async function excluirCotacao(id: string) {
-    try {
-      if (!id) {
-        return { success: false, error: "ID da cotação não fornecido" };
-      }
-  
-      // Excluir a cotação diretamente do banco de dados
-      await prisma.cotacao.delete({
-        where: { id },
-      });
-  
-      // Revalidar o caminho para atualizar os dados
-      revalidatePath("/cotacoes");
-      revalidatePath("/dashboard");
-  
-      return { success: true };
-    } catch (error) {
-      console.error("Erro ao excluir cotação:", error);
-      return { 
-        success: false, 
-        error: "Ocorreu um erro ao excluir a cotação" 
-      };
+  try {
+    if (!id) {
+      return { success: false, error: "ID da cotação não fornecido" };
     }
-  }
 
-  export async function converterCotacao(
-    id: string,
-    novoStatus: StatusCotacao,
-    data: VendaFormData | NaoVendaFormData
-  ): Promise<{ success?: boolean; error?: string; id?: string }> {
-    try {
-      const session = await auth();
-      if (!session || !session.user) {
-        return { error: "Não autorizado" };
-      }
-  
-      // Primeiro, buscar a cotação para garantir que existe
-      const cotacaoExistente = await prisma.cotacao.findUnique({
+    // Excluir a cotação diretamente do banco de dados
+    await prisma.cotacao.delete({
+      where: { id },
+    });
+
+    // Revalidar o caminho para atualizar os dados
+    revalidatePath("/cotacoes");
+    revalidatePath("/dashboard");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao excluir cotação:", error);
+    return {
+      success: false,
+      error: "Ocorreu um erro ao excluir a cotação",
+    };
+  }
+}
+
+export async function converterCotacao(
+  id: string,
+  novoStatus: StatusCotacao,
+  data: VendaFormData | NaoVendaFormData
+): Promise<{ success?: boolean; error?: string; id?: string }> {
+  try {
+    console.log(`Iniciando conversão de cotação ID:${id} para status:${novoStatus}`);
+    
+    const session = await auth();
+    if (!session || !session.user) {
+      return { error: "Não autorizado" };
+    }
+
+    // Primeiro, buscar a cotação para garantir que existe
+    const cotacaoExistente = await prisma.cotacao.findUnique({
+      where: { id },
+      include: {
+        cliente: true,
+        produtos: {
+          include: {
+            produto: true,
+          },
+        },
+      },
+    });
+    
+    console.log(`Resultado da busca por cotação: ${cotacaoExistente ? 'Encontrada' : 'Não encontrada'}`);
+
+    // Verificar se é uma não-venda
+    if (!cotacaoExistente) {
+      const naoVendaExistente = await prisma.naoVenda.findUnique({
         where: { id },
         include: {
           cliente: true,
           produtos: {
             include: {
-              produto: true
-            }
-          }
-        }
+              produto: true,
+            },
+          },
+        },
       });
-  
-      // Verificar se é uma não-venda
-      if (!cotacaoExistente) {
-        const naoVendaExistente = await prisma.naoVenda.findUnique({
+      
+      console.log(`Resultado da busca por não-venda: ${naoVendaExistente ? 'Encontrada' : 'Não encontrada'}`);
+
+      if (!naoVendaExistente) {
+        // Tentar buscar como venda
+        const vendaExistente = await prisma.venda.findUnique({
           where: { id },
           include: {
             cliente: true,
             produtos: {
               include: {
-                produto: true
-              }
-            }
-          }
+                produto: true,
+              },
+            },
+          },
         });
-  
-        if (!naoVendaExistente) {
-          // Tentar buscar como venda
-          const vendaExistente = await prisma.venda.findUnique({
-            where: { id },
-            include: {
-              cliente: true,
-              produtos: {
-                include: {
-                  produto: true
+        
+        console.log(`Resultado da busca por venda: ${vendaExistente ? 'Encontrada' : 'Não encontrada'}`);
+
+        if (!vendaExistente) {
+          return { error: "Cotação não encontrada" };
+        }
+
+        // É uma venda que será convertida
+        if (novoStatus === "cancelada") {
+          console.log("Convertendo venda para não-venda (cotação cancelada) - MÉTODO DIRETO");
+          
+          // NOVA ABORDAGEM: Conversão direta no banco de dados
+          try {
+            const vendaData = data as VendaFormData;
+            
+            // Criar a não-venda diretamente usando Prisma
+            const naoVenda = await prisma.naoVenda.create({
+              data: {
+                codigoVenda: vendaExistente.codigoVenda,
+                valorTotal: vendaData.valorTotal,
+                condicaoPagamento: vendaData.condicaoPagamento,
+                objecaoGeral: "Convertido de venda finalizada",
+                clienteId: vendaExistente.clienteId,
+                vendedorId: session.user.id,
+                // Criar apenas o mínimo necessário de produtos
+                produtos: {
+                  create: vendaData.produtos.slice(0, 1).map(produto => ({
+                    quantidade: produto.quantidade,
+                    valor: produto.valor,
+                    medida: produto.medida,
+                    valorConcorrencia: 0,
+                    nomeConcorrencia: "Não disponível",
+                    infoNaoDisponivel: true,
+                    produto: {
+                      connect: {
+                        id: produto.id
+                      }
+                    }
+                  }))
                 }
               }
-            }
-          });
-  
-          if (!vendaExistente) {
-            return { error: "Cotação não encontrada" };
-          }
-  
-          // É uma venda que será convertida
-          if (novoStatus === "cancelada") {
-            // Converter venda para não-venda
-            const result = await criarNaoVenda(data as NaoVendaFormData);
+            });
             
-            if (result.success) {
-              // Excluir a venda original após criar a não-venda
-              await prisma.venda.delete({
-                where: { id }
+            console.log(`Não-venda criada com sucesso via método direto, ID: ${naoVenda.id}`);
+            
+            // Se criou com sucesso, excluir a venda original
+            await prisma.venda.delete({
+              where: { id }
+            });
+            
+            console.log("Venda original excluída com sucesso");
+            
+            // Adicionar o restante dos produtos em uma segunda operação se necessário
+            if (vendaData.produtos.length > 1) {
+              const produtosAdicionais = vendaData.produtos.slice(1).map(produto => ({
+                quantidade: produto.quantidade,
+                valor: produto.valor,
+                medida: produto.medida,
+                valorConcorrencia: 0,
+                nomeConcorrencia: "Não disponível",
+                infoNaoDisponivel: true,
+                naoVendaId: naoVenda.id,
+                produtoId: produto.id || ""
+              }));
+              
+              if (produtosAdicionais.length > 0) {
+                await prisma.naoVendaProduto.createMany({
+                  data: produtosAdicionais
+                });
+                console.log(`${produtosAdicionais.length} produtos adicionais incluídos na não-venda`);
+              }
+            }
+            
+            return { success: true, id: naoVenda.id };
+          } catch (directError) {
+            console.error("ERRO NO MÉTODO DIRETO:", directError);
+            
+            // Se falhou com o método direto, tentar método alternativo
+            try {
+              // Método alternativo: usar transação para garantir atomicidade
+              const resultado = await prisma.$transaction(async (tx) => {
+                // 1. Criar uma não-venda mínima
+                const novaNaoVenda = await tx.naoVenda.create({
+                  data: {
+                    codigoVenda: vendaExistente.codigoVenda,
+                    valorTotal: vendaExistente.valorTotal,
+                    condicaoPagamento: vendaExistente.condicaoPagamento,
+                    objecaoGeral: "Convertido via método alternativo",
+                    clienteId: vendaExistente.clienteId,
+                    vendedorId: vendaExistente.vendedorId
+                  }
+                });
+                
+                // 2. Excluir a venda original
+                await tx.venda.delete({
+                  where: { id }
+                });
+                
+                return novaNaoVenda;
               });
+              
+              console.log(`Não-venda criada com método alternativo, ID: ${resultado.id}`);
+              return { success: true, id: resultado.id };
+            } catch (alternativeError) {
+              console.error("ERRO NO MÉTODO ALTERNATIVO:", alternativeError);
+              return { error: "Falha em todos os métodos de conversão. Tente novamente." };
             }
-            
-            return result;
-          } else {
-            // Atualizar venda existente
-            return await atualizarVenda(id, data as VendaFormData);
           }
         } else {
-          // É uma não-venda que será convertida
-          if (novoStatus === "finalizada") {
-            // Converter não-venda para venda
-            const result = await criarVenda(data as VendaFormData);
-            
-            if (result.success) {
-              // Excluir a não-venda original após criar a venda
-              await prisma.naoVenda.delete({
-                where: { id }
-              });
-            }
-            
-            return result;
-          } else {
-            // Atualizar não-venda existente
-            return await atualizarNaoVenda(id, data as NaoVendaFormData);
-          }
+          // Atualizar venda existente
+          console.log("Atualizando venda existente");
+          return await atualizarVenda(id, data as VendaFormData);
         }
       } else {
-        // É uma cotação pendente que será convertida
+        // É uma não-venda que será convertida
         if (novoStatus === "finalizada") {
-          return await finalizarCotacao(id, data as VendaFormData);
-        } else if (novoStatus === "cancelada") {
-          return await cancelarCotacao(id, data as NaoVendaFormData);
+          console.log("Convertendo não-venda para venda (cotação finalizada)");
+          
+          // Obter o código da não-venda para preservá-lo
+          const codigoNaoVendaOriginal = naoVendaExistente.codigoVenda;
+          
+          // Adicionar o código manual aos dados da venda
+          const vendaData = data as VendaFormData;
+          vendaData.codigoManual = codigoNaoVendaOriginal;
+          
+          // Converter não-venda para venda
+          const result = await criarVenda(vendaData);
+
+          if (result.success) {
+            console.log(`Venda criada com sucesso, ID: ${result.id}`);
+            // Excluir a não-venda original após criar a venda
+            await prisma.naoVenda.delete({
+              where: { id },
+            });
+            console.log("Não-venda original excluída com sucesso");
+          } else {
+            console.error("Erro ao criar venda:", result.error);
+          }
+
+          return result;
         } else {
-          // Manter como cotação pendente, apenas atualizar
-          return await atualizarCotacao(id, data as CotacaoFormData);
+          // Atualizar não-venda existente
+          console.log("Atualizando não-venda existente");
+          return await atualizarNaoVenda(id, data as NaoVendaFormData);
         }
       }
-    } catch (error) {
-      console.error("Erro ao converter cotação:", error);
-      return { error: "Ocorreu um erro ao converter a cotação. Por favor, tente novamente." };
+    } else {
+      // É uma cotação pendente que será convertida
+      console.log("Convertendo cotação pendente");
+      
+      if (novoStatus === "finalizada") {
+        console.log("Para cotação finalizada (venda)");
+        return await finalizarCotacao(id, data as VendaFormData);
+      } else if (novoStatus === "cancelada") {
+        console.log("Para cotação cancelada (não-venda)");
+        return await cancelarCotacao(id, data as NaoVendaFormData);
+      } else {
+        // Manter como cotação pendente, apenas atualizar
+        console.log("Mantendo como cotação pendente (atualização)");
+        return await atualizarCotacao(id, data as CotacaoFormData);
+      }
     }
+  } catch (error) {
+    console.error("Erro ao converter cotação:", error);
+    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+    return {
+      error: `Ocorreu um erro ao converter a cotação: ${errorMessage}. Por favor, tente novamente.`,
+    };
   }
+}

@@ -11,6 +11,28 @@ import { gerarCodigoVenda } from "@/lib/utils";
 import { FiltrosVenda } from "@/types/filtros";
 
 export async function criarNaoVenda(data: NaoVendaFormData) {
+  // Adicionar logs para diagnóstico
+  console.log("Iniciando criarNaoVenda com dados:", {
+    cliente: data.cliente ? { 
+      nome: data.cliente.nome,
+      cnpj: data.cliente.cnpj 
+    } : 'Cliente não definido',
+    produtosCount: data.produtosConcorrencia?.length || 0,
+    codigoManual: data.codigoManual || 'não definido',
+    objecaoGeral: data.objecaoGeral || 'não definida',
+  });
+
+  // Verificar valores ausentes que podem causar problemas
+  if (!data.cliente || !data.cliente.cnpj) {
+    console.error("ERRO: Cliente ou CNPJ ausente!");
+    return { error: "Dados do cliente incompletos" };
+  }
+  
+  if (!data.produtosConcorrencia || data.produtosConcorrencia.length === 0) {
+    console.error("ERRO: Nenhum produto de concorrência fornecido!");
+    return { error: "É necessário pelo menos um produto" };
+  }
+
   // Validar autenticação
   const session = await auth();
 
@@ -22,12 +44,14 @@ export async function criarNaoVenda(data: NaoVendaFormData) {
   const validatedFields = naoVendaSchema.safeParse(data);
 
   if (!validatedFields.success) {
+    console.error("Falha na validação:", validatedFields.error);
     return { error: "Dados inválidos. Verifique os campos obrigatórios." };
   }
 
   try {
-    // Gerar código de venda único (6 dígitos)
-    const codigoVenda = gerarCodigoVenda();
+    // Gerar código de venda único (6 dígitos) ou usar o fornecido
+    const codigoVenda = data.codigoManual || gerarCodigoVenda();
+    console.log(`Usando código de venda: ${codigoVenda}`);
 
     // Verificar se o cliente já existe
     let cliente = await prisma.cliente.findFirst({
@@ -38,6 +62,7 @@ export async function criarNaoVenda(data: NaoVendaFormData) {
 
     // Se não existir, criar novo cliente
     if (!cliente) {
+      console.log(`Cliente com CNPJ ${data.cliente.cnpj} não encontrado. Criando novo cliente.`);
       cliente = await prisma.cliente.create({
         data: {
           nome: data.cliente.nome,
@@ -48,20 +73,30 @@ export async function criarNaoVenda(data: NaoVendaFormData) {
           whatsapp: data.cliente.whatsapp,
         },
       });
+    } else {
+      console.log(`Cliente encontrado: ${cliente.nome} (ID: ${cliente.id})`);
     }
 
-    // Criar não venda
+    // Criar a não-venda (cotação cancelada)
+    console.log(`Criando não-venda com ${data.produtosConcorrencia.length} produtos`);
     const naoVenda = await prisma.naoVenda.create({
       data: {
         codigoVenda,
         valorTotal: data.valorTotal,
         condicaoPagamento: data.condicaoPagamento,
-        objecaoGeral: data.objecaoGeral,
+        objecaoGeral: data.objecaoGeral || "",
         clienteId: cliente.id,
         vendedorId: session.user.id,
         produtos: {
           create: data.produtosConcorrencia.map((produtoConcorrencia) => {
             const produto = produtoConcorrencia.produtoGarden;
+            
+            // Verificar se temos ID válido
+            const produtoId = produto.id && produto.id.trim() !== "" 
+              ? produto.id 
+              : `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+            
+            console.log(`Processando produto: ${produto.nome} (ID: ${produtoId})`);
 
             return {
               quantidade: produto.quantidade,
@@ -84,7 +119,7 @@ export async function criarNaoVenda(data: NaoVendaFormData) {
               infoNaoDisponivel: produtoConcorrencia.infoNaoDisponivel || false,
               produto: {
                 connectOrCreate: {
-                  where: { id: produto.id || "" },
+                  where: { id: produtoId },
                   create: {
                     nome: produto.nome,
                     medida: produto.medida,
@@ -103,11 +138,13 @@ export async function criarNaoVenda(data: NaoVendaFormData) {
       },
     });
 
+    console.log(`Não-venda criada com sucesso. ID: ${naoVenda.id}`);
     revalidatePath("/dashboard/vendas");
     return { success: true, id: naoVenda.id };
   } catch (error) {
     console.error("Erro ao criar Cotação Cancelada:", error);
-    return { error: "Ocorreu um erro ao salvar a Cotação Cancelada" };
+    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: `Ocorreu um erro ao salvar a Cotação Cancelada: ${errorMessage}` };
   }
 }
 
