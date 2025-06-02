@@ -29,11 +29,14 @@ model User {
   clientesCreated      Cliente[]             @relation("ClienteCreatedBy")
   clientesEdited       Cliente[]             @relation("ClienteEditedBy")
   condicoesCreated     CondicaoPagamento[]
+  cotacoesEditadas     Cotacao[]             @relation("CotacaoEditedBy")
+  cotacoes             Cotacao[]
   medidasCreated       Medida[]
   naoVendasEditadas    NaoVenda[]            @relation("NaoVendaEditedBy")
   naoVendas            NaoVenda[]
   produtosCreated      Produto[]
   recorrenciasCreated  Recorrencia[]
+  Remarketing          Remarketing[]
   segmentosCreated     Segmento[]
   createdBy            User?                 @relation("UserCreatedBy", fields: [createdById], references: [id])
   createdByMe          User[]                @relation("UserCreatedBy")
@@ -41,8 +44,6 @@ model User {
   editedByMe           User[]                @relation("UserEditedBy")
   vendasEditadas       Venda[]               @relation("VendaEditedBy")
   vendas               Venda[]
-  cotacoesEditadas     Cotacao[]             @relation("CotacaoEditedBy")
-  cotacoes             Cotacao[]
 }
 
 model PasswordReset {
@@ -54,22 +55,27 @@ model PasswordReset {
 }
 
 model Cliente {
-  id          String     @id @default(uuid())
-  nome        String
-  segmento    String
-  cnpj        String
-  razaoSocial String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  createdById String
-  editedById  String?
-  createdBy   User       @relation("ClienteCreatedBy", fields: [createdById], references: [id])
-  editedBy    User?      @relation("ClienteEditedBy", fields: [editedById], references: [id])
-  naoVendas   NaoVenda[]
-  vendas      Venda[]
-  whatsapp    String?
-  recorrente  Boolean    @default(false)  
-  Cotacao     Cotacao[]
+  id                 String               @id @default(uuid())
+  nome               String
+  segmento           String
+  cnpj               String
+  razaoSocial        String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  createdById        String
+  editedById         String?
+  whatsapp           String?
+  recorrente         Boolean              @default(false)
+  email              String?
+  origem             String               @default("sistema")
+  user_ns            String?              @unique
+  createdBy          User                 @relation("ClienteCreatedBy", fields: [createdById], references: [id])
+  editedBy           User?                @relation("ClienteEditedBy", fields: [editedById], references: [id])
+  Cotacao            Cotacao[]
+  EtiquetaCliente    EtiquetaCliente[]
+  naoVendas          NaoVenda[]
+  RemarketingCliente RemarketingCliente[]
+  vendas             Venda[]
 }
 
 model Produto {
@@ -85,11 +91,10 @@ model Produto {
   icms             Float?            @default(0)
   ipi              Float?            @default(0)
   recorrente       Boolean           @default(false)
+  CotacaoProduto   CotacaoProduto[]
   naoVendaProdutos NaoVendaProduto[]
   createdBy        User              @relation(fields: [createdById], references: [id])
   vendaProdutos    VendaProduto[]
-
-  CotacaoProduto CotacaoProduto[]
 }
 
 model VendaProduto {
@@ -256,11 +261,6 @@ model CatalogoObjecao {
   createdBy   User     @relation(fields: [createdById], references: [id])
 }
 
-enum Role {
-  ADMIN
-  VENDEDOR
-}
-
 model Cotacao {
   id                String           @id @default(uuid())
   codigoCotacao     String           @unique
@@ -293,8 +293,48 @@ model CotacaoProduto {
   comissao   Float?  @default(0)
   icms       Float?  @default(0)
   ipi        Float?  @default(0)
-  produto    Produto @relation(fields: [produtoId], references: [id])
+  objecao    String?
   cotacao    Cotacao @relation(fields: [cotacaoId], references: [id], onDelete: Cascade)
+  produto    Produto @relation(fields: [produtoId], references: [id])
 
   @@index([cotacaoId])
+}
+
+model EtiquetaCliente {
+  id        String   @id
+  nome      String
+  clienteId String
+  createdAt DateTime @default(now())
+  Cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@unique([nome, clienteId])
+}
+
+model Remarketing {
+  id                 String               @id
+  nome               String
+  dataAgendada       DateTime
+  status             String               @default("agendado")
+  subFlowNs          String               @default("f153643s1950233")
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime
+  vendedorId         String
+  User               User                 @relation(fields: [vendedorId], references: [id])
+  RemarketingCliente RemarketingCliente[]
+}
+
+model RemarketingCliente {
+  id            String      @id
+  remarketingId String
+  clienteId     String
+  createdAt     DateTime    @default(now())
+  Cliente       Cliente     @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  Remarketing   Remarketing @relation(fields: [remarketingId], references: [id], onDelete: Cascade)
+
+  @@unique([remarketingId, clienteId])
+}
+
+enum Role {
+  ADMIN
+  VENDEDOR
 }

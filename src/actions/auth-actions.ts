@@ -133,20 +133,43 @@ export async function requestPasswordReset(email: string, cpf: string): Promise<
     
     // Criar conteúdo do email
     const emailHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 5px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <img src="${process.env.NEXT_PUBLIC_APP_URL}/logo-garden.png" alt="Garden Química" style="max-width: 150px;">
-        </div>
-        <h2 style="color: #00446A; text-align: center;">Redefinição de Senha</h2>
-        <p>Olá,</p>
-        <p>Recebemos uma solicitação para redefinir sua senha.</p>
-        <p>Seu código de verificação é:</p>
-        <div style="background-color: #f5f5f5; padding: 10px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;">
-          ${token}
-        </div>
-        <p>Este código é válido por 1 hora. Se você não solicitou esta redefinição, por favor ignore este email.</p>
-        <p>Atenciosamente,<br>Equipe Garden Química</p>
-      </div>
+    <div style="font-family: 'Poppins', Arial, sans-serif; max-width: 550px; margin: 20px auto; padding: 30px; border-radius: 20px; background-color: #F8FAFC; box-shadow: 0 10px 30px rgba(0, 68, 106, 0.1), 0 4px 15px rgba(0, 68, 106, 0.08); border: 1px solid #E7EFF3;">
+  
+    <div style="text-align: center; margin-bottom: 30px;">
+      <img src="https://garden.talkbi.net/logo-garden.png" alt="Garden Química" style="max-width: 170px; filter: drop-shadow(0 3px 5px rgba(0,0,0,0.08));">
+    </div>
+  
+    <h2 style="color: #00446A; text-align: center; font-size: 26px; font-weight: 600; margin-top: 0; margin-bottom: 20px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
+      Redefinição de Senha
+    </h2>
+  
+    <p style="color: #3D4F60; font-size: 16px; line-height: 1.7; margin-bottom: 15px;">
+      Olá,
+    </p>
+    <p style="color: #3D4F60; font-size: 16px; line-height: 1.7; margin-bottom: 10px;">
+      Recebemos uma solicitação para redefinir a senha da sua conta.
+    </p>
+    <p style="color: #3D4F60; font-size: 16px; line-height: 1.7; margin-bottom: 25px;">
+      Utilize o código de verificação abaixo para prosseguir:
+    </p>
+  
+    <div style="background: linear-gradient(135deg, #0062A3 0%, #00447A 100%); padding: 20px 25px; text-align: center; font-size: 30px; font-weight: 700; letter-spacing: 7px; margin: 30px 0; border-radius: 15px; color: #FFFFFF; box-shadow: 0 8px 18px rgba(0, 68, 106, 0.3), inset 0 1px 2px rgba(255,255,255,0.2); text-shadow: 0 1px 2px rgba(0,0,0,0.2);">
+      ${token}
+    </div>
+  
+    <p style="color: #506070; font-size: 15px; line-height: 1.6; margin-bottom: 10px; text-align: center;">
+      Este código é válido por <strong>1 hora</strong>.
+    </p>
+    <p style="color: #506070; font-size: 15px; line-height: 1.6; margin-bottom: 25px; text-align: center;">
+      Se você não solicitou esta redefinição, por favor, ignore este email com segurança. Nenhuma alteração será feita em sua conta.
+    </p>
+  
+    <p style="color: #607080; font-size: 14px; line-height: 1.6; text-align: center; margin-top: 30px; border-top: 1px solid #E7EFF3; padding-top: 20px;">
+      Atenciosamente,<br>
+      <strong style="color: #00446A;">Equipe Garden Química</strong>
+    </p>
+    
+  </div>
     `;
 
     // Enviar email com o token

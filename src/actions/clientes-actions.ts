@@ -7,6 +7,8 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { differenceInDays } from 'date-fns'
 import { Cliente, ClienteParams, ClienteFiltros } from '@/types/cliente'
+import { sincronizarClienteTalkBI } from "@/actions/talkbi-actions";
+
 interface VendaPrisma {
   id: string;
   valorTotal: number;
@@ -59,6 +61,10 @@ interface ClientePrisma {
   vendas: VendaPrisma[];
   Cotacao: CotacaoPrisma[];
   naoVendas: NaoVendaPrisma[];
+  origem?: string;
+  user_ns?: string;
+  email?: string;
+
 }
 /**
  * Busca todos os clientes com opções de filtro
@@ -373,7 +379,10 @@ export async function getClientes(filtros?: ClienteFiltros) {
         freqCompra,
         maiorValor,
         diasDesdeUltimaCompra: diasDesdeUltimaInteracao,
-        score
+        score,
+        origem: cliente.origem || "sistema", 
+        user_ns: cliente.user_ns, 
+        email: cliente.email  
       };
       
       return clienteFormatado;
@@ -461,6 +470,9 @@ export async function getClienteById(id: string) {
         cnpj: true,
         razaoSocial: true,
         createdAt: true,
+        origem: true,
+        user_ns: true,
+        email: true,
         vendas: {
           select: {
             id: true,
@@ -489,7 +501,7 @@ export async function getClienteById(id: string) {
             vendaRecorrente: true,
             status: true,
             produtos: {
-              select: {
+              select:{
                 produto: {
                   select: {
                     id: true,
@@ -701,7 +713,10 @@ export async function getClienteById(id: string) {
       freqCompra,
       maiorValor,
       diasDesdeUltimaCompra: diasDesdeUltimaInteracao, 
-      score
+      score,
+      origem: cliente.origem || "sistema", 
+      user_ns: cliente.user_ns || undefined, 
+      email: cliente.email || undefined  
     };
 
     // Revalidar para garantir dados atualizados
@@ -1055,8 +1070,13 @@ export async function criarCliente(data: ClienteParams) {
         razaoSocial: data.razaoSocial || null,
         createdById: session.user.id,
         whatsapp: data.whatsapp || null,
+        email: data.email || null,
+        origem: data.origem || 'sistema'
       }
     });
+
+    // Sincronizar com TalkBI
+    await sincronizarClienteTalkBI(cliente.id);
 
     // Revalidar para garantir que a UI mostre os dados atualizados
     revalidatePath('/clientes');
@@ -1114,9 +1134,14 @@ export async function atualizarCliente(id: string, data: ClienteParams) {
         cnpj: data.cnpj,
         razaoSocial: data.razaoSocial || null,
         editedById: session.user.id,
-        whatsapp: data.whatsapp || null, 
+        whatsapp: data.whatsapp || null,
+        email: data.email || null,
+        // Não atualizamos a origem para preservar
       }
     });
+
+    // Sincronizar com TalkBI (mesmo se a origem for "sistema")
+    await sincronizarClienteTalkBI(cliente.id);
 
     // Revalidar para garantir que a UI mostre os dados atualizados
     revalidatePath('/clientes');

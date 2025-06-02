@@ -2,7 +2,9 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { ProdutoConcorrenciaTemp, Produto } from "@/types/venda-tipos";
-
+import { prisma } from "@/lib/supabase/prisma";
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -116,3 +118,102 @@ export const aplicarMascaraTelefone = (valor: string): string => {
     return apenasNumeros.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').slice(0, 16);
   }
 };
+
+export async function gerarEtiquetasParaCliente(clienteId: string, cotacaoId: string) {
+  try {
+    // Buscar produtos da cotação
+    const cotacao = await prisma.cotacao.findUnique({
+      where: { id: cotacaoId },
+      include: {
+        produtos: {
+          include: {
+            produto: true
+          }
+        }
+      }
+    });
+
+    if (!cotacao) {
+      // Tentar buscar como venda
+      const venda = await prisma.venda.findUnique({
+        where: { id: cotacaoId },
+        include: {
+          produtos: {
+            include: {
+              produto: true
+            }
+          }
+        }
+      });
+
+      if (!venda) {
+        return { error: "Cotação ou venda não encontrada" };
+      }
+
+      // Gerar etiquetas a partir dos produtos da venda
+      const etiquetas = venda.produtos.map(produto => ({
+        nome: produto.produto.nome.replace(/\s+/g, '_').toLowerCase(),
+        clienteId
+      }));
+
+      // Remover etiquetas duplicadas
+      const etiquetasUnicas = etiquetas.filter((etiqueta, index, self) => 
+        self.findIndex(e => e.nome === etiqueta.nome) === index
+      );
+
+      // Criar etiquetas no banco
+      const promises = etiquetasUnicas.map(etiqueta => 
+        prisma.etiquetaCliente.upsert({
+          where: {
+            nome_clienteId: {
+              nome: etiqueta.nome,
+              clienteId: etiqueta.clienteId
+            }
+          },
+          update: {},
+          create: etiqueta
+        })
+      );
+
+      await Promise.all(promises);
+      return { success: true, etiquetas: etiquetasUnicas };
+    }
+
+    // Gerar etiquetas a partir dos produtos da cotação
+    const etiquetas = cotacao.produtos.map(produto => ({
+      nome: produto.produto.nome.replace(/\s+/g, '_').toLowerCase(),
+      clienteId
+    }));
+
+    // Remover etiquetas duplicadas
+    const etiquetasUnicas = etiquetas.filter((etiqueta, index, self) => 
+      self.findIndex(e => e.nome === etiqueta.nome) === index
+    );
+
+    // Criar etiquetas no banco
+    const promises = etiquetasUnicas.map(etiqueta => 
+      prisma.etiquetaCliente.upsert({
+        where: {
+          nome_clienteId: {
+            nome: etiqueta.nome,
+            clienteId: etiqueta.clienteId
+          }
+        },
+        update: {},
+        create: etiqueta
+      })
+    );
+
+    await Promise.all(promises);
+
+    return { success: true, etiquetas: etiquetasUnicas };
+  } catch (error) {
+    console.error("Erro ao gerar etiquetas para cliente:", error);
+    return { error: "Ocorreu um erro ao gerar as etiquetas" };
+  }
+}
+
+export function formatarDataHoraBR(data: Date | string): string {
+  const dataObj = typeof data === 'string' ? new Date(data) : data;
+  return format(dataObj, "dd/MM/yyyy HH:mm", { locale: ptBR });
+}

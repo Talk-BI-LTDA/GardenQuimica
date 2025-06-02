@@ -17,6 +17,11 @@ export interface Cliente {
   maiorValor: number;
   diasDesdeUltimaCompra: number;
   score: number;
+whatsapp?: string;
+  origem: string;
+  user_ns?: string;
+  email?: string;
+  etiquetas?: { id: string; nome: string }[];
 }
 
 // Tipo para representar filtros de clientes
@@ -42,6 +47,9 @@ export interface ClienteParams {
   segmento: string;
   cnpj: string;
   razaoSocial?: string;
+  email?: string;
+  origem?: string;
+  user_ns?: string;
 }
 
 // Tipo para representar estatísticas gerais de clientes

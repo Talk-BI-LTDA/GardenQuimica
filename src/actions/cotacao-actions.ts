@@ -10,6 +10,7 @@ import { criarVenda, atualizarVenda } from "@/actions/venda-actions";
 import { criarNaoVenda, atualizarNaoVenda } from "@/actions/nao-venda-actions";
 import { FiltrosCotacao } from "@/types/filtros";
 import { Prisma } from "@prisma/client";
+import { gerarEtiquetasParaCliente } from "@/lib/utils";
 
 // Define o tipo StatusCotacao se não existir
 export type StatusCotacao = "pendente" | "finalizada" | "cancelada";
@@ -73,6 +74,7 @@ export async function criarCotacao(data: CotacaoFormData) {
           whatsapp: data.cliente.whatsapp || null,
           recorrente: isRecorrente ? true : false,
           createdById: vendedorId,
+          origem: "sistema", // Origem padrão - sistema
         },
       });
     } else {
@@ -158,11 +160,77 @@ export async function criarCotacao(data: CotacaoFormData) {
       }
     }
 
+    // Gerar etiquetas para o cliente com base nos produtos da cotação
+    await gerarEtiquetasParaCliente(cliente.id, cotacao.id);
+
+    // Sincronizar com TalkBI se o cliente tiver whatsapp
+    if (cliente.whatsapp) {
+      const { sincronizarClienteTalkBI } = await import('@/actions/talkbi-actions');
+      await sincronizarClienteTalkBI(cliente.id);
+    }
+
     revalidatePath("/cotacoes");
     return { success: true, id: cotacao.id };
   } catch (error) {
     console.error("Erro ao criar cotação:", error);
     return { error: "Erro ao criar cotação. Por favor, tente novamente." };
+  }
+}
+
+// Modificar a função finalizarCotacao para gerar etiquetas
+export async function finalizarCotacao(id: string, data: VendaFormData) {
+  try {
+    const session = await auth();
+    if (!session || !session.user) {
+      return { error: "Não autorizado" };
+    }
+
+    // Buscar a cotação para garantir que existe
+    const cotacao = await prisma.cotacao.findUnique({
+      where: { id },
+      include: {
+        cliente: true,
+        produtos: {
+          include: {
+            produto: true,
+          },
+        },
+      },
+    });
+
+    if (!cotacao) {
+      return { error: "Cotação não encontrada" };
+    }
+
+    // Criar a venda usando a função existente
+    const result = await criarVenda(data);
+
+    if (result.error) {
+      return { error: result.error };
+    }
+
+    // Gerar etiquetas para o cliente com base nos produtos da venda
+    if (result.id) {
+      // Gerar etiquetas para o cliente (a venda acabou de ser criada)
+      await gerarEtiquetasParaCliente(cotacao.cliente.id, result.id);
+      
+      // Sincronizar com TalkBI se o cliente tiver whatsapp
+      if (cotacao.cliente.whatsapp) {
+        const { sincronizarClienteTalkBI } = await import('@/actions/talkbi-actions');
+        await sincronizarClienteTalkBI(cotacao.cliente.id);
+      }
+    }
+
+    // Se sucesso, excluir a cotação original
+    await prisma.cotacao.delete({
+      where: { id },
+    });
+
+    revalidatePath("/vendas");
+    return { success: true, id: result.id };
+  } catch (error) {
+    console.error("Erro ao finalizar cotação:", error);
+    return { error: "Erro ao finalizar cotação. Por favor, tente novamente." };
   }
 }
 
@@ -515,49 +583,49 @@ export async function getCotacoes(filtros?: FiltrosCotacao) {
 }
 
 // Finalizar cotação (transformar em venda)
-export async function finalizarCotacao(id: string, data: VendaFormData) {
-  try {
-    const session = await auth();
-    if (!session || !session.user) {
-      return { error: "Não autorizado" };
-    }
+// export async function finalizarCotacao(id: string, data: VendaFormData) {
+//   try {
+//     const session = await auth();
+//     if (!session || !session.user) {
+//       return { error: "Não autorizado" };
+//     }
 
-    // Buscar a cotação para garantir que existe
-    const cotacao = await prisma.cotacao.findUnique({
-      where: { id },
-      include: {
-        cliente: true,
-        produtos: {
-          include: {
-            produto: true,
-          },
-        },
-      },
-    });
+//     // Buscar a cotação para garantir que existe
+//     const cotacao = await prisma.cotacao.findUnique({
+//       where: { id },
+//       include: {
+//         cliente: true,
+//         produtos: {
+//           include: {
+//             produto: true,
+//           },
+//         },
+//       },
+//     });
 
-    if (!cotacao) {
-      return { error: "Cotação não encontrada" };
-    }
+//     if (!cotacao) {
+//       return { error: "Cotação não encontrada" };
+//     }
 
-    // Criar a venda usando a função existente
-    const result = await criarVenda(data);
+//     // Criar a venda usando a função existente
+//     const result = await criarVenda(data);
 
-    if (result.error) {
-      return { error: result.error };
-    }
+//     if (result.error) {
+//       return { error: result.error };
+//     }
 
-    // Se sucesso, excluir a cotação original
-    await prisma.cotacao.delete({
-      where: { id },
-    });
+//     // Se sucesso, excluir a cotação original
+//     await prisma.cotacao.delete({
+//       where: { id },
+//     });
 
-    revalidatePath("/vendas");
-    return { success: true, id: result.id };
-  } catch (error) {
-    console.error("Erro ao finalizar cotação:", error);
-    return { error: "Erro ao finalizar cotação. Por favor, tente novamente." };
-  }
-}
+//     revalidatePath("/vendas");
+//     return { success: true, id: result.id };
+//   } catch (error) {
+//     console.error("Erro ao finalizar cotação:", error);
+//     return { error: "Erro ao finalizar cotação. Por favor, tente novamente." };
+//   }
+// }
 
 // Cancelar cotação (transformar em não-venda)
 export async function cancelarCotacao(id: string, data: NaoVendaFormData) {
