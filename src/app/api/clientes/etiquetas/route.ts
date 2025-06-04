@@ -21,7 +21,7 @@ export async function GET() {
       select: {
         id: true,
         nome: true,
-        etiquetas: {
+        EtiquetaCliente: {
           select: {
             id: true,
             nome: true
@@ -29,7 +29,7 @@ export async function GET() {
         }
       },
       where: {
-        etiquetas: {
+        EtiquetaCliente: {
           some: {} // Apenas clientes que tenham alguma etiqueta
         }
       },
@@ -43,7 +43,7 @@ export async function GET() {
       const clienteExemplo = clientes[0];
       console.log(`Exemplo - Cliente: ${clienteExemplo.nome} (ID: ${clienteExemplo.id})`);
       console.log(`Etiquetas do cliente exemplo:`, 
-        clienteExemplo.etiquetas.map(e => `${e.nome} (${e.id})`));
+        clienteExemplo.EtiquetaCliente.map(e => `${e.nome} (${e.id})`));
     }
 
     return NextResponse.json({

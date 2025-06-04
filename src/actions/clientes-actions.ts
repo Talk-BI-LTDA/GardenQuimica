@@ -65,6 +65,7 @@ interface ClientePrisma {
   user_ns?: string;
   email?: string;
   EtiquetaCliente?: { id: string; nome: string }[];
+  whatsapp?: string | null;
 }
 /**
  * Busca todos os clientes com opções de filtro
@@ -173,6 +174,7 @@ export async function getClientes(filtros?: ClienteFiltros) {
           segmento: true,
           cnpj: true,
           razaoSocial: true,
+          whatsapp: true,
           createdAt: true,
           vendas: {
             select: {
@@ -391,8 +393,8 @@ export async function getClientes(filtros?: ClienteFiltros) {
         origem: cliente.origem || "sistema", 
         user_ns: cliente.user_ns, 
         email: cliente.email,
-        EtiquetaCliente: cliente.EtiquetaCliente || []
-        
+        EtiquetaCliente: cliente.EtiquetaCliente || [],
+        whatsapp: cliente.whatsapp || undefined,
         
       };
       
@@ -480,6 +482,7 @@ export async function getClienteById(id: string) {
         segmento: true,
         cnpj: true,
         razaoSocial: true,
+        whatsapp: true,
         createdAt: true,
         origem: true,
         user_ns: true,
