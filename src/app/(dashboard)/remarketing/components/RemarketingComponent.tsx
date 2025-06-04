@@ -1342,7 +1342,11 @@ if (etiquetasSelecionadasFiltro.length > 0) {
                                   {cliente.segmento}
                                 </Badge>
                               </TableCell>
-                              <TableCell>{cliente.whatsapp || "-"}</TableCell>
+                              <TableCell>
+  {cliente.whatsapp ? 
+    (cliente.whatsapp.trim() ? cliente.whatsapp : "-") : 
+    "-"}
+</TableCell>
                               <TableCell>
                                 {cliente.recorrente ? (
                                   <Badge className="bg-green-100 text-green-800">

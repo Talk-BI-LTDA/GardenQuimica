@@ -28,7 +28,6 @@ interface TimePickerDemoProps {
 export function TimePickerDemo({ date, setDate }: TimePickerDemoProps) {
   const minuteRef = React.useRef<HTMLButtonElement>(null);
   const hourRef = React.useRef<HTMLButtonElement>(null);
-  const secondRef = React.useRef<HTMLButtonElement>(null);
 
   // Inicializar estados internos baseados na prop date apenas uma vez
   const [hour, setHour] = React.useState(() => date.getHours().toString());
@@ -42,7 +41,6 @@ export function TimePickerDemo({ date, setDate }: TimePickerDemoProps) {
   const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0"));
 
   // Create an array of seconds (0-59)
-  const seconds = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0"));
 
   // Sincronizar apenas quando a prop date mudar externamente (sem incluir date nas dependências)
   const dateTimestamp = date.getTime();
@@ -51,7 +49,7 @@ export function TimePickerDemo({ date, setDate }: TimePickerDemoProps) {
     setHour(date.getHours().toString());
     setMinute(date.getMinutes().toString().padStart(2, "0"));
     setSecond(date.getSeconds().toString().padStart(2, "0"));
-  }, [dateTimestamp]); // Usar timestamp para evitar comparação de objetos
+  }, [date, dateTimestamp]); // Usar timestamp para evitar comparação de objetos
 
   // Atualizar date quando os valores internos mudarem
   React.useEffect(() => {
@@ -64,7 +62,7 @@ export function TimePickerDemo({ date, setDate }: TimePickerDemoProps) {
     if (newDate.getTime() !== date.getTime()) {
       setDate(newDate);
     }
-  }, [hour, minute, second, setDate]); // REMOVIDO 'date' das dependências
+  }, [date, hour, minute, second, setDate]); // REMOVIDO 'date' das dependências
 
   // Função para atualizar hora específica
   const updateTime = (hours: string, mins: string, secs: string) => {
