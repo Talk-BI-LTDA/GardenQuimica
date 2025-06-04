@@ -168,11 +168,13 @@ export function Sidebar({ usuario }: SidebarProps) {
           />
         )}
         {/* Vendas - Para ADMIN e VENDEDOR */}
+        {isAdmin && (
         <SidebarItem
           href="/remarketing"
           icon={<ShoppingCart className="w-5 h-5" />}
           label="Remarketing"
         />
+      )}
         {/* Estoque - Apenas para ADMIN */}
         {/* {isAdmin && (
           <SidebarItem
