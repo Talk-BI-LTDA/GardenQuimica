@@ -5,7 +5,7 @@ export async function GET() {
   try {
     const progresso = await obterProgressoImportacao();
     return NextResponse.json(progresso);
-  } catch (error) {
+  } catch  {
     return NextResponse.json({ 
       error: "Erro ao obter progresso",
       emProgresso: false,

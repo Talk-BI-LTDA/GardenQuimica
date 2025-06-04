@@ -1,0 +1,16 @@
+{
+  "coletadosAteAgora": 9752,
+  "totalAProcessar": 9752,
+  "processadosNoLoteAtual": 20,
+  "processadosTotalmente": 140,
+  "importadosNovos": 3,
+  "atualizadosExistentes": 137,
+  "falhasNoProcessamento": 0,
+  "emProgresso": true,
+  "mensagemStatus": "Processando lote 7 de 488. Processados: 120/9752 (1%)",
+  "isPaused": false,
+  "isCancelled": false,
+  "lastUpdatedTimestamp": 1748884703367,
+  "fase": "processamento",
+  "porcentagem": 1
+}

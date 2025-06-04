@@ -21,8 +21,13 @@ import {
   RefreshCcw,
   ChevronLeft,
   ChevronRight,
+  Upload,
+  Download,
+  Phone,
+  ExternalLink,
+  Settings,
 } from "lucide-react";
-
+import { getCatalogoItens } from "@/actions/catalogo-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -79,10 +84,58 @@ import {
   removerClienteRemarketing,
   atualizarDataRemarketing,
   buscarEImportarClientesTalkBI,
+  // exportarClientesTalkBI,
+  // atualizarPrefixoWhatsAppClientes
 } from "@/actions/talkbi-actions";
-
+import { ImportacaoProgressoDialog } from "@/components/ImportacaoProgressoDialog";
+import ExportarClientesTalkBI from "@/components/ExportarClientesTalkBI";
 import { Cliente } from "@/types/cliente";
 import { RemarketingDetalhes } from "@/types/cliente-talkbi";
+import EtiquetasFilter from "@/components/EtiquetasFilter";
+
+interface RemarketingListItem {
+  id: string;
+  nome: string;
+  dataAgendada: Date;
+  status: string;
+  totalClientes: number;
+  vendedorNome: string;
+}
+
+// Interfaces para os resultados de exportação
+interface ResultadoExportacao {
+  id: string;
+  nome: string;
+  sucesso: boolean;
+  user_ns?: string;
+  erro?: string;
+}
+
+interface ResultadoAtualizacaoPrefixo {
+  id: string;
+  nome: string;
+  whatsappAntigo: string;
+  whatsappNovo: string;
+  alterado: boolean;
+}
+
+interface ExportacaoResponse {
+  success: boolean;
+  error?: string;
+  total: number;
+  sucessos: number;
+  falhas: number;
+  resultados: ResultadoExportacao[];
+}
+
+interface AtualizacaoPrefixoResponse {
+  success: boolean;
+  error?: string;
+  total: number;
+  atualizados: number;
+  inalterados: number;
+  resultados: ResultadoAtualizacaoPrefixo[];
+}
 
 interface RemarketingComponentProps {
   session: {
@@ -93,42 +146,31 @@ interface RemarketingComponentProps {
   };
 }
 
-export default function RemarketingComponent({
-  session,
-}: RemarketingComponentProps) {
+export default function RemarketingComponent({}: RemarketingComponentProps) {
+
+  
   // Estados para dados
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clientesSelecionados, setClientesSelecionados] = useState<string[]>(
     []
   );
   const [remarketingAgendados, setRemarketingAgendados] = useState<
-    {
-      id: string;
-      nome: string;
-      dataAgendada: Date;
-      status: string;
-      totalClientes: number;
-      vendedorNome: string;
-    }[]
+    RemarketingListItem[]
   >([]);
-
   const [remarketingEnviados, setRemarketingEnviados] = useState<
-    {
-      id: string;
-      nome: string;
-      dataAgendada: Date;
-      status: string;
-      totalClientes: number;
-      vendedorNome: string;
-    }[]
+    RemarketingListItem[]
   >([]);
   const [remarketingDetalhes, setRemarketingDetalhes] =
     useState<RemarketingDetalhes | null>(null);
   const [selectAll, setSelectAll] = useState(false);
   const [paginaAtual, setPaginaAtual] = useState(1);
-  const [itensPorPagina, setItensPorPagina] = useState(20); // Reduzido para melhor usabilidade
+  const [itensPorPagina] = useState(20);
 
   // Estados para filtros e UI
+  const [, setEtiquetas] = useState<string[]>([]);
+  const [etiquetasSelecionadasFiltro, setEtiquetasSelecionadasFiltro] =
+    useState<string[]>([]);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [filtroSegmento, setFiltroSegmento] = useState<string | undefined>(
     undefined
@@ -137,7 +179,12 @@ export default function RemarketingComponent({
   const [tabAtiva, setTabAtiva] = useState("clientes");
   const [showRemarketingDialog, setShowRemarketingDialog] = useState(false);
   const [showDetalhesDialog, setShowDetalhesDialog] = useState(false);
-  const [showProgressoDialog, setShowProgressoDialog] = useState(false);
+  const [showExportarClientesDialog, setShowExportarClientesDialog] =
+    useState(false);
+
+  const [showProgressoImportacaoDialog, setShowProgressoImportacaoDialog] =
+    useState(false);
+  const [isInitiatingImport, setIsInitiatingImport] = useState(false);
 
   // Estados para criação de remarketing
   const [nomeRemarketing, setNomeRemarketing] = useState("");
@@ -161,33 +208,180 @@ export default function RemarketingComponent({
   >(new Date());
   const [showEditarDataDialog, setShowEditarDataDialog] = useState(false);
 
-  const importarClientesTalkBI = async () => {
-    // Mostrar toast e diálogo de progresso
-    toast.info("Iniciando importação de clientes da TalkBI...");
-    setShowProgressoDialog(true);
+  // Novos estados para exportação de clientes
+  const [isExporting, setIsExporting] = useState(false);
+  const [isUpdatingPrefixes, setIsUpdatingPrefixes] = useState(false);
+  const [showExportarDialog, setShowExportarDialog] = useState(false);
+  const [resultadoExportacao, setResultadoExportacao] = useState<{
+    total: number;
+    sucessos: number;
+    falhas: number;
+    resultados: ResultadoExportacao[];
+  } | null>(null);
+  const [resultadoAtualizacaoPrefixo, setResultadoAtualizacaoPrefixo] =
+    useState<{
+      total: number;
+      atualizados: number;
+      inalterados: number;
+      resultados: ResultadoAtualizacaoPrefixo[];
+    } | null>(null);
 
-    setLoading(true);
+  const abrirExportarClientesDialog = () => {
+    setShowExportarClientesDialog(true);
+  };
+
+  const handleImportarClientesTalkBI = async () => {
+    toast.info("Tentando iniciar importação...");
+    setIsInitiatingImport(true);
+    setShowProgressoImportacaoDialog(true);
+
     try {
-      const resultado = await buscarEImportarClientesTalkBI();
+      const resultadoInicial = await buscarEImportarClientesTalkBI();
 
-      if (resultado.success) {
-        toast.success(`${resultado.message}`, {
-          duration: 5000,
+      if (
+        resultadoInicial &&
+        resultadoInicial.success === false &&
+        resultadoInicial.error
+      ) {
+        toast.error(`Falha ao iniciar: ${resultadoInicial.error}`, {
+          duration: 6000,
         });
-        await carregarClientes(); // Recarregar a lista após importação
+        setShowProgressoImportacaoDialog(false);
+      } else if (
+        resultadoInicial &&
+        "alreadyRunning" in resultadoInicial &&
+        resultadoInicial.alreadyRunning
+      ) {
+        toast.dismiss();
+        toast.info(
+          resultadoInicial.message || "Importação já em execução ou pausada.",
+          { duration: 4000 }
+        );
+      } else if (
+        resultadoInicial &&
+        resultadoInicial.success === true &&
+        !(
+          "alreadyRunning" in resultadoInicial &&
+          resultadoInicial.alreadyRunning
+        )
+      ) {
+        toast.dismiss();
+      } else if (!resultadoInicial) {
+        toast.error("Resposta inesperada ao iniciar importação.", {
+          duration: 6000,
+        });
+        setShowProgressoImportacaoDialog(false);
+      }
+    } catch {
+      toast.error("Erro crítico ao iniciar importação.", { duration: 6000 });
+      setShowProgressoImportacaoDialog(false);
+    } finally {
+      setIsInitiatingImport(false);
+    }
+  };
+
+  // Nova função para exportar clientes para TalkBI
+  const handleExportarClientesTalkBI = async () => {
+    setIsExporting(true);
+    toast.info("Iniciando exportação para TalkBI...");
+
+    try {
+      const response = await fetch("/api/clientes/exportar-talkbi", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          acao: "exportar",
+          filtros: {
+            segmento: filtroSegmento,
+            clienteIds:
+              clientesSelecionados.length > 0
+                ? clientesSelecionados
+                : undefined,
+            recorrente: undefined,
+          },
+        }),
+      });
+
+      const data = (await response.json()) as ExportacaoResponse;
+
+      if (data.success) {
+        toast.success(
+          `Exportação concluída: ${data.sucessos} de ${data.total} clientes exportados com sucesso.`
+        );
+
+        console.log("Resultado da exportação:", data);
+
+        setResultadoExportacao({
+          total: data.total,
+          sucessos: data.sucessos,
+          falhas: data.falhas,
+          resultados: data.resultados,
+        });
+        setResultadoAtualizacaoPrefixo(null);
+
+        // Forçar renderização e garantir que o estado foi atualizado antes de abrir o diálogo
+        setTimeout(() => {
+          setShowExportarDialog(true);
+        }, 100);
+
+        await carregarClientes();
       } else {
-        toast.error(`Erro: ${resultado.error}`, {
-          duration: 5000,
-        });
-        console.error("Detalhes do erro:", resultado);
+        toast.error(data.error || "Erro ao exportar clientes para TalkBI");
       }
     } catch (error) {
-      console.error("Erro ao importar clientes da TalkBI:", error);
-      toast.error("Ocorreu um erro ao importar os clientes do TalkBI", {
-        duration: 5000,
-      });
+      console.error("Erro ao exportar clientes:", error);
+      toast.error("Ocorreu um erro ao exportar os clientes para TalkBI");
     } finally {
-      setLoading(false);
+      setIsExporting(false);
+    }
+  };
+
+  // Nova função para atualizar prefixos +55 dos números de WhatsApp
+  const handleAtualizarPrefixosWhatsApp = async () => {
+    setIsUpdatingPrefixes(true);
+    toast.info("Atualizando prefixos +55 dos números de WhatsApp...");
+
+    try {
+      const response = await fetch("/api/clientes/exportar-talkbi", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          acao: "atualizar-prefixo",
+        }),
+      });
+
+      const data = (await response.json()) as AtualizacaoPrefixoResponse;
+
+      if (data.success) {
+        toast.success(
+          `${data.atualizados} de ${data.total} números de WhatsApp foram atualizados com o prefixo +55.`
+        );
+        setResultadoAtualizacaoPrefixo({
+          total: data.total,
+          atualizados: data.atualizados,
+          inalterados: data.inalterados,
+          resultados: data.resultados,
+        });
+        setResultadoExportacao(null);
+        setShowExportarDialog(true);
+
+        await carregarClientes();
+      } else {
+        toast.error(
+          data.error || "Erro ao atualizar prefixos dos números de WhatsApp"
+        );
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar prefixos:", error);
+      toast.error(
+        "Ocorreu um erro ao atualizar os prefixos dos números de WhatsApp"
+      );
+    } finally {
+      setIsUpdatingPrefixes(false);
     }
   };
 
@@ -198,19 +392,86 @@ export default function RemarketingComponent({
 
   // Memoização dos clientes filtrados
   const clientesFiltrados = useMemo(() => {
-    return clientes.filter(
-      (cliente) =>
-        (filtroSegmento ? cliente.segmento === filtroSegmento : true) &&
-        (searchTerm
-          ? cliente.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            cliente.cnpj.includes(searchTerm)
-          : true)
-    );
-  }, [clientes, filtroSegmento, searchTerm]);
+    return clientes.filter((cliente) => {
+      // Filtro de segmento
+      const passaPorFiltroSegmento = filtroSegmento
+        ? cliente.segmento === filtroSegmento
+        : true;
+  
+      // Filtro de busca
+      const passaPorFiltroBusca = searchTerm
+        ? cliente.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          cliente.cnpj.includes(searchTerm)
+        : true;
+  
+      // Filtro por etiquetas - CORREÇÃO
+      let passaPorFiltroEtiqueta = true;
+
+if (etiquetasSelecionadasFiltro.length > 0) {
+  if (!cliente.EtiquetaCliente || cliente.EtiquetaCliente.length === 0) {
+    passaPorFiltroEtiqueta = false;
+  } else {
+    passaPorFiltroEtiqueta = false;
+    
+    // Juntar todas as etiquetas do cliente em uma string única para busca
+    const todasEtiquetasCliente = cliente.EtiquetaCliente
+      .map(e => e.nome.toLowerCase())
+      .join(' ');
+    
+    console.log(`Cliente ${cliente.nome} - Etiquetas: "${todasEtiquetasCliente}"`);
+    
+    for (const etiquetaSelecionada of etiquetasSelecionadasFiltro) {
+      // Múltiplas tentativas de conversão para encontrar match
+      const tentativas = [
+        // 1. Nome original em minúsculas
+        etiquetaSelecionada.toLowerCase(),
+        
+        // 2. Conversão básica (espaços para underscore)
+        etiquetaSelecionada.toLowerCase().replace(/\s+/g, '_'),
+        
+        // 3. Conversão completa
+        etiquetaSelecionada
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/\s+/g, "_")
+          .replace(/[^\w\-_()]/g, "_")
+          .replace(/_+/g, "_")
+          .replace(/^_|_$/g, ""),
+        
+        // 4. Apenas letras e números
+        etiquetaSelecionada.toLowerCase().replace(/[^a-z0-9]/g, ""),
+        
+        // 5. Primeira palavra apenas
+        etiquetaSelecionada.toLowerCase().split(' ')[0]
+      ];
+      
+      console.log(`Buscando "${etiquetaSelecionada}" com tentativas:`, tentativas);
+      
+      // Verificar se alguma tentativa encontra match
+      for (const tentativa of tentativas) {
+        if (tentativa && todasEtiquetasCliente.includes(tentativa)) {
+          console.log(`✅ MATCH encontrado: "${tentativa}" em "${todasEtiquetasCliente}"`);
+          passaPorFiltroEtiqueta = true;
+          break;
+        }
+      }
+      
+      if (passaPorFiltroEtiqueta) break;
+    }
+    
+    if (!passaPorFiltroEtiqueta) {
+      console.log(`❌ Nenhum match para cliente ${cliente.nome}`);
+    }
+  }
+}
+  
+      return passaPorFiltroSegmento && passaPorFiltroBusca && passaPorFiltroEtiqueta;
+    });
+  }, [clientes, filtroSegmento, searchTerm, etiquetasSelecionadasFiltro]);
 
   // Funções de carregamento
-  const carregarClientes = async () => {
-    setLoading(true);
+  const carregarClientes = useCallback(async () => {
     try {
       const resultado = await getClientes();
       if (resultado.success && resultado.clientes) {
@@ -221,13 +482,10 @@ export default function RemarketingComponent({
     } catch (error) {
       console.error("Erro ao carregar clientes:", error);
       toast.error("Ocorreu um erro ao carregar os clientes");
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [setClientes]);
 
-  const carregarRemarketingAgendados = async () => {
-    setLoading(true);
+  const carregarRemarketingAgendados = useCallback(async () => {
     try {
       const resultado = await getRemarketingAgendados();
       if (resultado.success && resultado.remarketing) {
@@ -240,13 +498,10 @@ export default function RemarketingComponent({
     } catch (error) {
       console.error("Erro ao carregar remarketing agendados:", error);
       toast.error("Ocorreu um erro ao carregar os remarketing agendados");
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [setRemarketingAgendados]);
 
-  const carregarRemarketingEnviados = async () => {
-    setLoading(true);
+  const carregarRemarketingEnviados = useCallback(async () => {
     try {
       const resultado = await getRemarketingEnviados();
       if (resultado.success && resultado.remarketing) {
@@ -257,25 +512,82 @@ export default function RemarketingComponent({
     } catch (error) {
       console.error("Erro ao carregar remarketing enviados:", error);
       toast.error("Ocorreu um erro ao carregar os remarketing enviados");
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [setRemarketingEnviados]);
+
+  // Função para carregar etiquetas dos clientes e produtos do catálogo
+  const carregarEtiquetas = useCallback(async () => {
+    try {
+      console.log("Iniciando carregamento de etiquetas...");
+
+      // Buscar produtos do catálogo (que serão usados como etiquetas)
+      const resProdutos = await getCatalogoItens("produto");
+
+      // Conjunto para armazenar todas as etiquetas únicas
+      const todasEtiquetas = new Set<string>();
+
+      // Adicionar produtos do catálogo como etiquetas
+      if (resProdutos.success && resProdutos.itens) {
+        console.log(
+          `Adicionando ${resProdutos.itens.length} produtos do catálogo como etiquetas`
+        );
+        resProdutos.itens.forEach((produto) => {
+          todasEtiquetas.add(produto.nome);
+        });
+      }
+
+      // Buscar etiquetas já associadas aos clientes
+      const resClientes = await getClientes();
+      if (resClientes.success && resClientes.clientes) {
+        console.log(
+          `Processando etiquetas de ${resClientes.clientes.length} clientes`
+        );
+        resClientes.clientes.forEach((cliente) => {
+          if (cliente.EtiquetaCliente && cliente.EtiquetaCliente.length > 0) {
+            cliente.EtiquetaCliente.forEach((etiqueta) => {
+              todasEtiquetas.add(etiqueta.nome);
+            });
+          }
+        });
+      }
+
+      // Converter para array e atualizar estado
+      const etiquetasArray = Array.from(todasEtiquetas);
+      console.log(`Total de etiquetas carregadas: ${etiquetasArray.length}`);
+      setEtiquetas(etiquetasArray);
+    } catch (error) {
+      console.error("Erro ao carregar etiquetas:", error);
+      toast.error("Erro ao carregar as etiquetas");
+    }
+  }, []);
 
   // UseEffect para carregar dados iniciais
   useEffect(() => {
-    const carregarDados = async () => {
-      await Promise.all([
-        carregarClientes(),
-        carregarRemarketingAgendados(),
-        carregarRemarketingEnviados(),
-      ]);
+    const carregarDadosIniciais = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([
+          carregarClientes(),
+          carregarRemarketingAgendados(),
+          carregarRemarketingEnviados(),
+          carregarEtiquetas(), // Carregar etiquetas
+        ]);
+        setLoading(false);
+      } catch (error) {
+        console.error("Erro ao carregar dados iniciais:", error);
+        setLoading(false);
+      }
     };
 
-    carregarDados();
-  }, []); // Array vazio - carrega apenas uma vez
-
-
+    if (typeof window !== "undefined") {
+      carregarDadosIniciais();
+    }
+  }, [
+    carregarClientes,
+    carregarRemarketingAgendados,
+    carregarRemarketingEnviados,
+    carregarEtiquetas,
+  ]);
 
   // Ver detalhes do remarketing
   const verDetalhesRemarketing = async (id: string) => {
@@ -341,7 +653,6 @@ export default function RemarketingComponent({
       if (resultado.success) {
         toast.success("Cliente removido do remarketing com sucesso");
 
-        // Atualizar detalhes do remarketing
         if (remarketingDetalhes && remarketingDetalhes.id === remarketingId) {
           const detalhesAtualizados = await getRemarketingDetalhes(
             remarketingId
@@ -376,7 +687,6 @@ export default function RemarketingComponent({
       return;
     }
 
-    // Combinar data e hora
     const dataHora = new Date(novaDataRemarketing);
     dataHora.setHours(
       novaHoraRemarketing.getHours(),
@@ -385,7 +695,6 @@ export default function RemarketingComponent({
       0
     );
 
-    // Verificar se a data é no futuro
     if (isBefore(dataHora, new Date())) {
       toast.error("A data de agendamento deve ser no futuro");
       return;
@@ -401,7 +710,6 @@ export default function RemarketingComponent({
         toast.success("Data do remarketing atualizada com sucesso");
         setShowEditarDataDialog(false);
 
-        // Atualizar detalhes do remarketing
         if (
           remarketingDetalhes &&
           remarketingDetalhes.id === editandoRemarketingId
@@ -430,7 +738,6 @@ export default function RemarketingComponent({
   const handleSelectAll = (checked: boolean) => {
     setSelectAll(checked);
     if (checked) {
-      // Selecionar apenas os clientes da página atual
       setClientesSelecionados(clientesPaginados.map((c) => c.id));
     } else {
       setClientesSelecionados([]);
@@ -438,13 +745,18 @@ export default function RemarketingComponent({
   };
 
   // Manipular seleção de cliente individual
-  const handleSelectCliente = useCallback((clienteId: string, checked: boolean) => {
-    if (checked) {
-      setClientesSelecionados(prev => [...prev, clienteId]);
-    } else {
-      setClientesSelecionados(prev => prev.filter(id => id !== clienteId));
-    }
-  }, []);
+  const handleSelectCliente = useCallback(
+    (clienteId: string, checked: boolean) => {
+      if (checked) {
+        setClientesSelecionados((prev) => [...prev, clienteId]);
+      } else {
+        setClientesSelecionados((prev) =>
+          prev.filter((id) => id !== clienteId)
+        );
+      }
+    },
+    []
+  );
 
   // Configurar data do remarketing baseado na opção selecionada
   const configurarDataRemarketing = (opcao: string) => {
@@ -486,7 +798,6 @@ export default function RemarketingComponent({
       return;
     }
 
-    // Combinar data e hora
     const dataHora = new Date(dataRemarketing);
     dataHora.setHours(
       horaRemarketing.getHours(),
@@ -495,7 +806,6 @@ export default function RemarketingComponent({
       0
     );
 
-    // Se não for imediato, verificar se a data é no futuro
     if (opcaoDataRemarketing !== "imediato" && isBefore(dataHora, new Date())) {
       toast.error("A data de agendamento deve ser no futuro");
       return;
@@ -548,33 +858,248 @@ export default function RemarketingComponent({
   // Função para mudar de página
   const mudarPagina = useCallback((pagina: number) => {
     setPaginaAtual(pagina);
-    // Desmarcar "selecionar todos" quando mudar de página
     setSelectAll(false);
   }, []);
 
   // Reset de página quando os filtros mudam
+  useEffect(() => { setPaginaAtual(1); }, [searchTerm, filtroSegmento, etiquetasSelecionadasFiltro]);
+
+
+  const clienteEstaSelectionado = useCallback(
+    (id: string) => {
+      return clientesSelecionados.includes(id);
+    },
+    [clientesSelecionados]
+  );
+
+  // UseEffect para atualizar seleção "todos" quando clientesSelecionados muda
   useEffect(() => {
-    setPaginaAtual(1);
-  }, [searchTerm, filtroSegmento]);
-  const clienteEstaSelectionado = useCallback((id: string) => {
-    return clientesSelecionados.includes(id);
-  }, [clientesSelecionados]);
-    // UseEffect para atualizar seleção "todos" quando clientesSelecionados muda
-    useEffect(() => {
-      if (clientesPaginados.length > 0 && clientesSelecionados.length === clientesPaginados.length) {
-        setSelectAll(true);
-      } else {
-        setSelectAll(false);
+    if (
+      clientesPaginados.length > 0 &&
+      clientesSelecionados.length === clientesPaginados.length
+    ) {
+      setSelectAll(true);
+    } else {
+      setSelectAll(false);
+    }
+  }, [clientesSelecionados, clientesPaginados.length]);
+
+  
+  const handleEtiquetasFiltroChange = (novasEtiquetas: string[]) => {
+    console.log("Etiquetas selecionadas para filtro:", novasEtiquetas);
+    setEtiquetasSelecionadasFiltro(novasEtiquetas);
+    
+    // Se tiver selecionado etiquetas, verificar a estrutura dos dados para debug
+    if (novasEtiquetas.length > 0) {
+      // Verificar clientes que possuem as etiquetas selecionadas
+      const clientesComEtiquetasSelecionadas = clientes.filter(cliente => 
+        cliente.EtiquetaCliente && Array.isArray(cliente.EtiquetaCliente) && 
+        cliente.EtiquetaCliente.some(etiqueta => novasEtiquetas.includes(etiqueta.nome))
+      );
+      
+      console.log(`Clientes com as etiquetas selecionadas: ${clientesComEtiquetasSelecionadas.length}`);
+      
+      // Verificar a estrutura da primeira etiqueta de cada cliente
+      if (clientesComEtiquetasSelecionadas.length > 0) {
+        const primeiroCliente = clientesComEtiquetasSelecionadas[0];
+        if (primeiroCliente.EtiquetaCliente && primeiroCliente.EtiquetaCliente.length > 0) {
+          console.log("Estrutura da etiqueta:", JSON.stringify(primeiroCliente.EtiquetaCliente[0]));
+        }
       }
-    }, [clientesSelecionados, clientesPaginados.length]);
+    }
+  };
+  // Componente para o diálogo de resultados de exportação
+  const ExportarDialog = () => (
+    <Dialog open={showExportarDialog} onOpenChange={setShowExportarDialog}>
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle>
+            {resultadoExportacao
+              ? "Resultados da Exportação para TalkBI"
+              : "Resultados da Atualização de Prefixos"}
+          </DialogTitle>
+          <DialogDescription>
+            {resultadoExportacao
+              ? "Detalhes dos clientes exportados para a plataforma TalkBI"
+              : "Detalhes dos números de WhatsApp atualizados com o prefixo +55"}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="py-4 flex-1 overflow-hidden">
+          {resultadoExportacao && (
+            <>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="p-4 rounded-lg border bg-green-50 border-green-200 text-center">
+                  <div className="flex items-center justify-center text-green-600 mb-1">
+                    <Check className="h-5 w-5 mr-1" />
+                    <span className="text-xs font-medium">Sucessos</span>
+                  </div>
+                  <p className="text-2xl font-bold text-green-600">
+                    {resultadoExportacao.sucessos}
+                  </p>
+                </div>
+                <div className="p-4 rounded-lg border bg-red-50 border-red-200 text-center">
+                  <div className="flex items-center justify-center text-red-600 mb-1">
+                    <AlertCircle className="h-5 w-5 mr-1" />
+                    <span className="text-xs font-medium">Falhas</span>
+                  </div>
+                  <p className="text-2xl font-bold text-red-600">
+                    {resultadoExportacao.falhas}
+                  </p>
+                </div>
+                <div className="p-4 rounded-lg border bg-blue-50 border-blue-200 text-center">
+                  <div className="flex items-center justify-center text-blue-600 mb-1">
+                    <Users className="h-5 w-5 mr-1" />
+                    <span className="text-xs font-medium">Total</span>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {resultadoExportacao.total}
+                  </p>
+                </div>
+              </div>
+
+              <Separator className="my-4" />
+
+              <h4 className="font-medium mb-2">Detalhes por cliente</h4>
+
+              <ScrollArea className="h-[calc(90vh-350px)] pr-4">
+                <div className="space-y-3">
+                  {resultadoExportacao.resultados.map((resultado) => (
+                    <Card key={resultado.id} className="p-0">
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h5 className="font-medium">{resultado.nome}</h5>
+                            {resultado.sucesso ? (
+                              <p className="text-sm text-green-600">
+                                <Check className="h-4 w-4 inline mr-1" />
+                                Exportado com sucesso
+                                {resultado.user_ns && (
+                                  <span className="text-xs text-gray-500 ml-2">
+                                    ID: {resultado.user_ns}
+                                  </span>
+                                )}
+                              </p>
+                            ) : (
+                              <p className="text-sm text-red-600">
+                                <AlertCircle className="h-4 w-4 inline mr-1" />
+                                {resultado.erro || "Falha na exportação"}
+                              </p>
+                            )}
+                          </div>
+                          <Badge
+                            className={
+                              resultado.sucesso
+                                ? "bg-green-100 text-green-800"
+                                : "bg-red-100 text-red-800"
+                            }
+                          >
+                            {resultado.sucesso ? "Sucesso" : "Falha"}
+                          </Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
+            </>
+          )}
+
+          {resultadoAtualizacaoPrefixo && (
+            <>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="p-4 rounded-lg border bg-green-50 border-green-200 text-center">
+                  <div className="flex items-center justify-center text-green-600 mb-1">
+                    <Phone className="h-5 w-5 mr-1" />
+                    <span className="text-xs font-medium">Atualizados</span>
+                  </div>
+                  <p className="text-2xl font-bold text-green-600">
+                    {resultadoAtualizacaoPrefixo.atualizados}
+                  </p>
+                </div>
+                <div className="p-4 rounded-lg border bg-gray-50 border-gray-200 text-center">
+                  <div className="flex items-center justify-center text-gray-600 mb-1">
+                    <Check className="h-5 w-5 mr-1" />
+                    <span className="text-xs font-medium">Já Formatados</span>
+                  </div>
+                  <p className="text-2xl font-bold text-gray-600">
+                    {resultadoAtualizacaoPrefixo.inalterados}
+                  </p>
+                </div>
+                <div className="p-4 rounded-lg border bg-blue-50 border-blue-200 text-center">
+                  <div className="flex items-center justify-center text-blue-600 mb-1">
+                    <Users className="h-5 w-5 mr-1" />
+                    <span className="text-xs font-medium">Total</span>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {resultadoAtualizacaoPrefixo.total}
+                  </p>
+                </div>
+              </div>
+
+              <Separator className="my-4" />
+
+              <h4 className="font-medium mb-2">Detalhes por cliente</h4>
+
+              <ScrollArea className="h-[calc(90vh-350px)] pr-4">
+                <div className="space-y-3">
+                  {resultadoAtualizacaoPrefixo.resultados.map((resultado) => (
+                    <Card key={resultado.id} className="p-0">
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h5 className="font-medium">{resultado.nome}</h5>
+                            <div className="mt-1">
+                              <p className="text-sm">
+                                <span className="text-gray-500">Anterior:</span>{" "}
+                                {resultado.whatsappAntigo || "-"}
+                              </p>
+                              <p className="text-sm">
+                                <span className="text-gray-500">Atual:</span>{" "}
+                                <span
+                                  className={
+                                    resultado.alterado
+                                      ? "text-green-600 font-medium"
+                                      : ""
+                                  }
+                                >
+                                  {resultado.whatsappNovo || "-"}
+                                </span>
+                              </p>
+                            </div>
+                          </div>
+                          <Badge
+                            className={
+                              resultado.alterado
+                                ? "bg-green-100 text-green-800"
+                                : "bg-gray-100 text-gray-800"
+                            }
+                          >
+                            {resultado.alterado ? "Atualizado" : "Inalterado"}
+                          </Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
+            </>
+          )}
+        </div>
+
+        <DialogFooter className="border-t pt-4">
+          <Button onClick={() => setShowExportarDialog(false)}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   return (
     <div className="space-y-6">
-      {/* Cabeçalho */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Remarketing</h2>
       </div>
 
-      {/* Tabs */}
       <Tabs value={tabAtiva} onValueChange={setTabAtiva}>
         <TabsList className="mb-4">
           <TabsTrigger value="clientes">Selecionar Clientes</TabsTrigger>
@@ -602,7 +1127,6 @@ export default function RemarketingComponent({
           </TabsTrigger>
         </TabsList>
 
-        {/* Conteúdo da Tab de Clientes */}
         <TabsContent value="clientes">
           <Card className="shadow-md">
             <CardHeader className="pb-0">
@@ -626,6 +1150,12 @@ export default function RemarketingComponent({
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
                   </div>
+
+                  {/* Componente de filtro de etiquetas */}
+                  <EtiquetasFilter
+  etiquetasSelecionadas={etiquetasSelecionadasFiltro}
+  onEtiquetasChange={handleEtiquetasFiltroChange}
+/>
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -660,19 +1190,73 @@ export default function RemarketingComponent({
                       ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
-                  <Button
-                    variant="outline"
-                    className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 flex items-center"
-                    onClick={importarClientesTalkBI}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <RefreshCcw className="mr-2 h-4 w-4" />
-                    )}
-                    Importar da TalkBI
-                  </Button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="bg-green-50 border-green-700 text-green-700 hover:bg-green-100 flex items-center"
+                      >
+                        <Settings className="mr-2 h-4 w-4" />
+                        Opções TalkBI
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[220px]">
+                      <DropdownMenuItem
+                        className="py-3"
+                        onClick={handleImportarClientesTalkBI}
+                        disabled={
+                          isInitiatingImport || showProgressoImportacaoDialog
+                        }
+                      >
+                        {isInitiatingImport || showProgressoImportacaoDialog ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="mr-2 h-4 w-4" />
+                        )}
+                        Importar da TalkBI
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="py-3"
+                        onClick={abrirExportarClientesDialog}
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Exportar para TalkBI
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={handleAtualizarPrefixosWhatsApp}
+                        disabled={isUpdatingPrefixes}
+                      >
+                        {isUpdatingPrefixes ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Phone className="mr-2 h-4 w-4" />
+                        )}
+                        Atualizar Prefixos +55
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() =>
+                          window.open("https://chat.talkbi.com.br", "_blank")
+                        }
+                      >
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        Abrir TalkBI
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <ImportacaoProgressoDialog
+                    isOpen={showProgressoImportacaoDialog}
+                    onCloseDialog={() => {
+                      setShowProgressoImportacaoDialog(false);
+                      carregarClientes();
+                    }}
+                  />
+
+                  <ExportarDialog />
                 </div>
               </div>
             </CardHeader>
@@ -720,17 +1304,31 @@ export default function RemarketingComponent({
                         </TableHeader>
                         <TableBody>
                           {clientesPaginados.map((cliente) => (
-                            <TableRow key={cliente.id}>
-                              <TableCell>
-                              <Checkbox
-  checked={clienteEstaSelectionado(cliente.id)}
-  onCheckedChange={(checked) => {
-    handleSelectCliente(cliente.id, !!checked);
-  }}
-  className="cursor-pointer"
-  aria-label={`Selecionar ${cliente.nome}`}
-/>
-
+                            <TableRow
+                              key={cliente.id}
+                              onClick={() => {
+                                // Toggling selection when clicking on row
+                                const isSelected = clienteEstaSelectionado(
+                                  cliente.id
+                                );
+                                handleSelectCliente(cliente.id, !isSelected);
+                              }}
+                              className="cursor-pointer hover:bg-gray-50"
+                            >
+                              <TableCell
+                                onClick={(e) => {
+                                  // Prevent propagation to avoid double triggering
+                                  e.stopPropagation();
+                                }}
+                              >
+                                <Checkbox
+                                  checked={clienteEstaSelectionado(cliente.id)}
+                                  onCheckedChange={(checked) => {
+                                    handleSelectCliente(cliente.id, !!checked);
+                                  }}
+                                  className="cursor-pointer"
+                                  aria-label={`Selecionar ${cliente.nome}`}
+                                />
                               </TableCell>
                               <TableCell className="font-medium">
                                 {cliente.nome}
@@ -755,26 +1353,38 @@ export default function RemarketingComponent({
                                 )}
                               </TableCell>
                               <TableCell>
-                                {cliente.etiquetas &&
-                                cliente.etiquetas.length > 0 ? (
+                                {cliente.EtiquetaCliente &&
+                                cliente.EtiquetaCliente.length > 0 ? (
                                   <div className="flex flex-wrap gap-1">
-                                    {cliente.etiquetas
+                                    {cliente.EtiquetaCliente
                                       .slice(0, 2)
-                                      .map((etiqueta) => (
-                                        <Badge
-                                          key={etiqueta.id}
-                                          variant="outline"
-                                          className="bg-blue-50 text-blue-800"
-                                        >
-                                          {etiqueta.nome}
-                                        </Badge>
-                                      ))}
-                                    {cliente.etiquetas.length > 2 && (
+                                      .map((etiqueta) => {
+                                        // Formatar nome da etiqueta para exibição
+                                        const nomeFormatado = etiqueta.nome
+                                          .replace(/[_-]/g, " ")
+                                          .replace(
+                                            /\w\S*/g,
+                                            (txt) =>
+                                              txt.charAt(0).toUpperCase() +
+                                              txt.substr(1).toLowerCase()
+                                          );
+
+                                        return (
+                                          <Badge
+                                            key={etiqueta.id}
+                                            variant="outline"
+                                            className="bg-blue-50 text-blue-800"
+                                          >
+                                            {nomeFormatado}
+                                          </Badge>
+                                        );
+                                      })}
+                                    {cliente.EtiquetaCliente.length > 2 && (
                                       <Badge
                                         variant="outline"
                                         className="bg-gray-100"
                                       >
-                                        +{cliente.etiquetas.length - 2}
+                                        +{cliente.EtiquetaCliente.length - 2}
                                       </Badge>
                                     )}
                                   </div>
@@ -791,66 +1401,80 @@ export default function RemarketingComponent({
                     </ScrollArea>
                   </div>
 
-                  {/* Controles de paginação */}
                   {totalPaginas > 1 && (
-  <div className="flex items-center justify-center space-x-2 mt-4">
-    <Button
-      variant="outline"
-      size="icon"
-      onClick={() => mudarPagina(Math.max(1, paginaAtual - 1))}
-      disabled={paginaAtual === 1}
-    >
-      <ChevronLeft className="h-4 w-4" />
-    </Button>
+                    <div className="flex items-center justify-center space-x-2 mt-4">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() =>
+                          mudarPagina(Math.max(1, paginaAtual - 1))
+                        }
+                        disabled={paginaAtual === 1}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
 
-    {/* Mostrar páginas relevantes com elipses */}
-    {Array.from({ length: totalPaginas }, (_, i) => i + 1)
-      .filter(page => 
-        page === 1 || 
-        page === totalPaginas || 
-        (page >= paginaAtual - 1 && page <= paginaAtual + 1)
-      )
-      .map((page, index, array) => {
-        // Adicionar elipses
-        if (index > 0 && array[index - 1] !== page - 1) {
-          return (
-            <React.Fragment key={`ellipsis-${page}`}>
-              <span className="px-2">...</span>
-              <Button
-                key={page}
-                variant={page === paginaAtual ? "default" : "outline"}
-                size="sm"
-                className={page === paginaAtual ? "bg-[#00446A] text-white" : ""}
-                onClick={() => mudarPagina(page)}
-              >
-                {page}
-              </Button>
-            </React.Fragment>
-          );
-        }
-        return (
-          <Button
-            key={page}
-            variant={page === paginaAtual ? "default" : "outline"}
-            size="sm"
-            className={page === paginaAtual ? "bg-[#00446A] text-white" : ""}
-            onClick={() => mudarPagina(page)}
-          >
-            {page}
-          </Button>
-        );
-      })}
+                      {Array.from({ length: totalPaginas }, (_, i) => i + 1)
+                        .filter(
+                          (page) =>
+                            page === 1 ||
+                            page === totalPaginas ||
+                            (page >= paginaAtual - 1 && page <= paginaAtual + 1)
+                        )
+                        .map((page, index, array) => {
+                          if (index > 0 && array[index - 1] !== page - 1) {
+                            return (
+                              <React.Fragment key={`ellipsis-${page}`}>
+                                <span className="px-2">...</span>
+                                <Button
+                                  key={page}
+                                  variant={
+                                    page === paginaAtual ? "default" : "outline"
+                                  }
+                                  size="sm"
+                                  className={
+                                    page === paginaAtual
+                                      ? "bg-[#00446A] text-white"
+                                      : ""
+                                  }
+                                  onClick={() => mudarPagina(page)}
+                                >
+                                  {page}
+                                </Button>
+                              </React.Fragment>
+                            );
+                          }
+                          return (
+                            <Button
+                              key={page}
+                              variant={
+                                page === paginaAtual ? "default" : "outline"
+                              }
+                              size="sm"
+                              className={
+                                page === paginaAtual
+                                  ? "bg-[#00446A] text-white"
+                                  : ""
+                              }
+                              onClick={() => mudarPagina(page)}
+                            >
+                              {page}
+                            </Button>
+                          );
+                        })}
 
-    <Button
-      variant="outline"
-      size="icon"
-      onClick={() => mudarPagina(Math.min(totalPaginas, paginaAtual + 1))}
-      disabled={paginaAtual === totalPaginas}
-    >
-      <ChevronRight className="h-4 w-4" />
-    </Button>
-  </div>
-)}
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() =>
+                          mudarPagina(Math.min(totalPaginas, paginaAtual + 1))
+                        }
+                        disabled={paginaAtual === totalPaginas}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
 
                   <div className="mt-4 flex justify-between items-center">
                     <div>
@@ -860,14 +1484,32 @@ export default function RemarketingComponent({
                       </span>
                     </div>
 
-                    <Button
-                      className="bg-[#00446A] text-white hover:bg-[#00446A]/90"
-                      disabled={clientesSelecionados.length === 0}
-                      onClick={() => setShowRemarketingDialog(true)}
-                    >
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Definir Remarketing
-                    </Button>
+                    <div className="flex gap-2">
+                      {clientesSelecionados.length > 0 && (
+                        <Button
+                          variant="outline"
+                          className="border-blue-200 text-blue-700 hover:bg-blue-50"
+                          onClick={handleExportarClientesTalkBI}
+                          disabled={isExporting}
+                        >
+                          {isExporting ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Upload className="mr-2 h-4 w-4" />
+                          )}
+                          Exportar Selecionados
+                        </Button>
+                      )}
+
+                      <Button
+                        className="bg-[#00446A] text-white hover:bg-[#00446A]/90"
+                        disabled={clientesSelecionados.length === 0}
+                        onClick={() => setShowRemarketingDialog(true)}
+                      >
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Definir Remarketing
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -880,7 +1522,6 @@ export default function RemarketingComponent({
           </Card>
         </TabsContent>
 
-        {/* Conteúdo da Tab de Remarketing Agendados */}
         <TabsContent value="agendados">
           <Card className="shadow-md">
             <CardHeader>
@@ -909,78 +1550,80 @@ export default function RemarketingComponent({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {remarketingAgendados.map((remarketing) => (
-                        <TableRow key={remarketing.id}>
-                          <TableCell className="font-medium">
-                            {remarketing.nome}
-                          </TableCell>
-                          <TableCell>
-                            {format(
-                              new Date(remarketing.dataAgendada),
-                              "dd/MM/yyyy HH:mm",
-                              { locale: ptBR }
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="outline"
-                              className="bg-blue-50 text-blue-800"
-                            >
-                              {remarketing.totalClientes} cliente(s)
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{remarketing.vendedorNome}</TableCell>
-                          <TableCell>
-                            <Badge className="bg-yellow-100 text-yellow-800">
-                              Agendado
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <ChevronDown className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    verDetalhesRemarketing(remarketing.id)
-                                  }
-                                >
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  Ver Detalhes
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    setEditandoRemarketingId(remarketing.id);
-                                    setNovaDataRemarketing(
-                                      new Date(remarketing.dataAgendada)
-                                    );
-                                    setNovaHoraRemarketing(
-                                      new Date(remarketing.dataAgendada)
-                                    );
-                                    setShowEditarDataDialog(true);
-                                  }}
-                                >
-                                  <Calendar className="mr-2 h-4 w-4" />
-                                  Alterar Data
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-red-600"
-                                  onClick={() =>
-                                    handleCancelarRemarketing(remarketing.id)
-                                  }
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Cancelar Remarketing
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {remarketingAgendados.map(
+                        (remarketing: RemarketingListItem) => (
+                          <TableRow key={remarketing.id}>
+                            <TableCell className="font-medium">
+                              {remarketing.nome}
+                            </TableCell>
+                            <TableCell>
+                              {format(
+                                new Date(remarketing.dataAgendada),
+                                "dd/MM/yyyy HH:mm",
+                                { locale: ptBR }
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className="bg-blue-50 text-blue-800"
+                              >
+                                {remarketing.totalClientes} cliente(s)
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{remarketing.vendedorNome}</TableCell>
+                            <TableCell>
+                              <Badge className="bg-yellow-100 text-yellow-800">
+                                Agendado
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    <ChevronDown className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      verDetalhesRemarketing(remarketing.id)
+                                    }
+                                  >
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    Ver Detalhes
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setEditandoRemarketingId(remarketing.id);
+                                      setNovaDataRemarketing(
+                                        new Date(remarketing.dataAgendada)
+                                      );
+                                      setNovaHoraRemarketing(
+                                        new Date(remarketing.dataAgendada)
+                                      );
+                                      setShowEditarDataDialog(true);
+                                    }}
+                                  >
+                                    <Calendar className="mr-2 h-4 w-4" />
+                                    Alterar Data
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-red-600"
+                                    onClick={() =>
+                                      handleCancelarRemarketing(remarketing.id)
+                                    }
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Cancelar Remarketing
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      )}
                     </TableBody>
                   </Table>
                 </div>
@@ -1005,7 +1648,6 @@ export default function RemarketingComponent({
           </Card>
         </TabsContent>
 
-        {/* Conteúdo da Tab de Histórico de Envios */}
         <TabsContent value="enviados">
           <Card className="shadow-md">
             <CardHeader>
@@ -1034,45 +1676,47 @@ export default function RemarketingComponent({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {remarketingEnviados.map((remarketing) => (
-                        <TableRow key={remarketing.id}>
-                          <TableCell className="font-medium">
-                            {remarketing.nome}
-                          </TableCell>
-                          <TableCell>
-                            {format(
-                              new Date(remarketing.dataAgendada),
-                              "dd/MM/yyyy HH:mm",
-                              { locale: ptBR }
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="outline"
-                              className="bg-blue-50 text-blue-800"
-                            >
-                              {remarketing.totalClientes} cliente(s)
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{remarketing.vendedorNome}</TableCell>
-                          <TableCell>
-                            <Badge className="bg-green-100 text-green-800">
-                              Enviado
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() =>
-                                verDetalhesRemarketing(remarketing.id)
-                              }
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {remarketingEnviados.map(
+                        (remarketing: RemarketingListItem) => (
+                          <TableRow key={remarketing.id}>
+                            <TableCell className="font-medium">
+                              {remarketing.nome}
+                            </TableCell>
+                            <TableCell>
+                              {format(
+                                new Date(remarketing.dataAgendada),
+                                "dd/MM/yyyy HH:mm",
+                                { locale: ptBR }
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className="bg-blue-50 text-blue-800"
+                              >
+                                {remarketing.totalClientes} cliente(s)
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{remarketing.vendedorNome}</TableCell>
+                            <TableCell>
+                              <Badge className="bg-green-100 text-green-800">
+                                Enviado
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() =>
+                                  verDetalhesRemarketing(remarketing.id)
+                                }
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      )}
                     </TableBody>
                   </Table>
                 </div>
@@ -1098,7 +1742,6 @@ export default function RemarketingComponent({
         </TabsContent>
       </Tabs>
 
-      {/* Modal para definir Remarketing */}
       <Dialog
         open={showRemarketingDialog}
         onOpenChange={setShowRemarketingDialog}
@@ -1269,7 +1912,6 @@ export default function RemarketingComponent({
         </DialogContent>
       </Dialog>
 
-      {/* Modal para detalhes do Remarketing */}
       <Dialog open={showDetalhesDialog} onOpenChange={setShowDetalhesDialog}>
         <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
@@ -1477,7 +2119,6 @@ export default function RemarketingComponent({
         </DialogContent>
       </Dialog>
 
-      {/* Modal para editar data do Remarketing */}
       <Dialog
         open={showEditarDataDialog}
         onOpenChange={setShowEditarDataDialog}
@@ -1563,6 +2204,20 @@ export default function RemarketingComponent({
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={showExportarClientesDialog}
+        onOpenChange={setShowExportarClientesDialog}
+      >
+        <DialogContent className="sm:max-w-[700px]">
+          <DialogHeader>
+            <DialogTitle>Exportar Clientes para TalkBI</DialogTitle>
+            <DialogDescription>
+              Utilize esta interface para exportar clientes e atualizar prefixos
+            </DialogDescription>
+          </DialogHeader>
+          <ExportarClientesTalkBI segmentos={segmentosUnicos} />
         </DialogContent>
       </Dialog>
     </div>

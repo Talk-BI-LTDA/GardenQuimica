@@ -78,7 +78,7 @@ export async function sincronizarClienteTalkBI(clienteId: string) {
     const cliente = await prisma.cliente.findUnique({
       where: { id: clienteId },
       include: {
-        etiquetas: true
+        EtiquetaCliente: true
       }
     });
 
@@ -142,7 +142,7 @@ export async function sincronizarClienteTalkBI(clienteId: string) {
       });
 
       // Se houver etiquetas, enviar para o TalkBI
-      if (cliente.etiquetas && cliente.etiquetas.length > 0) {
+      if (cliente.EtiquetaCliente && cliente.EtiquetaCliente.length > 0) {
         // Implementar envio de etiquetas para o TalkBI
         // Essa funcionalidade seria implementada quando tivermos acesso à API de etiquetas do TalkBI
       }
@@ -246,12 +246,15 @@ export async function criarRemarketing(data: RemarketingForm) {
     // Criar remarketing no banco
     const remarketing = await prisma.remarketing.create({
       data: {
+        id: `rmk_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         nome: data.nome,
         dataAgendada: data.dataAgendada,
         subFlowNs: data.subFlowNs || "f153643s1950233",
         vendedorId,
-        clientes: {
+        updatedAt: new Date(),
+        RemarketingCliente: {
           create: data.clienteIds.map(clienteId => ({
+            id: `rc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             clienteId
           }))
         }
@@ -267,14 +270,14 @@ export async function criarRemarketing(data: RemarketingForm) {
           remarketingId: remarketing.id
         },
         include: {
-          cliente: true
+          Cliente: true
         }
       });
 
       // Enviar fluxo para cada cliente que tem user_ns
       for (const item of clientesRemarketing) {
-        if (item.cliente.user_ns) {
-          await enviarFluxoTalkBI(item.cliente.user_ns, remarketing.subFlowNs);
+        if (item.Cliente.user_ns) {
+          await enviarFluxoTalkBI(item.Cliente.user_ns, remarketing.subFlowNs);
         }
       }
 
@@ -334,14 +337,14 @@ export async function getRemarketingAgendados(filtros?: RemarketingFiltros) {
     const remarketing = await prisma.remarketing.findMany({
       where,
       include: {
-        vendedor: {
+        User: {
           select: {
             name: true
           }
         },
         _count: {
           select: {
-            clientes: true
+            RemarketingCliente: true
           }
         }
       },
@@ -360,8 +363,8 @@ export async function getRemarketingAgendados(filtros?: RemarketingFiltros) {
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
       vendedorId: item.vendedorId,
-      vendedorNome: item.vendedor.name,
-      totalClientes: item._count.clientes
+      vendedorNome: item.User.name,
+      totalClientes: item._count.RemarketingCliente
     }));
 
     return { success: true, remarketing: remarketingFormatados };
@@ -411,14 +414,14 @@ export async function getRemarketingEnviados(filtros?: RemarketingFiltros) {
     const remarketing = await prisma.remarketing.findMany({
       where,
       include: {
-        vendedor: {
+        User: {
           select: {
             name: true
           }
         },
         _count: {
           select: {
-            clientes: true
+            RemarketingCliente: true
           }
         }
       },
@@ -437,8 +440,8 @@ export async function getRemarketingEnviados(filtros?: RemarketingFiltros) {
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
       vendedorId: item.vendedorId,
-      vendedorNome: item.vendedor.name,
-      totalClientes: item._count.clientes
+      vendedorNome: item.User.name,
+      totalClientes: item._count.RemarketingCliente
     }));
 
     return { success: true, remarketing: remarketingFormatados };
@@ -462,16 +465,16 @@ export async function getRemarketingDetalhes(id: string): Promise<{ success?: bo
     const remarketing = await prisma.remarketing.findUnique({
       where: { id },
       include: {
-        vendedor: {
+        User: {
           select: {
             name: true
           }
         },
-        clientes: {
+        RemarketingCliente: {
           include: {
-            cliente: {
+            Cliente: {
               include: {
-                etiquetas: true
+                EtiquetaCliente: true
               }
             }
           }
@@ -490,24 +493,24 @@ export async function getRemarketingDetalhes(id: string): Promise<{ success?: bo
 
     // Obter todas as etiquetas únicas
     const todasEtiquetas = new Set<string>();
-    remarketing.clientes.forEach(cliente => {
-      cliente.cliente.etiquetas.forEach(etiqueta => {
+    remarketing.RemarketingCliente.forEach(clienteRel => {
+      clienteRel.Cliente.EtiquetaCliente.forEach(etiqueta => {
         todasEtiquetas.add(etiqueta.nome);
       });
     });
 
     // Formatar clientes
-    const clientesFormatados = remarketing.clientes.map(item => ({
-        id: item.cliente.id,
-        nome: item.cliente.nome,
-        segmento: item.cliente.segmento,
-        cnpj: item.cliente.cnpj,
-        razaoSocial: item.cliente.razaoSocial,
-        whatsapp: item.cliente.whatsapp || "",
-        recorrente: item.cliente.recorrente,
-        origem: item.cliente.origem,
-        user_ns: item.cliente.user_ns,
-        etiquetas: item.cliente.etiquetas.map(etiqueta => ({
+    const clientesFormatados = remarketing.RemarketingCliente.map(item => ({
+        id: item.Cliente.id,
+        nome: item.Cliente.nome,
+        segmento: item.Cliente.segmento,
+        cnpj: item.Cliente.cnpj,
+        razaoSocial: item.Cliente.razaoSocial,
+        whatsapp: item.Cliente.whatsapp || "",
+        recorrente: item.Cliente.recorrente,
+        origem: item.Cliente.origem,
+        user_ns: item.Cliente.user_ns,
+        etiquetas: item.Cliente.EtiquetaCliente.map(etiqueta => ({
           id: etiqueta.id,
           nome: etiqueta.nome
         }))
@@ -523,8 +526,8 @@ export async function getRemarketingDetalhes(id: string): Promise<{ success?: bo
       createdAt: remarketing.createdAt,
       updatedAt: remarketing.updatedAt,
       vendedorId: remarketing.vendedorId,
-      vendedorNome: remarketing.vendedor.name,
-      totalClientes: remarketing.clientes.length,
+      vendedorNome: remarketing.User.name,
+      totalClientes: remarketing.RemarketingCliente.length,
       totalEtiquetas: todasEtiquetas.size,
       clientes: clientesFormatados 
     };
@@ -706,9 +709,9 @@ export async function processarRemarketingAgendados() {
         }
       },
       include: {
-        clientes: {
+        RemarketingCliente: {
           include: {
-            cliente: true
+            Cliente: true
           }
         }
       }
@@ -727,14 +730,14 @@ export async function processarRemarketingAgendados() {
     // Processar cada remarketing
     for (const remarketing of remarketingPendentes) {
       console.log(`Processando remarketing: ${remarketing.id} - ${remarketing.nome}`);
-      console.log(`Total de clientes neste remarketing: ${remarketing.clientes.length}`);
+      console.log(`Total de clientes neste remarketing: ${remarketing.RemarketingCliente.length}`);
       
       // Garantir que o subflow está definido
       const subFlowNs = remarketing.subFlowNs || "f153643s1950233";
       
       // Enviar fluxo para cada cliente
-      for (const clienteRemarketing of remarketing.clientes) {
-        const cliente = clienteRemarketing.cliente;
+      for (const clienteRemarketing of remarketing.RemarketingCliente) {
+        const cliente = clienteRemarketing.Cliente;
         
         console.log(`Processando cliente: ${cliente.id} - ${cliente.nome} - user_ns: ${cliente.user_ns || 'Não definido'}`);
         
@@ -834,7 +837,7 @@ export async function testeTalkBIConnection() {
     let data;
     try {
       data = await response.json();
-    } catch (e) {
+    } catch {
       data = "Não foi possível obter corpo da resposta";
     }
     console.log("Resposta:", data);
@@ -878,20 +881,23 @@ export async function criarEProcessarRemarketingImediato(nome: string, clienteId
     // Criar remarketing no banco
     const remarketing = await prisma.remarketing.create({
       data: {
+        id: `rmk_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         nome,
         dataAgendada,
         subFlowNs: "f153643s1950233", // Fluxo padrão
         vendedorId: session.user.id,
-        clientes: {
+        updatedAt: new Date(),
+        RemarketingCliente: {
           create: clienteIds.map(clienteId => ({
+            id: `rc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             clienteId
           }))
         }
       },
       include: {
-        clientes: {
+        RemarketingCliente: {
           include: {
-            cliente: true
+            Cliente: true
           }
         }
       }
@@ -900,13 +906,30 @@ export async function criarEProcessarRemarketingImediato(nome: string, clienteId
     console.log(`Remarketing criado com ID: ${remarketing.id}`);
     
     // Processar imediatamente
-    const resultados: any[] = [];
+    interface ResultadoProcessamento {
+      clienteId: string;
+      clienteNome: string;
+      user_ns?: string;
+      resultado?: {
+        success?: boolean;
+        error?: string;
+        data?: unknown;
+      };
+      sync?: {
+        success?: boolean;
+        error?: string;
+        user_ns?: string;
+      };
+      erro?: string;
+    }
+    
+    const resultados: ResultadoProcessamento[] = [];
     let sucessos = 0;
     let falhas = 0;
 
     // Processar cada cliente
-    for (const clienteRemarketing of remarketing.clientes) {
-      const cliente = clienteRemarketing.cliente;
+    for (const clienteRemarketing of remarketing.RemarketingCliente) {
+      const cliente = clienteRemarketing.Cliente;
       console.log(`Processando cliente: ${cliente.id} - ${cliente.nome}`);
       
       // Verificar se cliente já tem user_ns
@@ -981,7 +1004,7 @@ export async function criarEProcessarRemarketingImediato(nome: string, clienteId
       success: true, 
       id: remarketing.id,
       nome,
-      clientesProcessados: remarketing.clientes.length,
+      clientesProcessados: remarketing.RemarketingCliente.length,
       sucessos,
       falhas,
       resultados
@@ -1062,202 +1085,640 @@ export async function importarClientesTalkBI(clientesData: ClienteTalkBI[]) {
     return { error: "Ocorreu um erro ao importar os clientes", details: error };
   }
 }
-let importacaoProgresso = {
-  total: 0,
-  processados: 0,
-  importados: 0,
-  atualizados: 0,
-  falhas: 0,
-  emProgresso: false,
-  mensagemStatus: "Aguardando"
-};
+interface TalkBISubscriberData {
+  user_ns: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+}
 
-// Função para obter o progresso atual
-export async function obterProgressoImportacao() {
-  return { 
-    ...importacaoProgresso,
-    porcentagem: importacaoProgresso.total > 0 
-      ? Math.round((importacaoProgresso.processados / importacaoProgresso.total) * 100) 
-      : 0
+interface TalkBIAPIResponse {
+  data: TalkBISubscriberData[];
+  meta?: {
+    current_page: number;
+    last_page: number;
   };
 }
 
-// Adicionar em talkbi-actions.ts
-// @/actions/talkbi-actions.ts
+interface ImportacaoProgresso {
+  coletadosAteAgora: number;
+  totalAProcessar: number;
+  processadosNoLoteAtual: number; // Para log e feedback mais granular se necessário
+  processadosTotalmente: number; // Acumulador de todos os processados (sucesso + falha)
+  importadosNovos: number;
+  atualizadosExistentes: number;
+  falhasNoProcessamento: number;
+  emProgresso: boolean;
+  mensagemStatus: string;
+  isPaused: boolean;
+  isCancelled: boolean;
+  lastUpdatedTimestamp: number;
+  fase: "ocioso" | "coleta" | "processamento" | "concluido" | "erro" | "cancelado";
+  porcentagem: number;
+}
+
+let importacaoProgresso: ImportacaoProgresso = {
+  coletadosAteAgora: 0,
+  totalAProcessar: 0,
+  processadosNoLoteAtual: 0,
+  processadosTotalmente: 0,
+  importadosNovos: 0,
+  atualizadosExistentes: 0,
+  falhasNoProcessamento: 0,
+  emProgresso: false,
+  mensagemStatus: "Pronto para iniciar.",
+  isPaused: false,
+  isCancelled: false,
+  lastUpdatedTimestamp: 0,
+  fase: "ocioso",
+  porcentagem: 0,
+};
+
+function calcularPorcentagemProgresso(): number {
+  if (importacaoProgresso.fase === "processamento" && importacaoProgresso.totalAProcessar > 0) {
+    const porcentagem = Math.min(100, Math.round((importacaoProgresso.processadosTotalmente / importacaoProgresso.totalAProcessar) * 100));
+    return porcentagem;
+  }
+  if (importacaoProgresso.fase === "concluido" || importacaoProgresso.fase === "cancelado" || importacaoProgresso.fase === "erro") {
+    return 100;
+  }
+  if (importacaoProgresso.fase === "coleta") return 0; // Durante coleta, não temos total ainda
+  return 0;
+}
+
+
+
+function atualizarEstadoImportacao(updates: Partial<Omit<ImportacaoProgresso, 'porcentagem'>>) {
+  const prevState = { ...importacaoProgresso };
+  
+  // Garantir que o timestamp seja sempre atualizado
+  const novoTimestamp = Date.now();
+  
+  importacaoProgresso = { 
+    ...importacaoProgresso, 
+    ...updates, 
+    lastUpdatedTimestamp: novoTimestamp 
+  };
+  
+  // Recalcular porcentagem após atualização
+  importacaoProgresso.porcentagem = calcularPorcentagemProgresso();
+
+  // Logs mais detalhados para debug
+  const logChanged = 
+    prevState.mensagemStatus !== importacaoProgresso.mensagemStatus ||
+    prevState.fase !== importacaoProgresso.fase ||
+    prevState.emProgresso !== importacaoProgresso.emProgresso ||
+    prevState.isPaused !== importacaoProgresso.isPaused ||
+    prevState.isCancelled !== importacaoProgresso.isCancelled ||
+    prevState.processadosTotalmente !== importacaoProgresso.processadosTotalmente ||
+    prevState.coletadosAteAgora !== importacaoProgresso.coletadosAteAgora ||
+    prevState.porcentagem !== importacaoProgresso.porcentagem;
+
+  if (logChanged) {
+    console.log(`[ESTADO_ATUALIZADO] ${novoTimestamp}:`, {
+      fase: importacaoProgresso.fase,
+      emProgresso: importacaoProgresso.emProgresso,
+      processados: importacaoProgresso.processadosTotalmente,
+      total: importacaoProgresso.totalAProcessar,
+      porcentagem: importacaoProgresso.porcentagem,
+      novos: importacaoProgresso.importadosNovos,
+      atualizados: importacaoProgresso.atualizadosExistentes,
+      falhas: importacaoProgresso.falhasNoProcessamento,
+      pausado: importacaoProgresso.isPaused,
+      cancelado: importacaoProgresso.isCancelled
+    });
+    console.log(`[MENSAGEM]: "${importacaoProgresso.mensagemStatus}"`);
+  }
+}
+
+export async function obterProgressoImportacao() {
+  console.log('[OBTER_PROGRESSO] Estado atual:', {
+    fase: importacaoProgresso.fase,
+    emProgresso: importacaoProgresso.emProgresso,
+    processados: importacaoProgresso.processadosTotalmente,
+    total: importacaoProgresso.totalAProcessar,
+    porcentagem: importacaoProgresso.porcentagem,
+    mensagem: importacaoProgresso.mensagemStatus,
+    timestamp: importacaoProgresso.lastUpdatedTimestamp
+  });
+  
+  return { ...importacaoProgresso };
+}
+
+export async function pausarImportacaoTalkBI() {
+  if (importacaoProgresso.emProgresso && !importacaoProgresso.isCancelled) {
+    atualizarEstadoImportacao({ isPaused: true, mensagemStatus: "Importação pausada." });
+  }
+  return obterProgressoImportacao();
+}
+
+export async function retomarImportacaoTalkBI() {
+  if (importacaoProgresso.emProgresso && !importacaoProgresso.isCancelled && importacaoProgresso.isPaused) {
+    atualizarEstadoImportacao({ isPaused: false, mensagemStatus: "Retomando importação..." });
+  }
+  return obterProgressoImportacao();
+}
+
+export async function cancelarImportacaoTalkBI() {
+  atualizarEstadoImportacao({
+    isCancelled: true, emProgresso: false, isPaused: false,
+    mensagemStatus: "Importação cancelada pelo usuário.", fase: "cancelado"
+  });
+  return obterProgressoImportacao();
+}
+
 export async function buscarEImportarClientesTalkBI() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    atualizarEstadoImportacao({ mensagemStatus: "Não autorizado.", emProgresso: false, fase: "erro" });
+    return { error: "Não autorizado", success: false };
+  }
+
+  if (importacaoProgresso.emProgresso && !importacaoProgresso.isCancelled) {
+    const message = importacaoProgresso.isPaused ? "Importação está pausada." : "Importação já está em progresso.";
+    return { success: true, message, alreadyRunning: true, isPaused: importacaoProgresso.isPaused };
+  }
+
+  // Reinicializa completamente o objeto global para uma nova importação
+  importacaoProgresso = { 
+    coletadosAteAgora: 0, totalAProcessar: 0, processadosNoLoteAtual: 0, processadosTotalmente: 0,
+    importadosNovos: 0, atualizadosExistentes: 0, falhasNoProcessamento: 0,
+    emProgresso: true, mensagemStatus: "Iniciando...",
+    isPaused: false, isCancelled: false, lastUpdatedTimestamp: Date.now(),
+    fase: "coleta", porcentagem: 0,
+  };
+  atualizarEstadoImportacao({ mensagemStatus: "Conectando ao TalkBI..." });
+
+  try {
+    const todosClientesAPI: TalkBISubscriberData[] = [];
+    let paginaAtual = 1;
+    let temMaisPaginas = true;
+    const LIMITE_POR_PAGINA = 100;
+
+    // Loop de Coleta
+    while (temMaisPaginas) {
+      if (importacaoProgresso.isCancelled) {
+        atualizarEstadoImportacao({ mensagemStatus: "Coleta de dados cancelada.", emProgresso: false, fase: "cancelado" });
+        return { error: "Importação cancelada durante coleta.", success: false };
+      }
+      while (importacaoProgresso.isPaused && !importacaoProgresso.isCancelled) {
+        atualizarEstadoImportacao({ mensagemStatus: `Pausado na coleta. ${importacaoProgresso.coletadosAteAgora} clientes encontrados.`});
+        await new Promise(resolve => setTimeout(resolve, 5500));
+      }
+      if (importacaoProgresso.isCancelled) break;
+
+      atualizarEstadoImportacao({ mensagemStatus: `Coletando clientes... Página ${paginaAtual}. (${importacaoProgresso.coletadosAteAgora} coletados)` });
+      
+      const response = await fetch(`${TALKBI_API_URL}/subscribers?page=${paginaAtual}&limit=${LIMITE_POR_PAGINA}`, {
+        method: "GET", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${TALKBI_API_KEY}` },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        atualizarEstadoImportacao({ mensagemStatus: `Erro ao buscar página ${paginaAtual}: ${response.status}.`, emProgresso: false, fase: "erro" });
+        return { error: `Falha ao buscar clientes (Status: ${response.status})`, detalhes: errorText, success: false };
+      }
+
+      const responseData: TalkBIAPIResponse = await response.json();
+      if (!responseData.data || !Array.isArray(responseData.data)) {
+        atualizarEstadoImportacao({ mensagemStatus: "Formato de resposta inesperado da TalkBI.", emProgresso: false, fase: "erro" });
+        return { error: "Formato de resposta inesperado", success: false };
+      }
+      
+      todosClientesAPI.push(...responseData.data);
+      atualizarEstadoImportacao({ coletadosAteAgora: todosClientesAPI.length });
+      
+      temMaisPaginas = responseData.meta ? responseData.meta.current_page < responseData.meta.last_page : false;
+      if (temMaisPaginas) { paginaAtual++; } else { break; }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    if (importacaoProgresso.isCancelled) {
+      atualizarEstadoImportacao({ mensagemStatus: "Cancelado após coleta.", emProgresso: false, fase: "cancelado" });
+      return { error: "Importação cancelada.", success: false };
+    }
+
+    atualizarEstadoImportacao({ 
+      totalAProcessar: todosClientesAPI.length, 
+      fase: "processamento", 
+      mensagemStatus: `${todosClientesAPI.length} clientes coletados. Iniciando processamento...` 
+    });
+
+    if (importacaoProgresso.totalAProcessar === 0) {
+        atualizarEstadoImportacao({ mensagemStatus: "Nenhum cliente encontrado na TalkBI.", emProgresso: false, fase: "concluido" });
+        return { success: true, message: "Nenhum cliente encontrado." };
+    }
+    
+    console.log(`[INICIO PROCESSAMENTO] Total: ${importacaoProgresso.totalAProcessar} clientes`);
+    
+    const tamanhoDoLote = 20;
+    const totalLotes = Math.ceil(importacaoProgresso.totalAProcessar / tamanhoDoLote);
+    
+    for (let i = 0; i < importacaoProgresso.totalAProcessar; i += tamanhoDoLote) {
+      if (importacaoProgresso.isCancelled) break; 
+      
+      while (importacaoProgresso.isPaused && !importacaoProgresso.isCancelled) {
+        atualizarEstadoImportacao({ mensagemStatus: `Pausado. ${importacaoProgresso.processadosTotalmente}/${importacaoProgresso.totalAProcessar} (${importacaoProgresso.porcentagem}%).` });
+        await new Promise(resolve => setTimeout(resolve, 5500));
+      }
+      if (importacaoProgresso.isCancelled) break; 
+
+      const lote = todosClientesAPI.slice(i, i + tamanhoDoLote);
+      const loteNum = Math.floor(i / tamanhoDoLote) + 1;
+      
+      console.log(`[LOTE ${loteNum}/${totalLotes}] Processando ${lote.length} clientes. Processados até agora: ${importacaoProgresso.processadosTotalmente}/${importacaoProgresso.totalAProcessar}`);
+      
+      // Atualizar mensagem ANTES de processar o lote
+      atualizarEstadoImportacao({ 
+        mensagemStatus: `Processando lote ${loteNum} de ${totalLotes}. Processados: ${importacaoProgresso.processadosTotalmente}/${importacaoProgresso.totalAProcessar} (${calcularPorcentagemProgresso()}%)`,
+        processadosNoLoteAtual: 0 
+      });
+      
+      let numImportadosEsteLote = 0;
+      let numAtualizadosEsteLote = 0;
+      let numFalhasEsteLote = 0;
+      let numItensProcessadosNoLote = 0;
+
+      for (const clienteTalkBI of lote) {
+        if (importacaoProgresso.isCancelled) break; 
+        
+        let operacaoSucesso = false;
+        try {
+          const clienteExistente = await prisma.cliente.findFirst({ where: { user_ns: clienteTalkBI.user_ns } });
+          if (clienteExistente) {
+            await prisma.cliente.update({ 
+              where: { id: clienteExistente.id }, 
+              data: { 
+                nome: clienteTalkBI.name || clienteExistente.nome, 
+                whatsapp: clienteTalkBI.phone || clienteExistente.whatsapp, 
+                email: clienteTalkBI.email || clienteExistente.email, 
+                origem: "talkbi",
+                updatedAt: new Date()
+              }
+            });
+            numAtualizadosEsteLote++; 
+            operacaoSucesso = true;
+            console.log(`[ATUALIZADO] Cliente: ${clienteTalkBI.name} (${clienteTalkBI.user_ns})`);
+          } else if (clienteTalkBI.phone || clienteTalkBI.email || clienteTalkBI.name) { 
+            await prisma.cliente.create({ data: {
+                nome: clienteTalkBI.name || `Cliente TalkBI ${clienteTalkBI.user_ns || String(Date.now()).slice(-5)}`, 
+                segmento: "Importado TalkBI",
+                cnpj: clienteTalkBI.phone ? clienteTalkBI.phone.replace(/\D/g, '').padEnd(14, '0').substring(0, 14) : String(Date.now() + Math.random()).slice(-14).padStart(14,'0'),
+                razaoSocial: clienteTalkBI.name || null, 
+                whatsapp: clienteTalkBI.phone || null, 
+                email: clienteTalkBI.email || null,
+                origem: "talkbi", 
+                user_ns: clienteTalkBI.user_ns, 
+                createdById: session.user.id,
+            }});
+            numImportadosEsteLote++; 
+            operacaoSucesso = true;
+            console.log(`[CRIADO] Cliente: ${clienteTalkBI.name} (${clienteTalkBI.user_ns})`);
+          }
+          if (!operacaoSucesso) {
+            numFalhasEsteLote++;
+            console.log(`[IGNORADO] Cliente sem dados válidos: ${clienteTalkBI.user_ns}`);
+          }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } catch (dbError: any) { 
+            numFalhasEsteLote++; 
+            console.error(`[ERRO DB] Cliente: ${clienteTalkBI.name}`, dbError.message);
+        }
+        numItensProcessadosNoLote++;
+      } 
+      
+      if (importacaoProgresso.isCancelled) break; 
+
+      // Atualizar os contadores GLOBAIS após processar o lote
+      const novoProcessadosTotalmente = importacaoProgresso.processadosTotalmente + numItensProcessadosNoLote;
+      const novosImportados = importacaoProgresso.importadosNovos + numImportadosEsteLote;
+      const novosAtualizados = importacaoProgresso.atualizadosExistentes + numAtualizadosEsteLote;
+      const novasFalhas = importacaoProgresso.falhasNoProcessamento + numFalhasEsteLote;
+      
+      atualizarEstadoImportacao({
+          processadosTotalmente: novoProcessadosTotalmente,
+          importadosNovos: novosImportados, 
+          atualizadosExistentes: novosAtualizados, 
+          falhasNoProcessamento: novasFalhas,
+          processadosNoLoteAtual: numItensProcessadosNoLote 
+      });
+      
+      console.log(`[LOTE ${loteNum} CONCLUÍDO] Processados: ${novoProcessadosTotalmente}/${importacaoProgresso.totalAProcessar} | Novos: ${numImportadosEsteLote} | Atualizados: ${numAtualizadosEsteLote} | Falhas: ${numFalhasEsteLote} | Progresso: ${importacaoProgresso.porcentagem}%`);
+      
+      // Aumentar o delay para dar tempo ao frontend de capturar as atualizações
+      await new Promise(resolve => setTimeout(resolve, 500)); 
+    }
+
+    const finalMessage = importacaoProgresso.isCancelled ?
+      `Cancelada: ${importacaoProgresso.importadosNovos}N, ${importacaoProgresso.atualizadosExistentes}A, ${importacaoProgresso.falhasNoProcessamento}F.` :
+      `Concluída: ${importacaoProgresso.importadosNovos}N, ${importacaoProgresso.atualizadosExistentes}A, ${importacaoProgresso.falhasNoProcessamento}F.`;
+    
+    let finalFase : ImportacaoProgresso['fase'] = "concluido";
+    if (importacaoProgresso.isCancelled) {
+        finalFase = "cancelado";
+    } else if (importacaoProgresso.falhasNoProcessamento > 0 && (importacaoProgresso.importadosNovos + importacaoProgresso.atualizadosExistentes) === 0 && importacaoProgresso.totalAProcessar > 0) {
+        finalFase = "erro"; 
+    }
+
+    atualizarEstadoImportacao({ mensagemStatus: finalMessage, emProgresso: false, fase: finalFase });
+    
+    console.log(`[IMPORTAÇÃO FINALIZADA] Status: ${finalFase} | Total: ${importacaoProgresso.totalAProcessar} | Processados: ${importacaoProgresso.processadosTotalmente} | Novos: ${importacaoProgresso.importadosNovos} | Atualizados: ${importacaoProgresso.atualizadosExistentes} | Falhas: ${importacaoProgresso.falhasNoProcessamento}`);
+    
+    if (!importacaoProgresso.isCancelled && finalFase === "concluido") {
+      revalidatePath("/remarketing");
+    }
+    
+    return {
+      success: !importacaoProgresso.isCancelled && finalFase !== "erro", 
+      message: importacaoProgresso.mensagemStatus,
+      importados: importacaoProgresso.importadosNovos, 
+      atualizados: importacaoProgresso.atualizadosExistentes,
+      falhas: importacaoProgresso.falhasNoProcessamento, 
+      totalAProcessar: importacaoProgresso.totalAProcessar,
+      isCancelled: importacaoProgresso.isCancelled
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (error: any) {
+    console.error(`[ERRO CRÍTICO]`, error);
+    atualizarEstadoImportacao({ mensagemStatus: `Erro crítico: ${error.message || 'Erro desconhecido'}`, emProgresso: false, isCancelled: true, fase: "erro" });
+    return { error: `Erro crítico: ${error.message || 'Erro desconhecido'}`, success: false };
+  }
+}
+
+// 1. Função exportarClientesTalkBI corrigida
+export async function exportarClientesTalkBI(filtros?: { segmento?: string, recorrente?: boolean, clienteIds?: string[], etiqueta?: string }) {
   try {
     const session = await auth();
     if (!session) {
       return { error: "Não autorizado" };
     }
 
-    // Inicializar variáveis de progresso
-    importacaoProgresso = {
-      total: 0,
-      processados: 0,
-      importados: 0,
-      atualizados: 0,
-      falhas: 0,
-      emProgresso: true,
-      mensagemStatus: "Iniciando importação..."
+    // Definir filtros para a consulta no banco de dados
+    const where: Prisma.ClienteWhereInput = {
+      origem: "sistema" // Apenas clientes com origem "sistema"
     };
+    
+    if (filtros?.segmento) {
+      where.segmento = filtros.segmento;
+    }
+    
+    if (filtros?.recorrente !== undefined) {
+      where.recorrente = filtros.recorrente;
+    }
+    
+    // Se houver IDs específicos selecionados, filtrar apenas esses clientes
+    if (filtros?.clienteIds && filtros.clienteIds.length > 0) {
+      where.id = {
+        in: filtros.clienteIds
+      };
+    }
 
-    console.log("Iniciando importação de clientes da TalkBI...");
-    
-    // Armazenar todos os clientes importados
-    let todosClientes: any[] = [];
-    let paginaAtual = 1;
-    let temMaisPaginas = true;
-    const LIMITE_POR_PAGINA = 100; // Máximo permitido pela API
-    
-    // Buscar clientes página por página
-    while (temMaisPaginas) {
-      importacaoProgresso.mensagemStatus = `Buscando página ${paginaAtual} de clientes...`;
-      console.log(importacaoProgresso.mensagemStatus);
+    // Filtrar por etiqueta se especificada
+    if (filtros?.etiqueta) {
+      where.EtiquetaCliente = {
+        some: {
+          nome: filtros.etiqueta
+        }
+      };
+    }
+
+    // Buscar clientes no banco de dados
+    const clientes = await prisma.cliente.findMany({
+      where,
+      include: {
+        EtiquetaCliente: true // Incluir etiquetas para referência
+      }
+    });
+
+    console.log(`Exportando ${clientes.length} clientes para TalkBI (apenas origem: sistema)...`);
+
+    // Processar cada cliente
+    const resultados = [];
+    let sucessos = 0;
+    let falhas = 0;
+
+    for (const cliente of clientes) {
+      try {
+        // Verificar novamente se o cliente tem origem "sistema" (segurança extra)
+        if (cliente.origem !== "sistema") {
+          console.log(`Cliente ${cliente.nome} (ID: ${cliente.id}) tem origem "${cliente.origem}", pulando...`);
+          resultados.push({
+            id: cliente.id,
+            nome: cliente.nome,
+            sucesso: false,
+            erro: "Apenas clientes com origem 'sistema' podem ser exportados"
+          });
+          falhas++;
+          continue;
+        }
+
+        // Formatar o número de WhatsApp (se existir)
+        let whatsappFormatado = cliente.whatsapp;
+        
+        if (whatsappFormatado) {
+          // Remover TODOS os caracteres não numéricos
+          whatsappFormatado = whatsappFormatado.replace(/\D/g, '');
+          
+          // Remover zeros à esquerda que possam estar no início do número
+          whatsappFormatado = whatsappFormatado.replace(/^0+/, '');
+          
+          // Verificar se já tem o prefixo 55
+          if (!whatsappFormatado.startsWith('55')) {
+            whatsappFormatado = `55${whatsappFormatado}`;
+          }
+          
+          // Adicionar o sinal de + no início
+          if (!whatsappFormatado.startsWith('+')) {
+            whatsappFormatado = `+${whatsappFormatado}`;
+          }
+          
+          console.log(`WhatsApp formatado: ${cliente.whatsapp} -> ${whatsappFormatado}`);
+        }
+
+        // Preparar dados para envio ao TalkBI
+        const clienteTalkBI: ClienteTalkBICreate = {
+          name: cliente.nome,
+          phone: whatsappFormatado || undefined, // O campo phone na API TalkBI corresponde ao WhatsApp
+          email: cliente.email || undefined, 
+          first_name: cliente.nome.split(' ')[0],
+          last_name: cliente.nome.split(' ').slice(1).join(' ') || undefined,
+        };
+
+        // Verificar se cliente já existe no TalkBI (pelo user_ns)
+        if (cliente.user_ns) {
+          // Se já existe, deletar e recriar
+          await deletarClienteTalkBI(cliente.user_ns);
+        }
+
+        // Criar cliente no TalkBI
+        const response = await fetch(`${TALKBI_API_URL}/subscriber/create`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${TALKBI_API_KEY}`
+          },
+          body: JSON.stringify(clienteTalkBI)
+        });
+
+        const responseData = await response.json();
+
+        if (!response.ok) {
+          console.error(`Erro ao exportar cliente ${cliente.id} para TalkBI:`, responseData);
+          resultados.push({ 
+            id: cliente.id, 
+            nome: cliente.nome, 
+            sucesso: false, 
+            erro: responseData.message || "Erro desconhecido" 
+          });
+          falhas++;
+          continue;
+        }
+
+        const data = responseData as ClienteTalkBI;
+        
+        // Atualizar cliente no banco com o user_ns do TalkBI
+        if (data.user_ns) {
+          await prisma.cliente.update({
+            where: { id: cliente.id },
+            data: {
+              user_ns: data.user_ns,
+              whatsapp: whatsappFormatado || cliente.whatsapp, // Atualizar o WhatsApp formatado no banco
+              origem: "sistema" // Manter a origem como sistema
+            }
+          });
+
+          resultados.push({ 
+            id: cliente.id, 
+            nome: cliente.nome, 
+            sucesso: true, 
+            user_ns: data.user_ns 
+          });
+          sucessos++;
+        } else {
+          resultados.push({ 
+            id: cliente.id, 
+            nome: cliente.nome, 
+            sucesso: false, 
+            erro: "Não foi possível obter o ID do cliente no TalkBI" 
+          });
+          falhas++;
+        }
+      } catch (error) {
+        console.error(`Erro ao processar cliente ${cliente.id}:`, error);
+        resultados.push({ 
+          id: cliente.id, 
+          nome: cliente.nome, 
+          sucesso: false, 
+          erro: "Erro interno ao processar cliente" 
+        });
+        falhas++;
+      }
+    }
+
+    return { 
+      success: true, 
+      total: clientes.length,
+      sucessos,
+      falhas,
+      resultados,
+      message: `${sucessos} clientes exportados com sucesso. ${falhas} falhas.`
+    };
+  } catch (error) {
+    console.error("Erro ao exportar clientes para TalkBI:", error);
+    return { error: "Ocorreu um erro ao exportar os clientes" };
+  }
+}
+
+// 2. Função atualizarPrefixoWhatsAppClientes corrigida
+export async function atualizarPrefixoWhatsAppClientes() {
+  try {
+    const session = await auth();
+    if (!session) {
+      return { error: "Não autorizado" };
+    }
+
+    // Buscar todos os clientes que têm WhatsApp e origem sistema
+    const clientes = await prisma.cliente.findMany({
+      where: {
+        whatsapp: {
+          not: null
+        },
+        origem: "sistema" // Apenas clientes com origem "sistema"
+      }
+    });
+
+    console.log(`Atualizando prefixo de ${clientes.length} números de WhatsApp (apenas origem: sistema)...`);
+
+    let atualizados = 0;
+    let inalterados = 0;
+    const resultados = [];
+
+    for (const cliente of clientes) {
+      if (!cliente.whatsapp) continue;
+
+      // Formatar o número de WhatsApp
+      const whatsappOriginal = cliente.whatsapp;
       
-      const response = await fetch(`${TALKBI_API_URL}/subscribers?page=${paginaAtual}&limit=${LIMITE_POR_PAGINA}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${TALKBI_API_KEY}`
+      // Remover caracteres não numéricos
+      const numeroLimpo = whatsappOriginal.replace(/\D/g, '');
+      
+      // Remover zeros à esquerda que possam estar no início do número
+      const numeroSemZeros = numeroLimpo.replace(/^0+/, '');
+      
+      // Verificar se já tem o prefixo 55
+      let novoNumero = numeroSemZeros;
+      if (!numeroSemZeros.startsWith('55')) {
+        novoNumero = `55${numeroSemZeros}`;
+      }
+      
+      // Adicionar o sinal de + no início
+      if (!novoNumero.startsWith('+')) {
+        novoNumero = `+${novoNumero}`;
+      }
+      
+      // Se o número já estava formatado corretamente, pular
+      if (whatsappOriginal === novoNumero) {
+        resultados.push({
+          id: cliente.id,
+          nome: cliente.nome,
+          whatsappAntigo: whatsappOriginal,
+          whatsappNovo: novoNumero,
+          alterado: false
+        });
+        inalterados++;
+        continue;
+      }
+
+      console.log(`WhatsApp atualizado: ${whatsappOriginal} -> ${novoNumero} para cliente ${cliente.nome} (ID: ${cliente.id})`);
+
+      // Atualizar o WhatsApp do cliente no banco
+      await prisma.cliente.update({
+        where: { id: cliente.id },
+        data: {
+          whatsapp: novoNumero
         }
       });
 
-      if (!response.ok) {
-        importacaoProgresso.mensagemStatus = `Erro na página ${paginaAtual}`;
-        importacaoProgresso.emProgresso = false;
-        console.error(`Erro ao buscar página ${paginaAtual} de clientes:`, response.status);
-        return { error: "Falha ao buscar clientes", detalhes: await response.text() };
-      }
-
-      const responseData = await response.json();
-      
-      // Verificar se há dados
-      if (!responseData.data || !Array.isArray(responseData.data)) {
-        importacaoProgresso.mensagemStatus = "Formato de resposta inesperado";
-        importacaoProgresso.emProgresso = false;
-        console.error("Formato de resposta inesperado:", responseData);
-        return { error: "Formato de resposta inesperado da API" };
-      }
-      
-      // Adicionar clientes desta página ao array total
-      const clientesDaPagina = responseData.data;
-      todosClientes = [...todosClientes, ...clientesDaPagina];
-      
-      console.log(`Página ${paginaAtual}: ${clientesDaPagina.length} clientes obtidos. Total até agora: ${todosClientes.length}`);
-      
-      // Verificar se há mais páginas
-      if (responseData.meta && responseData.meta.current_page < responseData.meta.last_page) {
-        paginaAtual++;
-        temMaisPaginas = true;
-      } else if (clientesDaPagina.length < LIMITE_POR_PAGINA) {
-        // Se temos menos itens que o limite, provavelmente é a última página
-        temMaisPaginas = false;
-      } else if (responseData.links && responseData.links.next) {
-        // Se temos um link para a próxima página
-        paginaAtual++;
-        temMaisPaginas = true;
-      } else {
-        // Caso contrário, assumimos que não há mais páginas
-        temMaisPaginas = false;
-      }
-      
-      importacaoProgresso.mensagemStatus = `Buscados ${todosClientes.length} clientes até o momento...`;
-    }
-    
-    importacaoProgresso.total = todosClientes.length;
-    console.log(`Total de ${importacaoProgresso.total} clientes encontrados na TalkBI`);
-    importacaoProgresso.mensagemStatus = `Encontrados ${importacaoProgresso.total} clientes. Iniciando processamento...`;
-
-    // Processar e salvar cada cliente no banco de dados
-    importacaoProgresso.importados = 0;
-    importacaoProgresso.atualizados = 0;
-    importacaoProgresso.falhas = 0;
-    
-    // Processar em lotes de 50 para melhor performance
-    const tamanhoDolote = 50;
-    for (let i = 0; i < todosClientes.length; i += tamanhoDolote) {
-      const lote = todosClientes.slice(i, i + tamanhoDolote);
-      const loteAtual = Math.floor(i/tamanhoDolote) + 1;
-      const totalLotes = Math.ceil(todosClientes.length/tamanhoDolote);
-      
-      importacaoProgresso.mensagemStatus = `Processando lote ${loteAtual}/${totalLotes}`;
-      console.log(importacaoProgresso.mensagemStatus);
-      
-      for (const clienteTalkBI of lote) {
-        try {
-          // Verificar se o cliente já existe pelo user_ns
-          const clienteExistente = await prisma.cliente.findFirst({
-            where: { user_ns: clienteTalkBI.user_ns }
-          });
-
-          if (clienteExistente) {
-            // Atualizar cliente existente
-            await prisma.cliente.update({
-              where: { id: clienteExistente.id },
-              data: {
-                nome: clienteTalkBI.name || clienteExistente.nome,
-                whatsapp: clienteTalkBI.phone || clienteExistente.whatsapp,
-                email: clienteTalkBI.email || clienteExistente.email,
-                origem: "talkbi",
-                // Não atualizar CNPJ e segmento se já existirem
-              }
-            });
-            importacaoProgresso.atualizados++;
-          } else if (clienteTalkBI.phone || clienteTalkBI.email) { // Garantir que tenha telefone ou email
-            // Criar novo cliente - note que alguns valores são temporários
-            await prisma.cliente.create({
-              data: {
-                nome: clienteTalkBI.name || "Cliente TalkBI",
-                segmento: "Importado TalkBI", // Valor padrão
-                cnpj: clienteTalkBI.phone ? 
-                      clienteTalkBI.phone.replace(/\D/g, '').padEnd(14, '0').substring(0, 14) : 
-                      "00000000000000", // Valor temporário baseado no telefone
-                razaoSocial: null,
-                whatsapp: clienteTalkBI.phone || null,
-                email: clienteTalkBI.email || null,
-                origem: "talkbi",
-                user_ns: clienteTalkBI.user_ns,
-                createdById: session.user.id
-              }
-            });
-            importacaoProgresso.importados++;
-          } else {
-            console.log("Cliente ignorado por falta de dados essenciais:", clienteTalkBI.user_ns);
-            importacaoProgresso.falhas++;
-          }
-        } catch (error) {
-          console.error("Erro ao processar cliente:", error);
-          importacaoProgresso.falhas++;
-        }
-        
-        // Atualizar contador de processados
-        importacaoProgresso.processados++;
-        
-        // Atualizar porcentagem para o progresso
-        if (importacaoProgresso.processados % 10 === 0 || importacaoProgresso.processados === importacaoProgresso.total) {
-          const porcentagem = Math.round((importacaoProgresso.processados / importacaoProgresso.total) * 100);
-          importacaoProgresso.mensagemStatus = `Progresso: ${importacaoProgresso.processados}/${importacaoProgresso.total} clientes (${porcentagem}%)`;
-        }
-      }
+      resultados.push({
+        id: cliente.id,
+        nome: cliente.nome,
+        whatsappAntigo: whatsappOriginal,
+        whatsappNovo: novoNumero,
+        alterado: true
+      });
+      atualizados++;
     }
 
-    // Finalizar o processo
-    importacaoProgresso.mensagemStatus = `Importação concluída!`;
-    importacaoProgresso.emProgresso = false;
-    
-    revalidatePath("/remarketing");
-    return { 
-      success: true, 
-      message: `Importação concluída: ${importacaoProgresso.importados} novos clientes, ${importacaoProgresso.atualizados} atualizados, ${importacaoProgresso.falhas} falhas.`,
-      total: importacaoProgresso.total
+    return {
+      success: true,
+      total: clientes.length,
+      atualizados,
+      inalterados,
+      resultados
     };
   } catch (error) {
-    // Em caso de erro, atualizar status
-    importacaoProgresso.mensagemStatus = `Erro: ${error instanceof Error ? error.message : 'Erro desconhecido'}`;
-    importacaoProgresso.emProgresso = false;
-    
-    console.error("Erro ao importar clientes da TalkBI:", error);
-    return { error: "Ocorreu um erro ao importar os clientes", details: error };
+    console.error("Erro ao atualizar prefixo de WhatsApp:", error);
+    return { error: "Ocorreu um erro ao atualizar os números de WhatsApp" };
   }
 }

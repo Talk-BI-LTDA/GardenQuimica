@@ -21,7 +21,7 @@ whatsapp?: string;
   origem: string;
   user_ns?: string;
   email?: string;
-  etiquetas?: { id: string; nome: string }[];
+  EtiquetaCliente?: { id: string; nome: string }[];
 }
 
 // Tipo para representar filtros de clientes

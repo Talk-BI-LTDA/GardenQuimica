@@ -64,7 +64,7 @@ interface ClientePrisma {
   origem?: string;
   user_ns?: string;
   email?: string;
-
+  EtiquetaCliente?: { id: string; nome: string }[];
 }
 /**
  * Busca todos os clientes com opções de filtro
@@ -166,6 +166,7 @@ export async function getClientes(filtros?: ClienteFiltros) {
           ? (filtros.pagina - 1) * filtros.itensPorPagina 
           : undefined,
         take: filtros?.itensPorPagina || undefined,
+        
         select: {
           id: true,
           nome: true,
@@ -231,8 +232,15 @@ export async function getClientes(filtros?: ClienteFiltros) {
                 }
               }
             }
-          }
+          },
+          EtiquetaCliente: {
+            select: {
+              id: true,
+              nome: true
+            }
+          },
         }
+        
       })
     ]);
       
@@ -382,7 +390,10 @@ export async function getClientes(filtros?: ClienteFiltros) {
         score,
         origem: cliente.origem || "sistema", 
         user_ns: cliente.user_ns, 
-        email: cliente.email  
+        email: cliente.email,
+        EtiquetaCliente: cliente.EtiquetaCliente || []
+        
+        
       };
       
       return clienteFormatado;

@@ -30,6 +30,7 @@ export interface ClienteTalkBI {
       description: string;
       value: string | number | boolean | Date;
     }[];
+    
   }
   
   export interface ClienteTalkBICreate {

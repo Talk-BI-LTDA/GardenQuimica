@@ -258,4 +258,7 @@ h4{
 .text-card-foreground {
     color: #001927 !important;
 }
+.prevent-close-on-outside-click[data-state="open"] {
+  pointer-events: auto; /* Permite interações dentro do diálogo */
+}
 }
