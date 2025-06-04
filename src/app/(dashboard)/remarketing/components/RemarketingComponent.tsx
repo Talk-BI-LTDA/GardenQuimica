@@ -1492,7 +1492,7 @@ if (etiquetasSelecionadasFiltro.length > 0) {
                       {clientesSelecionados.length > 0 && (
                         <Button
                           variant="outline"
-                          className="border-blue-200 text-blue-700 hover:bg-blue-50"
+                          className="border-blue-200 text-blue-700 hover:bg-blue-50 hidden"
                           onClick={handleExportarClientesTalkBI}
                           disabled={isExporting}
                         >
